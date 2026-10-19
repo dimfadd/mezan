@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate, useParams, Link } from "react-router-dom"
 import { ArrowLeft, Building2, CreditCard, Gauge, LogOut, Plus, Search } from "lucide-react";
 import { Empty, ErrorState, Field, Loading, Modal, MoneyInput, PageHead, Switch, useToast } from "../../components/ui";
 import { ThemeToggle } from "../../components/ThemeToggle";
+import { EphemeralBanner } from "../../components/Shell";
 import { api } from "../../lib/api";
 import { ago, date, KIND_LABEL, number, ROLE_LABEL, rupiah } from "../../lib/format";
 import { useApi } from "../../lib/hooks";
@@ -55,6 +56,7 @@ export function AdminShell() {
         <button className="icon-btn" aria-label="Keluar" onClick={async () => { await logout(); nav("/masuk"); }}><LogOut /></button>
       </header>
       <main className="main">
+        <EphemeralBanner />
         <Outlet />
       </main>
       <nav className="bottom-nav" aria-label="Navigasi admin" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>

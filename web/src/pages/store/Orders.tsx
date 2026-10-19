@@ -152,7 +152,7 @@ function Ticket({ order: o, onChanged }: { order: Order; onChanged: () => Promis
 
   return (
     <article className="receipt-edge" aria-label={`Pesanan nomor ${o.number}`}>
-      <div className={`ticket${o.status === "new" ? " is-new" : ""}`}>
+      <div className="ticket">
         <div className="ticket-top">
           <div>
             <div className="ticket-no num">#{o.number}</div>

@@ -36,7 +36,16 @@ export interface StoreInfo {
   grace_days: number;
 }
 
+export interface RuntimeInfo {
+  ephemeral: boolean;
+  uploadLimitMb: number;
+}
+
+// Disimpan di modul supaya util unggah (lib/media.ts) bisa membacanya tanpa hook.
+export let runtimeInfo: RuntimeInfo = { ephemeral: false, uploadLimitMb: 15 };
+
 interface SessionCtx {
+  runtime: RuntimeInfo;
   user: Me | null;
   tenant: StoreInfo | null;
   ready: boolean;
@@ -47,18 +56,19 @@ interface SessionCtx {
 const Ctx = createContext<SessionCtx | null>(null);
 
 export function SessionProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<{ user: Me | null; tenant: StoreInfo | null; ready: boolean }>({ user: null, tenant: null, ready: false });
+  const [state, setState] = useState<{ user: Me | null; tenant: StoreInfo | null; ready: boolean; runtime: RuntimeInfo }>({ user: null, tenant: null, ready: false, runtime: runtimeInfo });
   const refresh = useCallback(async () => {
     try {
-      const r = await api.get<{ user: Me | null; tenant: StoreInfo | null }>("/api/auth/me");
-      setState({ user: r.user, tenant: r.tenant ?? null, ready: true });
+      const r = await api.get<{ user: Me | null; tenant: StoreInfo | null; runtime?: RuntimeInfo }>("/api/auth/me");
+      if (r.runtime) runtimeInfo = r.runtime;
+      setState({ user: r.user, tenant: r.tenant ?? null, ready: true, runtime: runtimeInfo });
     } catch {
       setState((s) => ({ ...s, ready: true }));
     }
   }, []);
   const logout = useCallback(async () => {
     await api.post("/api/auth/logout").catch(() => {});
-    setState({ user: null, tenant: null, ready: true });
+    setState((s) => ({ ...s, user: null, tenant: null, ready: true }));
   }, []);
   useEffect(() => {
     refresh();

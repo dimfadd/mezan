@@ -16,6 +16,7 @@ export type Env = {
     user: SessionUser | null;
     tenant: Tenant | null;
     secureCookies: boolean;
+    runtime: RuntimeInfo;
   };
 };
 
@@ -23,6 +24,13 @@ export interface AppDeps {
   db: DB;
   storage: MediaStorage;
   secureCookies?: boolean;
+  /** Info lingkungan yang ditampilkan ke pengguna (mis. mode uji dengan database sementara). */
+  runtime?: RuntimeInfo;
+}
+
+export interface RuntimeInfo {
+  ephemeral: boolean; // true = data bisa hilang (database sementara)
+  uploadLimitMb: number; // batas unggah per file (Vercel membatasi body ~4,5 MB)
 }
 
 export function createApp(deps: AppDeps) {
@@ -32,6 +40,7 @@ export function createApp(deps: AppDeps) {
     c.set("db", deps.db);
     c.set("storage", deps.storage);
     c.set("secureCookies", deps.secureCookies ?? false);
+    c.set("runtime", deps.runtime ?? { ephemeral: false, uploadLimitMb: 15 });
     await next();
   });
 
@@ -68,6 +77,11 @@ export function createApp(deps: AppDeps) {
       key = decodeURIComponent(c.req.path.replace(/^\/media\//, ""));
     } catch {
       return c.text("Tidak ditemukan", 404);
+    }
+    if (c.var.storage.publicUrl) {
+      const url = await c.var.storage.publicUrl(key);
+      if (!url) return c.text("Tidak ditemukan", 404);
+      return new Response(null, { status: 302, headers: { Location: url, "Cache-Control": "public, max-age=86400" } });
     }
     const obj = await c.var.storage.get(key);
     if (!obj) return c.text("Tidak ditemukan", 404);

@@ -4,8 +4,8 @@
   - Kertas krem + tinta cokelat tua: meniru nota dan papan menu warung, lebih hangat dari putih-abu dashboard pada umumnya.
   - Hijau daun pisang (brand): warna "uang masuk / beres", dipakai untuk aksi utama dan status selesai.
   - Kunyit (aksen): satu warna penanda perhatian, hanya untuk pesanan baru dan tombol keranjang pelanggan.
-  - Plus Jakarta Sans: tipe buatan Jakarta, x-height tinggi, enak dibaca di HP murah. Angka pakai tabular-nums supaya harga sejajar.
-  - Fraunces: hanya untuk nama toko & nama menu di sisi pelanggan, memberi rasa menu cetak.
+  - Fredoka: font khas Mezan (dipilih pemilik produk). Huruf membulat terasa ramah untuk warung & kafe, tetap jelas di HP.
+  - Fraunces: tetap tersedia sebagai pilihan font judul di tampilan menu premium.
   - Motif identitas: tepi gerigi nota (.receipt-edge) di tiket pesanan, keranjang, dan status pesanan.
 */
 
@@ -38,8 +38,9 @@
   --radius-sm: 6px;
   --radius: 10px;
   --radius-lg: 16px;
-  --font: "Plus Jakarta Sans Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-menu: "Fraunces", Georgia, serif;
+  --font: "Fredoka Variable", "Fredoka", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-num: "Plus Jakarta Sans Variable", system-ui, sans-serif;
+  --font-menu: "Fredoka Variable", "Fredoka", system-ui, sans-serif;
   color-scheme: light;
 }
 
@@ -106,6 +107,8 @@ img, video { max-width: 100%; display: block; }
 button, input, select, textarea { font: inherit; color: inherit; }
 
 .num, .money { font-variant-numeric: tabular-nums; }
+/* Fredoka tidak punya angka tabular, jadi kolom angka yang harus sejajar memakai Plus Jakarta Sans. */
+.table .num, .table .money, .sum-row .money, .kpi .value { font-family: var(--font-num); }
 .muted { color: var(--ink-2); }
 .small { font-size: 0.85rem; }
 .tiny { font-size: 0.78rem; }
@@ -294,7 +297,7 @@ dialog.modal[open] { display: flex; flex-direction: column; animation: pop 0.16s
   position: sticky; top: 0; height: 100dvh; display: flex; flex-direction: column; gap: 4px;
   padding: 18px 12px; border-right: 1px solid var(--line); background: var(--surface); overflow-y: auto;
 }
-.wordmark { font-family: var(--font-menu); font-weight: 700; font-size: 1.45rem; letter-spacing: -0.02em; color: var(--ink); text-decoration: none; }
+.wordmark { font-family: var(--font); font-weight: 700; font-size: 1.5rem; letter-spacing: -0.01em; color: var(--ink); text-decoration: none; }
 .wordmark .dot { color: var(--brand); }
 .sidebar .store-chip { padding: 10px; margin: 6px 0 12px; border-radius: var(--radius); background: var(--surface-2); }
 .store-chip .name { font-weight: 750; line-height: 1.25; overflow-wrap: anywhere; }
@@ -415,7 +418,6 @@ dialog.modal[open] { display: flex; flex-direction: column; animation: pop 0.16s
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius) var(--radius) 0 0;
   padding: 14px 14px 12px; display: grid; gap: 10px; border-bottom: 0;
 }
-.ticket.is-new { border-top: 4px solid var(--accent); }
 .ticket-top { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
 .ticket-no { font-size: 1.35rem; font-weight: 800; line-height: 1; }
 .ticket-items { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }

@@ -8,21 +8,26 @@
     "dev": "concurrently -k -n api,web -c green,yellow \"npm:dev:api\" \"npm:dev:web\"",
     "dev:api": "tsx watch server/src/node.ts",
     "dev:web": "vite",
-    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "build": "node scripts/gen-migrations.mjs && tsc -p tsconfig.json --noEmit && vite build",
     "start": "NODE_ENV=production tsx server/src/node.ts",
     "db:migrate": "tsx server/src/scripts/migrate.ts",
     "db:seed": "tsx server/src/scripts/seed.ts",
     "db:reset": "rm -f data/mezan.db data/mezan.db-wal data/mezan.db-shm && npm run db:migrate && npm run db:seed",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test server/test/*.test.ts"
+    "test": "tsx --test server/test/*.test.ts",
+    "gen": "node scripts/gen-migrations.mjs",
+    "build:vercel": "node scripts/gen-migrations.mjs && vite build && node scripts/build-vercel.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "dependencies": {
+    "@fontsource-variable/fredoka": "^5.3.0",
     "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
     "@fontsource/fraunces": "^5.3.0",
     "@hono/node-server": "^2.1.5",
+    "@libsql/client": "^0.18.0",
+    "@vercel/blob": "^2.8.2",
     "better-sqlite3": "^13.0.3",
     "hono": "^4.13.13",
     "lucide-react": "^1.59.0",
@@ -40,6 +45,7 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "concurrently": "^10.0.6",
+    "esbuild": "^0.28.2",
     "playwright": "^1.64.1",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",

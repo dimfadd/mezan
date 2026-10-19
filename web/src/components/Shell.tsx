@@ -75,6 +75,17 @@ interface NavItem {
   count?: number;
 }
 
+export function EphemeralBanner() {
+  const { runtime } = useSession();
+  if (!runtime.ephemeral) return null;
+  return (
+    <div className="banner" role="note">
+      <AlertTriangle aria-hidden="true" />
+      <div>Mode uji: database sementara. Data yang kamu ubah bisa hilang sewaktu-waktu dan login bisa terputus. Sambungkan Turso supaya data tersimpan permanen (lihat docs/deploy-vercel.md).</div>
+    </div>
+  );
+}
+
 function SubscriptionBanner() {
   const { tenant, user } = useSession();
   if (!tenant) return null;
@@ -190,6 +201,7 @@ function ShellInner() {
       </header>
 
       <main className="main" id="main">
+        <EphemeralBanner />
         <SubscriptionBanner />
         <Outlet />
       </main>

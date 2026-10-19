@@ -1,4 +1,7 @@
 // Persiapan file sebelum diunggah, supaya hemat kuota pelanggan dan penyimpanan.
+import { runtimeInfo } from "./session";
+
+const capMb = () => runtimeInfo.uploadLimitMb;
 
 export const VIDEO_MAX_MB = 15;
 export const VIDEO_MAX_SECONDS = 20;
@@ -6,7 +9,7 @@ export const VIDEO_MAX_SECONDS = 20;
 /** Perkecil foto ke maksimal 1200px dan simpan sebagai WebP. GIF dibiarkan agar animasinya tidak hilang. */
 export async function prepareImage(file: File): Promise<File> {
   if (file.type === "image/gif") {
-    if (file.size > 3 * 1024 * 1024) throw new Error("GIF maksimal 3 MB. Untuk gerakan, video MP4 pendek biasanya 5-10x lebih kecil.");
+    if (file.size > Math.min(3, capMb()) * 1024 * 1024) throw new Error("GIF maksimal 3 MB. Untuk gerakan, video MP4 pendek biasanya 5-10x lebih kecil.");
     return file;
   }
   if (!file.type.startsWith("image/")) throw new Error("File ini bukan gambar.");
@@ -24,13 +27,16 @@ export async function prepareImage(file: File): Promise<File> {
   const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/webp", 0.82));
   if (!blob) return file;
   const out = new File([blob], file.name.replace(/\.\w+$/, "") + ".webp", { type: blob.type || "image/webp" });
-  return out.size < file.size ? out : file;
+  const best = out.size < file.size ? out : file;
+  if (best.size > capMb() * 1024 * 1024) throw new Error(`Foto masih lebih dari ${capMb()} MB setelah diperkecil. Coba foto lain.`);
+  return best;
 }
 
 /** Cek ukuran & durasi video sebelum diunggah. */
 export async function checkVideo(file: File): Promise<File> {
   if (!["video/mp4", "video/webm"].includes(file.type)) throw new Error("Video harus berformat MP4 atau WebM.");
-  if (file.size > VIDEO_MAX_MB * 1024 * 1024) throw new Error(`Video maksimal ${VIDEO_MAX_MB} MB. Potong jadi beberapa detik saja.`);
+  const maxMb = Math.min(VIDEO_MAX_MB, capMb());
+  if (file.size > maxMb * 1024 * 1024) throw new Error(`Video maksimal ${maxMb} MB di server ini. Potong jadi beberapa detik atau kecilkan resolusinya (720p cukup).`);
   const duration = await new Promise<number>((resolve) => {
     const v = document.createElement("video");
     v.preload = "metadata";

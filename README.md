@@ -6,7 +6,7 @@ Status: **MVP tahap pengembangan lokal.** Belum dipakai di produksi. Lihat bagia
 
 ## Menjalankan di komputer sendiri
 
-Butuh Node.js 20 atau lebih baru.
+Butuh Node.js 22 atau lebih baru.
 
 ```bash
 npm install
@@ -88,7 +88,8 @@ web/
 
 ## Keputusan teknis
 
-- **Hono + SQLite**: kode API yang sama jalan di Node (lokal) dan Cloudflare Workers. Lapisan DB (`server/src/db/types.ts`) meniru API D1, jadi pindah ke D1 tidak perlu menulis ulang query.
+- **Font khas: Fredoka.** Fredoka tidak punya angka tabular, jadi kolom angka di tabel dan rincian total memakai Plus Jakarta Sans supaya digit sejajar.
+- **Hono + SQLite**: kode API yang sama jalan di Node (lokal), Vercel (Turso), dan Cloudflare Workers (D1). Lapisan DB (`server/src/db/types.ts`) meniru API D1, jadi pindah ke D1 tidak perlu menulis ulang query.
 - **Harga dihitung di server.** Klien hanya mengirim ID menu dan jumlah. Harga yang dikirim klien diabaikan.
 - **Uang dalam rupiah bulat (INTEGER)**, waktu dalam epoch milidetik, laporan memakai tanggal bisnis zona waktu toko (default WIB).
 - **Pesanan masuk memakai polling tiap 5-7 detik**, bukan WebSocket. Lebih sederhana dan jalan di Workers tanpa Durable Objects. Cukup untuk warung/kafe; pertimbangkan Durable Objects kalau ada toko dengan ratusan pesanan per jam.
@@ -108,6 +109,10 @@ Ini yang perlu ada sebelum Mezan dijual ke toko sungguhan:
 7. **Domain/subdomain sendiri untuk toko premium** (mis. menu.namaresto.com) dan font unggahan sendiri. Sekarang font dipilih dari daftar Google Fonts yang dikurasi.
 8. **Logo & ikon final.** Ikon PWA saat ini placeholder huruf "m".
 9. **Mode offline untuk kasir** (antre pesanan saat internet putus lalu kirim ulang).
+
+## Deploy untuk testing (Vercel)
+
+Lihat [docs/deploy-vercel.md](docs/deploy-vercel.md). Ringkasnya: import repo di Vercel, lalu (disarankan) tambahkan Turso untuk database permanen dan Vercel Blob untuk foto/video.
 
 ## Pindah ke Cloudflare
 

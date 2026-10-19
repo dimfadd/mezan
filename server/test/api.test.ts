@@ -181,5 +181,13 @@ test("tampilan menu: template untuk paket biasa, kustom untuk premium, kontras b
 
   // Turun paket: menu otomatis kembali ke template tanpa menghapus pengaturan.
   db.raw.prepare("UPDATE plans SET allow_branding = 0").run();
-  assert.equal((await call("GET", `/api/public/table/${code}`)).json.store.theme.headingFont, "fraunces");
+  assert.equal((await call("GET", `/api/public/table/${code}`)).json.store.theme.headingFont, "fredoka");
+});
+
+test("migrations.gen.ts sinkron dengan server/migrations/*.sql", async () => {
+  const { readdirSync, readFileSync } = await import("node:fs");
+  const { MIGRATIONS } = await import("../src/db/migrations.gen");
+  const files = readdirSync("server/migrations").filter((f) => f.endsWith(".sql")).sort();
+  assert.deepEqual(MIGRATIONS.map((m) => m.name), files, "jalankan npm run gen");
+  for (const m of MIGRATIONS) assert.equal(m.sql, readFileSync(`server/migrations/${m.name}`, "utf8"), `${m.name} berubah, jalankan npm run gen`);
 });

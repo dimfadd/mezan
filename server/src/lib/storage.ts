@@ -3,6 +3,8 @@ export interface MediaStorage {
   put(key: string, data: ArrayBuffer, contentType: string): Promise<void>;
   get(key: string): Promise<{ body: ReadableStream | ArrayBuffer | Uint8Array; contentType: string; size: number } | null>;
   delete(key: string): Promise<void>;
+  /** Kalau ada, file dilayani lewat redirect ke URL publik ini (mis. Vercel Blob/CDN), bukan lewat server. */
+  publicUrl?(key: string): Promise<string | null>;
 }
 
 export const MEDIA_LIMITS = {

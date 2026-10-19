@@ -220,7 +220,10 @@ storeRoutes.post("/items/reorder", mgmt, async (c) => {
 storeRoutes.post("/media", mgmt, async (c) => {
   const t = storeOf(c);
   // Tolak lebih awal sebelum seluruh file dibaca ke memori.
-  if (Number(c.req.header("content-length") ?? 0) > MEDIA_LIMITS.video.maxBytes + 64 * 1024) fail(413, "Ukuran file terlalu besar.");
+  const cap = c.var.runtime.uploadLimitMb * 1024 * 1024;
+  if (Number(c.req.header("content-length") ?? 0) > Math.min(MEDIA_LIMITS.video.maxBytes, cap) + 64 * 1024) {
+    fail(413, `Ukuran file maksimal ${c.var.runtime.uploadLimitMb} MB.`);
+  }
   const form = await c.req.formData();
   const file = form.get("file");
   if (!(file instanceof File)) fail(400, "Pilih file dulu.");
@@ -230,8 +233,9 @@ storeRoutes.post("/media", mgmt, async (c) => {
     fail(415, kind === "video" ? "Video harus MP4 atau WebM." : "Gambar harus JPG, PNG, WebP, atau GIF.");
   }
   if (kind === "video" && !t.allow_video) fail(403, `Video menu belum termasuk di paket ${t.plan_name}.`);
-  if (file.size > limit.maxBytes) {
-    fail(413, `Ukuran file maksimal ${Math.round(limit.maxBytes / 1024 / 1024)} MB.`);
+  const max = Math.min(limit.maxBytes, cap);
+  if (file.size > max) {
+    fail(413, `Ukuran file maksimal ${Math.round((max / 1024 / 1024) * 10) / 10} MB.`);
   }
   const key = `${t.id}/${newId()}.${EXT[file.type]}`;
   await c.var.storage.put(key, await file.arrayBuffer(), file.type);

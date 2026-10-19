@@ -56,7 +56,8 @@ authRoutes.post("/logout", async (c) => {
 
 authRoutes.get("/me", async (c) => {
   const user = c.var.user;
-  if (!user) return c.json({ user: null });
+  const runtime = c.var.runtime;
+  if (!user) return c.json({ user: null, runtime });
   const t = c.var.tenant;
   return c.json({
     user,
@@ -65,6 +66,7 @@ authRoutes.get("/me", async (c) => {
       locked: tenantLocked(t),
       grace_days: GRACE_DAYS,
     },
+    runtime,
   });
 });
 

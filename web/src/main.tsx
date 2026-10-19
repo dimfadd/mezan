@@ -1,6 +1,7 @@
 import { StrictMode, Suspense, lazy, type ComponentType, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import "@fontsource-variable/fredoka";
 import "@fontsource-variable/plus-jakarta-sans";
 import "@fontsource/fraunces/600.css";
 import "@fontsource/fraunces/700.css";

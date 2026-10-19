@@ -120,7 +120,7 @@ function AuthLayout({ children, quote }: { children: React.ReactNode; quote: str
 }
 
 export function LoginPage() {
-  const { user, refresh, ready } = useSession();
+  const { user, refresh, ready, runtime } = useSession();
   const nav = useNavigate();
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
@@ -134,6 +134,11 @@ export function LoginPage() {
         <h1>Masuk</h1>
         <p className="muted" style={{ marginTop: 6 }}>Untuk pemilik, manajer, dan karyawan toko.</p>
       </div>
+      {runtime.ephemeral && (
+        <p className="banner" role="note" style={{ margin: 0 }}>
+          Server uji. Coba dengan akun contoh pemilik@contoh.id / contoh12345 atau kasir@contoh.id / contoh12345. Data bisa kembali ke awal sewaktu-waktu.
+        </p>
+      )}
       <form
         className="form-grid"
         onSubmit={async (e) => {
