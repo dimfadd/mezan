@@ -464,13 +464,13 @@
 .lp-card { display: grid; grid-template-rows: auto 1fr; background: var(--surface); border: 1px solid var(--line); border-radius: 22px; overflow: hidden; min-width: 0; }
 .lp-card.span2 { grid-column: span 2; }
 .lp-card.tall { grid-row: span 2; }
-.lp-card-demo { display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; min-height: 190px; padding: 18px; background: var(--surface-2); border-bottom: 1px solid var(--line); font-size: 12px; }
+.lp-card-demo { display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; min-height: 190px; padding: 18px; background: var(--surface-2); border-top: 1px solid var(--line); font-size: 12px; }
 .lp-card.tall .lp-card-demo { min-height: 420px; }
-.lp-card-copy { padding: 16px 18px 20px; }
-.lp-card-copy h3 { display: flex; gap: 8px; align-items: center; font-family: var(--font-menu); font-size: 1.12rem; font-weight: 700; line-height: 1.2; }
+.lp-card-copy { padding: 20px 18px 18px; text-align: center; }
+.lp-card-copy h3 { display: flex; flex-direction: column; gap: 10px; align-items: center; text-wrap: balance; font-family: var(--font-menu); font-size: 1.12rem; font-weight: 700; line-height: 1.2; }
 .lp-card-copy .ic { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: var(--brand-soft); color: var(--brand-text); flex: none; }
 .lp-card-copy .ic svg { width: 17px; height: 17px; }
-.lp-card-copy p { color: var(--ink-2); margin-top: 6px; font-size: 0.95rem; }
+.lp-card-copy p { color: var(--ink-2); margin: 8px auto 0; max-width: 46ch; font-size: 0.95rem; text-wrap: pretty; }
 .lp-mini-logo { font-weight: 700; font-size: 15px; line-height: 1; }
 
 .lp-call { display: grid; grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1.2fr); align-items: center; gap: 6px; width: 100%; max-width: 560px; }

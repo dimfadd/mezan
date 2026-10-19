@@ -59,11 +59,11 @@ export function Extras() {
 export function Card({ icon, title, body, className = "", children }: { icon: ReactNode; title: string; body: string; className?: string; children: ReactNode }) {
   return (
     <article className={`lp-card ${className}`}>
-      <div className="lp-card-demo" aria-hidden="true">{children}</div>
       <div className="lp-card-copy">
         <h3><span className="ic">{icon}</span>{title}</h3>
         <p>{body}</p>
       </div>
+      <div className="lp-card-demo" aria-hidden="true">{children}</div>
     </article>
   );
 }
