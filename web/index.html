@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f7f4ee" />
+    <meta name="description" content="Mezan: menu digital dengan foto dan video, pesan dari meja lewat QR, kasir, stok, dan laporan penjualan." />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Mezan" />
+    <title>Mezan</title>
+    <script>
+      // Pasang tema sebelum halaman tampil supaya tidak berkedip.
+      (function () {
+        try {
+          var p = localStorage.getItem("mezan-theme") || "system";
+          var d = p === "dark" || (p === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.dataset.theme = d ? "dark" : "light";
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>Mezan butuh JavaScript. Nyalakan JavaScript di browser kamu.</noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

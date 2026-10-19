@@ -1,0 +1,48 @@
+{
+  "name": "mezan",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Mezan: menu digital, pesan dari meja, kasir, stok, dan laporan untuk warung, kafe, dan toko.",
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c green,yellow \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "tsx watch server/src/node.ts",
+    "dev:web": "vite",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "start": "NODE_ENV=production tsx server/src/node.ts",
+    "db:migrate": "tsx server/src/scripts/migrate.ts",
+    "db:seed": "tsx server/src/scripts/seed.ts",
+    "db:reset": "rm -f data/mezan.db && npm run db:migrate && npm run db:seed",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test server/test/*.test.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
+    "@fontsource/fraunces": "^5.3.0",
+    "@hono/node-server": "^2.1.5",
+    "better-sqlite3": "^13.0.3",
+    "hono": "^4.13.13",
+    "lucide-react": "^1.59.0",
+    "qrcode": "^1.5.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router-dom": "^7.18.4",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.6.5",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "concurrently": "^10.0.6",
+    "playwright": "^1.64.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4"
+  }
+}

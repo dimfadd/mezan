@@ -1,0 +1,21 @@
+# Konfigurasi Cloudflare untuk tahap produksi. Belum dipakai saat pengembangan lokal.
+# Langkah pindah: lihat docs/deploy-cloudflare.md
+name = "mezan"
+main = "server/src/worker.ts"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "./web/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "mezan"
+database_id = "ISI_SETELAH_wrangler_d1_create"
+migrations_dir = "server/migrations"
+
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "mezan-media"

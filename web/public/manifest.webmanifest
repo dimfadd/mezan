@@ -1,0 +1,16 @@
+{
+  "name": "Mezan",
+  "short_name": "Mezan",
+  "description": "Menu digital, pesan dari meja, kasir, stok, dan laporan.",
+  "lang": "id",
+  "start_url": "/toko/pesanan",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f4ee",
+  "theme_color": "#1f6b4f",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
