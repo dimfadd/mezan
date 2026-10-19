@@ -1,8 +1,9 @@
 import { useRef, type ReactNode } from "react";
-import { BellRing, Check, LayoutGrid, List, MapPin, ReceiptText, ShoppingBag, ThumbsUp, Users } from "lucide-react";
+import { BellRing, Check, Clapperboard, Clock3, DoorOpen, LayoutGrid, List, MapPin, ReceiptText, ShoppingBag, Sparkles, Stamp, Star, ThumbsUp, Users } from "lucide-react";
 import { rupiah } from "../../../lib/format";
 import { AppIcon, FakeQR, Food, type FoodKind } from "./art";
 import { useReducedMotion, useStepper, useVisible } from "./motion";
+import { HappyDemo, PairDemo, RatingDemo, StampDemo, VideoDemo, WaitlistDemo } from "./MoreDemos";
 
 // Fitur-fitur kecil yang terasa langsung di meja. Setiap kartu memperagakan perilaku aplikasi yang sebenarnya.
 export function Extras() {
@@ -33,11 +34,29 @@ export function Extras() {
       <Card icon={<AppIcon size={18} />} title="QR berlogo pesan.in" body="Kode acak per meja yang tidak bisa ditebak, dengan logo di tengah dan tetap terbaca kamera HP biasa.">
         <QrDemo />
       </Card>
+      <Card className="span2" icon={<Star />} title="Struk digital & rating per menu" body="Kasir mengirim struk ke WhatsApp pembeli. Setelah makan, pembeli memberi bintang dan jempol per menu, lalu bisa lanjut menulis ulasan di Google Maps. Pemilik melihat menu mana yang disukai.">
+        <RatingDemo on={on} />
+      </Card>
+      <Card className="tall" icon={<Clapperboard />} title="Mode video ala TikTok" body="Pembeli menggeser menu satu per satu dalam layar penuh, videonya jalan sendiri. Tambah ke pesanan tanpa keluar dari video.">
+        <VideoDemo on={on} />
+      </Card>
+      <Card icon={<Stamp />} title="Kartu stempel lewat nomor HP" body="Kasir mengetik nomor HP saat bayar. Tiap belanja di atas batas minimal dapat satu stempel. Pembeli tidak perlu pasang aplikasi.">
+        <StampDemo on={on} />
+      </Card>
+      <Card icon={<Clock3 />} title="Menu & harga ikut jam" body="Menu sarapan hanya bisa dipesan pagi. Happy hour memotong harga sendiri pada jamnya, di menu QR dan di kasir.">
+        <HappyDemo on={on} />
+      </Card>
+      <Card className="span2" icon={<DoorOpen />} title="Antrean saat penuh" body="Pembeli memindai QR di pintu, mengisi nama dan jumlah orang, lalu bebas menunggu di mana saja. Halamannya diperbarui sendiri dan berubah saat mejanya siap.">
+        <WaitlistDemo on={on} />
+      </Card>
+      <Card icon={<Sparkles />} title="Saran pasangan menu" body="Pesan ayam geprek, muncul es teh. Pasangannya bisa diatur pemilik, atau diambil dari menu yang sering dipesan bareng.">
+        <PairDemo on={on} />
+      </Card>
     </div>
   );
 }
 
-function Card({ icon, title, body, className = "", children }: { icon: ReactNode; title: string; body: string; className?: string; children: ReactNode }) {
+export function Card({ icon, title, body, className = "", children }: { icon: ReactNode; title: string; body: string; className?: string; children: ReactNode }) {
   return (
     <article className={`lp-card ${className}`}>
       <div className="lp-card-demo" aria-hidden="true">{children}</div>

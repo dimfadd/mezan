@@ -50,6 +50,13 @@ export interface Tenant {
   geo_lat: number | null;
   geo_lng: number | null;
   geo_radius_m: number;
+  google_review_url: string;
+  loyalty_enabled: number;
+  loyalty_target: number;
+  loyalty_min_spend: number;
+  loyalty_reward: string;
+  waitlist_enabled: number;
+  waitlist_code: string | null;
 }
 
 export const COOKIE = "mezan_session";

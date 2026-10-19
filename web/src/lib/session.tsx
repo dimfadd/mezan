@@ -1,5 +1,17 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { api } from "./api";
+import { api, ApiError } from "./api";
+import { clearApiCache } from "./hooks";
+
+// Sesi terakhir disimpan di HP supaya kasir tetap terbuka saat internet putus dan halaman dimuat ulang.
+const ME_KEY = "pesanin-me";
+function cachedMe(): { user: Me | null; tenant: StoreInfo | null } | null {
+  try {
+    const v = localStorage.getItem(ME_KEY);
+    return v ? JSON.parse(v) : null;
+  } catch {
+    return null;
+  }
+}
 
 export type Role = "platform_admin" | "owner" | "manager" | "staff";
 export interface Me {
@@ -41,6 +53,14 @@ export interface StoreInfo {
   geo_lat: number | null;
   geo_lng: number | null;
   geo_radius_m: number;
+  google_review_url: string;
+  loyalty_enabled: number;
+  loyalty_target: number;
+  loyalty_min_spend: number;
+  loyalty_reward: string;
+  waitlist_enabled: number;
+  waitlist_code: string | null;
+  tz_offset_minutes: number;
   locked: boolean;
   grace_days: number;
 }
@@ -72,12 +92,26 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const r = await api.get<{ user: Me | null; tenant: StoreInfo | null; runtime?: RuntimeInfo }>("/api/auth/me");
       if (r.runtime) runtimeInfo = r.runtime;
       setState({ user: r.user, tenant: r.tenant ?? null, ready: true, runtime: runtimeInfo });
-    } catch {
-      setState((s) => ({ ...s, ready: true }));
+      try {
+        if (r.user) localStorage.setItem(ME_KEY, JSON.stringify({ user: r.user, tenant: r.tenant ?? null }));
+        else localStorage.removeItem(ME_KEY);
+      } catch {
+        /* abaikan */
+      }
+    } catch (e) {
+      const offline = e instanceof ApiError && e.status === 0;
+      const c = offline ? cachedMe() : null;
+      setState((s) => ({ ...s, ...(c ?? {}), ready: true }));
     }
   }, []);
   const logout = useCallback(async () => {
     await api.post("/api/auth/logout").catch(() => {});
+    try {
+      localStorage.removeItem(ME_KEY);
+    } catch {
+      /* abaikan */
+    }
+    clearApiCache();
     setState((s) => ({ ...s, user: null, tenant: null, ready: true }));
   }, []);
   useEffect(() => {

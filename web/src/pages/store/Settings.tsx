@@ -35,10 +35,11 @@ export function SettingsPage() {
     inventory_enabled: !!tenant.inventory_enabled,
     qr_ordering_enabled: !!tenant.qr_ordering_enabled,
     logo_url: tenant.logo_url,
+    google_review_url: tenant.google_review_url ?? "",
   });
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    if (!f && tenant) setF({ ...tenant, inventory_enabled: !!tenant.inventory_enabled, qr_ordering_enabled: !!tenant.qr_ordering_enabled });
+    if (!f && tenant) setF({ ...tenant, inventory_enabled: !!tenant.inventory_enabled, qr_ordering_enabled: !!tenant.qr_ordering_enabled, google_review_url: tenant.google_review_url ?? "" });
   }, [tenant, f]);
   if (!tenant || !f) return <Loading />;
 
@@ -132,6 +133,18 @@ export function SettingsPage() {
                 hint={tenant.allow_inventory ? "Opsional. Nyalakan kalau kamu ingin stok berkurang otomatis tiap terjual dan diingatkan saat menipis." : `Belum termasuk di paket ${tenant.plan_name}.`}
               />
             </div>
+          </section>
+
+          <section className="panel">
+            <div className="panel-head">
+              <div>
+                <h2>Ulasan Google Maps</h2>
+                <p>Setelah pembeli memberi nilai dari HP-nya, tombol "Tulis ulasan di Google Maps" ditampilkan ke semua pembeli, apa pun nilainya. Google melarang hanya meminta ulasan dari pembeli yang puas.</p>
+              </div>
+            </div>
+            <Field label="Tautan menulis ulasan" htmlFor="s-review" hint='Di Google Business Profile: "Minta ulasan" lalu salin tautannya (diawali https://g.page/ atau https://maps.app.goo.gl/). Kosongkan kalau belum punya.'>
+              <input id="s-review" className="input" inputMode="url" value={f.google_review_url} onChange={(e) => setF({ ...f, google_review_url: e.target.value.trim() })} maxLength={300} placeholder="https://g.page/r/..." />
+            </Field>
           </section>
 
           <div className="form-actions">

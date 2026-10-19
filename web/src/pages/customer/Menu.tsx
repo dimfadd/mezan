@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { BellRing, ChevronRight, Clock3, Images, ReceiptText, Users, LayoutGrid, List, MapPin, Minus, Play, Plus, Search, ShoppingBag, ThumbsUp, Trash2, UtensilsCrossed, X } from "lucide-react";
+import { BellRing, ChevronRight, Clock3, Images, ReceiptText, Users, LayoutGrid, List, MapPin, Minus, Play, Plus, Search, ShoppingBag, ThumbsUp, Trash2, UtensilsCrossed, X, Clapperboard, Sparkles } from "lucide-react";
+import { priceNow, useStoreClock, type PriceNow } from "../../lib/pricing";
+import { scheduleText, type PriceRule } from "../../../../shared/schedule";
+import { VideoFeed } from "./VideoFeed";
 import { Empty, ErrorState, Field, Loading, Modal, Thumb, useToast } from "../../components/ui";
 import { api } from "../../lib/api";
 import { rupiah } from "../../lib/format";
@@ -35,6 +38,10 @@ interface Dish {
   portion_en: string;
   components_en: string;
   allergens_en: string;
+  avail_days: number;
+  avail_from: number | null;
+  avail_to: number | null;
+  pairs?: string[];
 }
 interface MenuData {
   store: { name: string; address: string; welcome_note: string; welcome_note_en: string; tax_rate: number; service_rate: number; accepting_orders: boolean; theme?: MenuTheme };
@@ -43,7 +50,12 @@ interface MenuData {
   geo: { check: boolean; strict: boolean };
   categories: { id: string; name: string; name_en: string }[];
   items: Dish[];
+  pricing?: { tz: number; now: number; rules: PriceRule[] };
 }
+
+/** Harga & jam buka menu saat ini, dihitung dari jam toko. */
+export type Priced = (d: Dish) => PriceNow;
+export type { Dish };
 
 const cartKey = (code: string) => `mezan-cart-${code}`;
 const ordersKey = (code: string) => `mezan-orders-${code}`;
@@ -107,6 +119,8 @@ export function CustomerMenuPage() {
       return null;
     }
   });
+  // Mode video ala TikTok tidak disimpan: dibuka saat diminta, ditutup kembali ke daftar.
+  const [video, setVideo] = useState(false);
   const pickView = (v: "list" | "grid") => {
     setView(v);
     try {
@@ -115,6 +129,10 @@ export function CustomerMenuPage() {
       /* mode privat */
     }
   };
+  const clock = useStoreClock(data?.pricing);
+  const rules = data?.pricing?.rules ?? [];
+  const priced: Priced = (d) => priceNow(d, rules, clock);
+  const orderable = (d: Dish) => !d.sold_out && priced(d).open;
   const myOrders = loadJSON<{ token: string; number: number; at: number }[]>(ordersKey(code), []).filter((o) => Date.now() - o.at < 12 * 3600_000);
 
   useEffect(() => {
@@ -149,10 +167,11 @@ export function CustomerMenuPage() {
 
   const byId = useMemo(() => new Map((data?.items ?? []).map((i) => [i.id, i])), [data]);
   // Buang item yang sudah tidak ada/habis dari keranjang lama.
-  const validCart = cart.filter((l) => byId.has(l.id) && !byId.get(l.id)!.sold_out);
-  const validOthers = othersLines.filter((l) => byId.has(l.item_id) && !byId.get(l.item_id)!.sold_out);
+  const validCart = cart.filter((l) => byId.has(l.id) && orderable(byId.get(l.id)!));
+  const validOthers = othersLines.filter((l) => byId.has(l.item_id) && orderable(byId.get(l.item_id)!));
   const count = validCart.reduce((s, l) => s + l.qty, 0) + validOthers.reduce((s, l) => s + l.qty, 0);
-  const subtotal = validCart.reduce((s, l) => s + byId.get(l.id)!.price * l.qty, 0) + validOthers.reduce((s, l) => s + byId.get(l.item_id)!.price * l.qty, 0);
+  const subtotal = validCart.reduce((s, l) => s + priced(byId.get(l.id)!).price * l.qty, 0) + validOthers.reduce((s, l) => s + priced(byId.get(l.item_id)!).price * l.qty, 0);
+  const hasMedia = (data?.items ?? []).some((i) => i.media.length > 0 || i.image_url || i.video_url);
 
   const sections = useMemo(() => {
     if (!data) return [];
@@ -259,6 +278,11 @@ export function CustomerMenuPage() {
             <button type="button" aria-pressed={layout === "grid"} onClick={() => pickView("grid")} aria-label={t.gridView} title={t.gridView}>
               <LayoutGrid aria-hidden="true" />
             </button>
+            {hasMedia && (
+              <button type="button" aria-pressed={video} onClick={() => setVideo(true)} aria-label={t.videoView} title={t.videoView}>
+                <Clapperboard aria-hidden="true" />
+              </button>
+            )}
           </div>
         </div>
         {!q && sections.length > 1 && (
@@ -291,16 +315,21 @@ export function CustomerMenuPage() {
                 const inCart = validCart.filter((l) => l.id === d.id).reduce((n, l) => n + l.qty, 0);
                 const sub = subtitle(lang, d);
                 const desc = loc(lang, d.description, d.description_en);
+                const p = priced(d);
                 return (
-                  <button key={d.id} className={`dish${d.sold_out ? " sold" : ""}`} onClick={() => setOpen(d)} aria-label={`${d.name}${sub ? `, ${sub}` : ""}, ${rupiah(d.price)}${isBest(d) ? `, ${t.bestSeller}` : ""}${d.sold_out ? `, ${t.soldOut}` : ""}. ${t.seeDetail}`}>
+                  <button key={d.id} className={`dish${d.sold_out || !p.open ? " sold" : ""}`} onClick={() => setOpen(d)} aria-label={`${d.name}${sub ? `, ${sub}` : ""}, ${rupiah(p.price)}${p.promo ? `, ${p.promo}` : ""}${isBest(d) ? `, ${t.bestSeller}` : ""}${d.sold_out ? `, ${t.soldOut}` : !p.open ? `, ${t.availableAt(scheduleText(d, lang))}` : ""}. ${t.seeDetail}`}>
                     {inCart > 0 && <span className="count added">{inCart}</span>}
                     <div style={{ minWidth: 0 }}>
                       <div className="name">{d.name}</div>
                       {sub && <div className="name-en">{sub}</div>}
                       {desc && <div className="desc">{desc}</div>}
-                      <div className="price">{rupiah(d.price)}</div>
+                      <div className="price">
+                        {p.promo && <s className="was">{rupiah(p.list)}</s>} {rupiah(p.price)}
+                        {p.promo && <span className="promo-tag">{p.promo} −{p.percent}%</span>}
+                      </div>
                       <div className="tags">
                         {d.sold_out && <span className="badge badge-danger">{t.soldOut}</span>}
+                        {!d.sold_out && !p.open && <span className="badge"><Clock3 aria-hidden="true" /> {t.availableAt(scheduleText(d, lang))}</span>}
                         {d.few_left != null && <span className="badge badge-warn">{t.fewLeft(d.few_left)}</span>}
                         {d.tags.split(",").filter((tg) => tg && tg !== "bestseller").map((tg) => (
                           <span key={tg} className={`badge ${tg === "pedas" ? "badge-danger" : tg === "favorit" ? "badge-ok" : ""}`}>{t.tags[tg] ?? tg}</span>
@@ -345,7 +374,31 @@ export function CustomerMenuPage() {
         </button>
       )}
 
-      {open && <DishModal dish={open} lang={lang} canOrder={data.store.accepting_orders} onClose={() => setOpen(null)} onAdd={(qty, note) => { addLine(open.id, qty, note); setOpen(null); }} />}
+      {open && (
+        <DishModal
+          dish={open}
+          lang={lang}
+          canOrder={data.store.accepting_orders}
+          priced={priced}
+          pairs={(open.pairs ?? []).map((id) => byId.get(id)).filter((x): x is Dish => !!x && orderable(x))}
+          onClose={() => setOpen(null)}
+          onAdd={(qty, note) => { addLine(open.id, qty, note); setOpen(null); }}
+          onAddPair={(d) => { addLine(d.id, 1, ""); toast(t.added(d.name)); }}
+        />
+      )}
+      {video && (
+        <VideoFeed
+          items={sections.flatMap((x) => x.items).filter((i) => i.media.length > 0 || i.image_url || i.video_url)}
+          lang={lang}
+          priced={priced}
+          canOrder={data.store.accepting_orders}
+          count={count}
+          onAdd={(d) => { addLine(d.id, 1, ""); toast(t.added(d.name)); }}
+          onOpen={(d) => { setVideo(false); setOpen(d); }}
+          onCart={() => { setVideo(false); setCartOpen(true); }}
+          onClose={() => setVideo(false)}
+        />
+      )}
       <CartModal
         open={cartOpen}
         code={code}
@@ -354,6 +407,17 @@ export function CustomerMenuPage() {
         lines={validCart}
         setLines={setCart}
         others={validOthers}
+        priced={priced}
+        suggest={(() => {
+          const inCart = new Set([...validCart.map((l) => l.id), ...validOthers.map((l) => l.item_id)]);
+          const out: Dish[] = [];
+          for (const id of [...inCart]) for (const pid of byId.get(id)?.pairs ?? []) {
+            const x = byId.get(pid);
+            if (x && !inCart.has(pid) && orderable(x) && !out.includes(x)) out.push(x);
+          }
+          return out.slice(0, 3);
+        })()}
+        onAddPair={(d) => addLine(d.id, 1, "")}
         people={st?.people ?? 0}
         session={dineIn ? session : null}
         onClose={() => setCartOpen(false)}
@@ -377,7 +441,26 @@ export function CustomerMenuPage() {
   );
 }
 
-function DishModal({ dish, lang, canOrder, onClose, onAdd }: { dish: Dish; lang: Lang; canOrder: boolean; onClose: () => void; onAdd: (qty: number, note: string) => void }) {
+function DishModal({
+  dish,
+  lang,
+  canOrder,
+  priced,
+  pairs,
+  onClose,
+  onAdd,
+  onAddPair,
+}: {
+  dish: Dish;
+  lang: Lang;
+  canOrder: boolean;
+  priced: Priced;
+  pairs: Dish[];
+  onClose: () => void;
+  onAdd: (qty: number, note: string) => void;
+  onAddPair: (d: Dish) => void;
+}) {
+  const p = priced(dish);
   const { t } = useLang();
   const [qty, setQty] = useState(1);
   const [picks, setPicks] = useState<string[]>([]);
@@ -408,7 +491,10 @@ function DishModal({ dish, lang, canOrder, onClose, onAdd }: { dish: Dish; lang:
           <h2 className="dish-title">{dish.name}</h2>
           {sub && <p className="dish-subtitle">{sub}</p>}
           <div className="row wrap" style={{ marginTop: 8 }}>
-            <span className="strong money" style={{ fontSize: "1.15rem" }}>{rupiah(dish.price)}</span>
+            <span className="strong money" style={{ fontSize: "1.15rem" }}>
+              {p.promo && <s className="was">{rupiah(p.list)}</s>} {rupiah(p.price)}
+            </span>
+            {p.promo && <span className="promo-tag">{p.promo} −{p.percent}%</span>}
             {dish.tags.split(",").filter(Boolean).map((tg) =>
               tg === "bestseller" ? (
                 <span key={tg} className="badge badge-best"><ThumbsUp aria-hidden="true" /> {t.bestSeller}</span>
@@ -422,6 +508,8 @@ function DishModal({ dish, lang, canOrder, onClose, onAdd }: { dish: Dish; lang:
         <DishFacts d={dish} lang={lang} />
         {dish.sold_out ? (
           <div className="banner danger" style={{ margin: 0 }}>{t.soldOutLong}</div>
+        ) : !p.open ? (
+          <div className="banner info" style={{ margin: 0 }}><Clock3 aria-hidden="true" /> {t.availableAt(scheduleText(dish, lang))}</div>
         ) : canOrder ? (
           <>
             <div className="field">
@@ -442,9 +530,10 @@ function DishModal({ dish, lang, canOrder, onClose, onAdd }: { dish: Dish; lang:
                 <button type="button" onClick={() => setQty((q) => Math.min(dish.few_left ?? 50, q + 1))} aria-label={t.more}><Plus /></button>
               </div>
               <button className="btn btn-primary btn-lg" style={{ flex: 1 }} onClick={() => onAdd(qty, note)}>
-                {t.add} · <span className="money">{rupiah(dish.price * qty)}</span>
+                {t.add} · <span className="money">{rupiah(p.price * qty)}</span>
               </button>
             </div>
+            {pairs.length > 0 && <PairChips title={t.goesWith} items={pairs} lang={lang} priced={priced} onAdd={onAddPair} />}
           </>
         ) : (
           <p className="small muted">{t.orderAtCashier}</p>
@@ -462,6 +551,9 @@ function CartModal({
   lines,
   setLines,
   others,
+  priced,
+  suggest,
+  onAddPair,
   people,
   session,
   onClose,
@@ -473,6 +565,9 @@ function CartModal({
   lines: CartLine[];
   setLines: (fn: (c: CartLine[]) => CartLine[]) => void;
   others: SharedLine[];
+  priced: Priced;
+  suggest: Dish[];
+  onAddPair: (d: Dish) => void;
   people: number;
   session: ReturnType<typeof useTableSession> | null;
   onClose: () => void;
@@ -490,7 +585,7 @@ function CartModal({
   useEffect(() => {
     session?.setPerson(name.trim());
   }, [name, session]);
-  const subtotal = lines.reduce((s, l) => s + byId.get(l.id)!.price * l.qty, 0) + others.reduce((s, l) => s + byId.get(l.item_id)!.price * l.qty, 0);
+  const subtotal = lines.reduce((s, l) => s + priced(byId.get(l.id)!).price * l.qty, 0) + others.reduce((s, l) => s + priced(byId.get(l.item_id)!).price * l.qty, 0);
   const service = Math.round((subtotal * data.store.service_rate) / 100);
   const tax = Math.round(((subtotal + service) * data.store.tax_rate) / 100);
   const total = subtotal + service + tax;
@@ -498,7 +593,7 @@ function CartModal({
 
   const change = (idx: number, d: number) =>
     setLines((c) => {
-      const valid = c.filter((l) => byId.has(l.id) && !byId.get(l.id)!.sold_out);
+      const valid = c.filter((l) => byId.has(l.id) && !byId.get(l.id)!.sold_out && priced(byId.get(l.id)!).open);
       const l = valid[idx];
       if (!l) return c;
       const qty = l.qty + d;
@@ -582,7 +677,7 @@ function CartModal({
                     <div className="strong">{d.name}</div>
                     {sub && <div className="tiny muted">{sub}</div>}
                     {l.note && <div className="small" style={{ color: "var(--warn-text)" }}>{noteLabel(l.note)}</div>}
-                    <div className="small muted money">{rupiah(d.price * l.qty)}</div>
+                    <div className="small muted money">{rupiah(priced(d).price * l.qty)}</div>
                   </div>
                   <div className="qty">
                     <button onClick={() => change(idx, -1)} aria-label={`${l.qty === 1 ? t.remove : t.less} ${d.name}`}>{l.qty === 1 ? <Trash2 /> : <Minus />}</button>
@@ -593,7 +688,8 @@ function CartModal({
               );
             })}
           </div>
-          {group && <OthersLines others={others} byId={byId} lang={lang} noteLabel={noteLabel} onRemove={(id) => session!.removeLine(id)} />}
+          {group && <OthersLines others={others} byId={byId} lang={lang} priced={priced} noteLabel={noteLabel} onRemove={(id) => session!.removeLine(id)} />}
+          {data.store.accepting_orders && suggest.length > 0 && <PairChips title={t.addPair} items={suggest} lang={lang} priced={priced} onAdd={onAddPair} />}
           <hr className="divider-dashed" />
           {(service > 0 || tax > 0) && (
             <>
@@ -625,7 +721,7 @@ function CartModal({
   );
 }
 
-function OthersLines({ others, byId, lang, noteLabel, onRemove }: { others: SharedLine[]; byId: Map<string, Dish>; lang: Lang; noteLabel: (n: string) => string; onRemove: (id: string) => void }) {
+function OthersLines({ others, byId, lang, priced, noteLabel, onRemove }: { others: SharedLine[]; byId: Map<string, Dish>; lang: Lang; priced: Priced; noteLabel: (n: string) => string; onRemove: (id: string) => void }) {
   const { t } = useLang();
   if (others.length === 0) return null;
   const groups = new Map<string, SharedLine[]>();
@@ -648,7 +744,7 @@ function OthersLines({ others, byId, lang, noteLabel, onRemove }: { others: Shar
                     <div className="strong">{l.qty}× {d.name}</div>
                     {sub && <div className="tiny muted">{sub}</div>}
                     {l.note && <div className="small" style={{ color: "var(--warn-text)" }}>{noteLabel(l.note)}</div>}
-                    <div className="small muted money">{rupiah(d.price * l.qty)}</div>
+                    <div className="small muted money">{rupiah(priced(d).price * l.qty)}</div>
                   </div>
                   <button type="button" className="icon-btn" onClick={() => onRemove(l.id)} aria-label={`${t.remove} ${d.name} (${who})`}>
                     <Trash2 />
@@ -737,5 +833,26 @@ function CallSheet({
         )}
       </div>
     </Modal>
+  );
+}
+
+/** Saran pelengkap: diambil dari pilihan pemilik, atau dari yang sering dipesan bersama. */
+function PairChips({ title, items, lang, priced, onAdd }: { title: string; items: Dish[]; lang: Lang; priced: Priced; onAdd: (d: Dish) => void }) {
+  return (
+    <div className="pair-box">
+      <span className="small strong"><Sparkles aria-hidden="true" /> {title}</span>
+      <div className="pair-row">
+        {items.map((d) => (
+          <button key={d.id} type="button" className="pair-chip" onClick={() => onAdd(d)}>
+            <span className="ph">{d.image_url ? <img src={d.image_url} alt="" loading="lazy" /> : <Thumb name={d.name} />}</span>
+            <span className="tx">
+              <span className="nm">{d.name}{lang === "en" && d.name_en && d.name_en !== d.name ? <span className="tiny muted"> · {d.name_en}</span> : null}</span>
+              <span className="money small">+{rupiah(priced(d).price)}</span>
+            </span>
+            <Plus aria-hidden="true" className="add" />
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

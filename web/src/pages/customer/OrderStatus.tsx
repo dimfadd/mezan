@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Check, ChefHat, ClipboardCheck, HandPlatter, XCircle } from "lucide-react";
-import { ErrorState, Loading } from "../../components/ui";
+import { Check, ChefHat, ClipboardCheck, HandPlatter, XCircle, Star, ThumbsUp, ThumbsDown, Stamp, ExternalLink } from "lucide-react";
+import { ErrorState, Field, Loading, useToast } from "../../components/ui";
+import { api } from "../../lib/api";
 import { rupiah, time } from "../../lib/format";
 import { useApi } from "../../lib/hooks";
 import { ThemedRoot } from "../../components/ThemedRoot";
@@ -35,7 +36,22 @@ interface PublicOrder {
   store_name: string;
   table_code: string | null;
   order_type?: "dine_in" | "takeaway";
-  items: { id: string; name: string; name_en: string; qty: number; price: number; note: string }[];
+  payment_method?: string | null;
+  paid_at?: number | null;
+  store_address?: string;
+  source?: string;
+  items: { id: string; menu_item_id: string | null; name: string; name_en: string; qty: number; price: number; note: string; list_price?: number | null }[];
+}
+interface Feedback {
+  sent: boolean;
+  rating: number | null;
+  review_url: string | null;
+}
+interface Loyalty {
+  target: number;
+  reward: string;
+  min_spend: number;
+  card: { stamps: number; ready: boolean } | null;
 }
 
 const STEPS = [
@@ -48,7 +64,7 @@ const STEPS = [
 export function OrderStatusPage() {
   const { code = "", token = "" } = useParams();
   const { lang, setLang, t } = useLang();
-  const { data, error, loading, reload } = useApi<{ order: PublicOrder; theme?: MenuTheme }>(`/api/public/orders/${token}?lang=${lang}`, { poll: 5000 });
+  const { data, error, loading, reload } = useApi<{ order: PublicOrder; theme?: MenuTheme; feedback?: Feedback; loyalty?: Loyalty | null }>(`/api/public/orders/${token}?lang=${lang}`, { poll: 5000 });
   const o = data?.order;
   useEffect(() => {
     if (o) document.title = `${t.orderNo(o.number)} · ${o.store_name}`;
@@ -113,7 +129,9 @@ export function OrderStatusPage() {
                       {en && i.name_en && <span className="tiny muted" style={{ display: "block" }}>{i.name_en}</span>}
                       {i.note && <span className="note">{noteText(i.note)}</span>}
                     </span>
-                    <span className="money">{rupiah(i.qty * i.price)}</span>
+                    <span className="money">
+                      {i.list_price ? <s className="was">{rupiah(i.qty * i.list_price)}</s> : null} {rupiah(i.qty * i.price)}
+                    </span>
                   </span>
                 </li>
               ))}
@@ -123,10 +141,20 @@ export function OrderStatusPage() {
             {o.tax > 0 && <div className="sum-row small muted"><span>{t.tax}</span><span className="money">{rupiah(o.tax)}</span></div>}
             <div className="sum-row total"><span>{t.total}</span><span className="money">{rupiah(o.total)}</span></div>
             <div>
-              {o.payment_status === "paid" ? <span className="badge badge-ok">{t.paid}</span> : <span className="badge badge-warn">{t.payHere}</span>}
+              {o.payment_status === "paid" ? (
+                <span className="badge badge-ok">{o.payment_method ? t.paidWith(t.payMethods[o.payment_method] ?? o.payment_method) : t.paid}</span>
+              ) : (
+                <span className="badge badge-warn">{t.payHere}</span>
+              )}
             </div>
+            {o.store_address && <p className="tiny muted">{o.store_name} · {o.store_address}</p>}
           </div>
         </div>
+
+        {!cancelled && data?.loyalty && <StampBox token={token} paid={o.payment_status === "paid"} loyalty={data.loyalty} total={o.total} onDone={() => reload(true)} />}
+        {!cancelled && data?.feedback && (o.status === "done" || o.status === "ready" || o.payment_status === "paid") && (
+          <RateBox token={token} items={o.items} feedback={data.feedback} onDone={() => reload(true)} />
+        )}
 
         {o.table_code && code && (
           <Link className="btn btn-lg" to={`/m/${code}`}>
@@ -136,5 +164,136 @@ export function OrderStatusPage() {
       </div>
     </div>
     </ThemedRoot>
+  );
+}
+
+function RateBox({ token, items, feedback, onDone }: { token: string; items: PublicOrder["items"]; feedback: Feedback; onDone: () => void }) {
+  const { lang, t } = useLang();
+  const toast = useToast();
+  const [rating, setRating] = useState(0);
+  const [liked, setLiked] = useState<Record<string, boolean>>({});
+  const [comment, setComment] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(feedback.sent);
+  const dishes = [...new Map(items.filter((i) => i.menu_item_id).map((i) => [i.menu_item_id!, i])).values()];
+  const google = feedback.review_url;
+
+  if (sent) {
+    return (
+      <section className="panel stack rate-box" aria-label={t.rateTitle}>
+        <p className="strong">{t.rateThanks}</p>
+        {google && (
+          <>
+            <p className="small muted">{t.rateGoogleSub}</p>
+            <a className="btn" href={google} target="_blank" rel="noopener noreferrer"><ExternalLink /> {t.rateGoogle}</a>
+          </>
+        )}
+      </section>
+    );
+  }
+  const send = async () => {
+    setBusy(true);
+    try {
+      await api.post(`/api/public/orders/${token}/feedback`, { rating, comment, lang, items: Object.entries(liked).map(([id, l]) => ({ id, liked: l })) });
+      setSent(true);
+      onDone();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="panel stack rate-box" aria-labelledby="rate-h">
+      <div>
+        <h2 id="rate-h">{t.rateTitle}</h2>
+        <p className="small muted">{t.rateSub}</p>
+      </div>
+      <div className="stars" role="radiogroup" aria-label={t.rateTitle}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button key={n} type="button" role="radio" aria-checked={rating === n} aria-label={t.rateStars(n)} className={n <= rating ? "on" : ""} onClick={() => setRating(n)}>
+            <Star aria-hidden="true" />
+          </button>
+        ))}
+      </div>
+      {rating > 0 && (
+        <>
+          {dishes.length > 0 && (
+            <div className="stack-sm">
+              <span className="small strong">{t.ratePerItem}</span>
+              {dishes.map((d) => {
+                const v = liked[d.menu_item_id!];
+                const set = (x: boolean) => setLiked((s) => (s[d.menu_item_id!] === x ? (({ [d.menu_item_id!]: _, ...rest }) => rest)(s) : { ...s, [d.menu_item_id!]: x }));
+                return (
+                  <div key={d.menu_item_id} className="rate-item">
+                    <span>{lang === "en" && d.name_en ? d.name_en : d.name}</span>
+                    <span className="row" style={{ gap: 4 }}>
+                      <button type="button" className={`thumb${v === true ? " on" : ""}`} aria-pressed={v === true} aria-label={`${t.liked}: ${d.name}`} onClick={() => set(true)}><ThumbsUp aria-hidden="true" /></button>
+                      <button type="button" className={`thumb down${v === false ? " on" : ""}`} aria-pressed={v === false} aria-label={`${t.disliked}: ${d.name}`} onClick={() => set(false)}><ThumbsDown aria-hidden="true" /></button>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <Field label={t.rateComment} htmlFor="rate-c">
+            <textarea id="rate-c" className="textarea" value={comment} onChange={(e) => setComment(e.target.value)} maxLength={500} placeholder={t.rateCommentPh} />
+          </Field>
+          <button type="button" className="btn btn-primary btn-lg" disabled={busy} onClick={send}>{busy ? t.sending : t.rateSend}</button>
+        </>
+      )}
+    </section>
+  );
+}
+
+function StampBox({ token, paid, loyalty, total, onDone }: { token: string; paid: boolean; loyalty: Loyalty; total: number; onDone: () => void }) {
+  const { lang, t } = useLang();
+  const toast = useToast();
+  const [phone, setPhone] = useState("");
+  const [busy, setBusy] = useState(false);
+  const card = loyalty.card;
+  const eligible = total >= loyalty.min_spend;
+  if (!card && !eligible) return null;
+  const claim = async () => {
+    setBusy(true);
+    try {
+      await api.post(`/api/public/orders/${token}/stamp`, { phone, lang });
+      onDone();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="panel stack" aria-labelledby="stamp-h">
+      <div>
+        <h2 id="stamp-h"><Stamp aria-hidden="true" className="h-ico" /> {t.stampTitle}</h2>
+        <p className="small muted">
+          {t.stampSub(loyalty.target, loyalty.reward)}
+          {loyalty.min_spend > 0 ? ` ${t.stampMin(rupiah(loyalty.min_spend))}` : ""}
+        </p>
+      </div>
+      {card ? (
+        <>
+          <div className="stamp-card" aria-label={t.stampHave(card.stamps, loyalty.target)}>
+            {Array.from({ length: Math.min(loyalty.target, 20) }, (_, i) => (
+              <i key={i} className={i < card.stamps ? "on" : ""}>{i < card.stamps && <Check aria-hidden="true" />}</i>
+            ))}
+          </div>
+          <p className="strong">{t.stampHave(card.stamps, loyalty.target)}</p>
+          <p className="small">{card.ready ? t.stampReady(loyalty.reward) : t.stampLeft(loyalty.target - card.stamps, loyalty.reward)}</p>
+        </>
+      ) : paid ? (
+        <div className="row" style={{ gap: 8, alignItems: "flex-end" }}>
+          <Field label={t.stampPhone} htmlFor="st-phone">
+            <input id="st-phone" className="input" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={20} placeholder="0812 3456 7890" />
+          </Field>
+          <button type="button" className="btn btn-primary" disabled={busy || phone.replace(/\D/g, "").length < 9} onClick={claim}>{t.stampClaim}</button>
+        </div>
+      ) : (
+        <p className="small muted">{t.stampAfterPay}</p>
+      )}
+    </section>
   );
 }

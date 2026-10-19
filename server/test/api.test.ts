@@ -411,3 +411,226 @@ test("panggil pelayan: tidak dobel, muncul di papan kasir, ditandai selesai, buk
   const tw = await call("PUT", "/api/store/takeaway", { enabled: true }, owner);
   assert.equal((await call("POST", `/api/public/table/${tw.json.code}/calls`, { kind: "waiter" })).status, 400);
 });
+
+// ---------- Fitur operasional & pelanggan ----------
+import { clockAt } from "../../shared/schedule";
+
+test("kasir offline: pesanan tersinkron dengan waktu asli, tidak ditolak stok/habis, kiriman ulang tidak dobel", async () => {
+  const { call, login, db } = await setup();
+  const owner = await login("owner@t");
+  const kasir = await login("kasir@t");
+  const air = await call("POST", "/api/store/items", { category_id: null, name: "Air", price: 4000, track_stock: 1 }, owner);
+  await call("POST", "/api/store/stock/movements", { itemId: air.json.id, mode: "restock", qty: 1 }, owner);
+  await call("PATCH", `/api/store/items/${air.json.id}/availability`, { available: false }, owner);
+  const at = Date.now() - 2 * 3600_000;
+  const body = { orderType: "takeaway", items: [{ id: air.json.id, qty: 3 }], payment: { method: "cash", amountReceived: 5000 }, clientId: "dev-1234-abcd", offlineAt: at };
+  const r1 = await call("POST", "/api/store/orders", body, kasir);
+  assert.equal(r1.status, 201, JSON.stringify(r1.json));
+  const r2 = await call("POST", "/api/store/orders", body, kasir);
+  assert.equal(r2.status, 200);
+  assert.equal(r2.json.number, r1.json.number);
+  const rows = db.raw.prepare("SELECT created_at, paid_at, offline FROM orders").all() as { created_at: number; paid_at: number; offline: number }[];
+  assert.equal(rows.length, 1, "tidak dobel");
+  assert.equal(rows[0].created_at, at);
+  assert.equal(rows[0].paid_at, at);
+  assert.equal(rows[0].offline, 1);
+  assert.equal((db.raw.prepare("SELECT stock_qty FROM menu_items").get() as { stock_qty: number }).stock_qty, 0, "stok turun sampai nol, tidak minus");
+  // Tanpa tanda offline, menu habis tetap ditolak.
+  assert.equal((await call("POST", "/api/store/orders", { ...body, clientId: undefined, offlineAt: undefined }, kasir)).status, 409);
+});
+
+test("shift kasir: satu shift terbuka, isi laci seharusnya, selisih saat tutup, riwayat hanya manajemen", async () => {
+  const { call, login } = await setup();
+  const owner = await login("owner@t");
+  const kasir = await login("kasir@t");
+  const nasi = await call("POST", "/api/store/items", { category_id: null, name: "Nasi", price: 20000 }, owner);
+  const open = await call("POST", "/api/store/shifts/open", { opening_cash: 100000 }, kasir);
+  assert.equal(open.status, 201);
+  assert.equal((await call("POST", "/api/store/shifts/open", { opening_cash: 0 }, owner)).status, 409);
+  const cash = await call("POST", "/api/store/orders", { orderType: "takeaway", items: [{ id: nasi.json.id, qty: 1 }], payment: { method: "cash", amountReceived: 50000 } }, kasir);
+  await call("POST", "/api/store/orders", { orderType: "takeaway", items: [{ id: nasi.json.id, qty: 2 }], payment: { method: "qris", amountReceived: null } }, kasir);
+  assert.equal((await call("POST", `/api/store/shifts/${open.json.id}/moves`, { kind: "out", amount: 5000, note: "Beli es batu" }, kasir)).status, 201);
+  const cur = await call("GET", "/api/store/shifts/current", undefined, kasir);
+  assert.equal(cur.json.summary.cash_sales, cash.json.total);
+  assert.equal(cur.json.summary.expected, 100000 + cash.json.total - 5000);
+  assert.equal(cur.json.summary.byMethod.length, 2);
+  const feed = await call("GET", "/api/store/orders?scope=active", undefined, kasir);
+  assert.equal(feed.json.shift_open, true);
+  const close = await call("POST", `/api/store/shifts/${open.json.id}/close`, { counted_cash: 100000 + cash.json.total - 7000 }, kasir);
+  assert.equal(close.json.diff, -2000);
+  assert.equal((await call("GET", "/api/store/shifts", undefined, kasir)).status, 403);
+  const hist = await call("GET", "/api/store/shifts", undefined, owner);
+  assert.equal(hist.json.shifts[0].counted_cash - hist.json.shifts[0].expected_cash, -2000);
+});
+
+test("layar dapur: item dibagi dapur/bar, pesanan jadi siap saat semua bagian selesai", async () => {
+  const { call, login } = await setup();
+  const owner = await login("owner@t");
+  const kasir = await login("kasir@t");
+  const minum = await call("POST", "/api/store/categories", { name: "Minuman" }, owner);
+  const makan = await call("POST", "/api/store/categories", { name: "Makanan" }, owner);
+  const cats = await call("GET", "/api/store/categories", undefined, owner);
+  assert.deepEqual(cats.json.categories.map((c: { station: string }) => c.station), ["bar", "kitchen"], "kategori minuman otomatis ke bar");
+  const teh = await call("POST", "/api/store/items", { category_id: minum.json.id, name: "Teh", price: 5000 }, owner);
+  const mie = await call("POST", "/api/store/items", { category_id: makan.json.id, name: "Mie", price: 15000, prep_minutes: 8 }, owner);
+  const o = await call("POST", "/api/store/orders", { orderType: "takeaway", items: [{ id: teh.json.id, qty: 1 }, { id: mie.json.id, qty: 2 }] }, kasir);
+  const bar = await call("GET", "/api/store/kitchen?station=bar", undefined, kasir);
+  assert.equal(bar.json.orders.length, 1);
+  assert.deepEqual(bar.json.orders[0].items.map((i: { name: string }) => i.name), ["Teh"]);
+  assert.equal(bar.json.orders[0].other_open, 1);
+  const r1 = await call("PATCH", `/api/store/kitchen/items/${bar.json.orders[0].items[0].id}`, { ready: true }, kasir);
+  assert.equal(r1.json.advanced, false);
+  assert.equal((await call("GET", "/api/store/kitchen?station=bar", undefined, kasir)).json.orders.length, 0, "bagian bar sudah selesai");
+  const kitchen = await call("GET", "/api/store/kitchen?station=kitchen", undefined, kasir);
+  assert.equal(kitchen.json.orders[0].items[0].prep_minutes, 8);
+  const r2 = await call("POST", `/api/store/kitchen/orders/${o.json.id}/done`, { station: "kitchen" }, kasir);
+  assert.equal(r2.json.advanced, true);
+  const feed = await call("GET", "/api/store/orders?scope=active", undefined, kasir);
+  assert.equal(feed.json.orders[0].status, "ready");
+});
+
+test("menu per jam & happy hour: di luar jam ditolak, diskon otomatis dengan harga normal tercatat", async () => {
+  const { call, login, db } = await setup();
+  const owner = await login("owner@t");
+  const kasir = await login("kasir@t");
+  const now = clockAt(Date.now(), 420).min;
+  const minum = await call("POST", "/api/store/categories", { name: "Minuman" }, owner);
+  const bubur = await call("POST", "/api/store/items", { category_id: null, name: "Bubur", price: 12000, avail_from: (now + 120) % 1440, avail_to: (now + 180) % 1440 }, owner);
+  const kopi = await call("POST", "/api/store/items", { category_id: minum.json.id, name: "Kopi", price: 15000 }, owner);
+  assert.equal((await call("POST", "/api/store/items", { category_id: null, name: "X", price: 1, avail_from: 60, avail_to: null }, owner)).status, 400);
+  await call("POST", "/api/store/tables", { label: "Meja 1" }, owner);
+  const code = (db.raw.prepare("SELECT code FROM dining_tables").get() as { code: string }).code;
+  const off = await call("POST", "/api/public/orders", { tableCode: code, customerName: "A", items: [{ id: bubur.json.id, qty: 1 }] });
+  assert.equal(off.status, 409);
+  assert.match(off.json.error, /hanya tersedia/);
+  assert.equal((await call("POST", "/api/store/orders", { orderType: "takeaway", items: [{ id: bubur.json.id, qty: 1 }] }, kasir)).status, 409);
+  const rule = await call("POST", "/api/store/price-rules", { name: "Happy hour", percent: 20, days: 127, start_min: (now + 1410) % 1440, end_min: (now + 30) % 1440, category_ids: [minum.json.id] }, owner);
+  assert.equal(rule.status, 201);
+  assert.equal((await call("POST", "/api/store/price-rules", { name: "X", percent: 20, days: 127, start_min: 10, end_min: 20 }, kasir)).status, 403);
+  const menu = await call("GET", `/api/public/table/${code}`);
+  assert.equal(menu.json.pricing.rules.length, 1);
+  const ok = await call("POST", "/api/public/orders", { tableCode: code, customerName: "A", items: [{ id: kopi.json.id, qty: 2 }] });
+  assert.equal(ok.status, 201);
+  const it = db.raw.prepare("SELECT price, list_price FROM order_items").get() as { price: number; list_price: number };
+  assert.deepEqual(it, { price: 12000, list_price: 15000 });
+  const rep = await call("GET", "/api/store/analytics?range=today", undefined, owner);
+  assert.equal(rep.status, 200);
+});
+
+test("ulasan: setelah diantar, sekali per pesanan, tautan Google untuk semua nilai, masuk laporan", async () => {
+  const { call, login, db } = await setup();
+  const owner = await login("owner@t");
+  const kasir = await login("kasir@t");
+  const nasi = await call("POST", "/api/store/items", { category_id: null, name: "Nasi", price: 15000 }, owner);
+  await call("POST", "/api/store/tables", { label: "Meja 1" }, owner);
+  const code = (db.raw.prepare("SELECT code FROM dining_tables").get() as { code: string }).code;
+  assert.equal((await call("PUT", "/api/store/settings", { name: "Toko Uji", kind: "warung", address: "", phone: "", welcome_note: "", tax_rate: 10, service_rate: 5, inventory_enabled: true, qr_ordering_enabled: true, logo_url: null, google_review_url: "https://evil.example/x" }, owner)).status, 400);
+  assert.equal((await call("PUT", "/api/store/settings", { name: "Toko Uji", kind: "warung", address: "", phone: "", welcome_note: "", tax_rate: 10, service_rate: 5, inventory_enabled: true, qr_ordering_enabled: true, logo_url: null, google_review_url: "https://g.page/r/abc/review" }, owner)).status, 200);
+  const o = await call("POST", "/api/public/orders", { tableCode: code, customerName: "A", items: [{ id: nasi.json.id, qty: 1 }] });
+  const early = await call("POST", `/api/public/orders/${o.json.token}/feedback`, { rating: 5 });
+  assert.equal(early.status, 409);
+  const id = (db.raw.prepare("SELECT id FROM orders").get() as { id: string }).id;
+  for (const s of ["preparing", "ready", "done"]) await call("PATCH", `/api/store/orders/${id}/status`, { status: s }, kasir);
+  const fb = await call("POST", `/api/public/orders/${o.json.token}/feedback`, { rating: 2, comment: "Agak asin", items: [{ id: nasi.json.id, liked: false }, { id: "lain", liked: true }] });
+  assert.equal(fb.status, 201);
+  assert.equal(fb.json.review_url, "https://g.page/r/abc/review", "nilai rendah pun tetap ditawari tautan Google");
+  assert.equal((await call("POST", `/api/public/orders/${o.json.token}/feedback`, { rating: 5 })).status, 409);
+  const st = await call("GET", `/api/public/orders/${o.json.token}`);
+  assert.equal(st.json.feedback.sent, true);
+  const rep = await call("GET", "/api/store/analytics?range=today", undefined, owner);
+  assert.equal(rep.json.feedback.count, 1);
+  assert.equal(rep.json.feedback.recent[0].comment, "Agak asin");
+  assert.deepEqual(rep.json.feedback.items, [{ name: "Nasi", likes: 0, dislikes: 1 }]);
+});
+
+test("kartu stempel: nomor HP dinormalkan, satu stempel per pesanan, minimal belanja, tukar hadiah", async () => {
+  const { call, login, db } = await setup();
+  const owner = await login("owner@t");
+  const kasir = await login("kasir@t");
+  const nasi = await call("POST", "/api/store/items", { category_id: null, name: "Nasi", price: 15000 }, owner);
+  const teh = await call("POST", "/api/store/items", { category_id: null, name: "Teh", price: 3000 }, owner);
+  assert.equal((await call("PUT", "/api/store/loyalty", { enabled: true, target: 2, min_spend: 10000, reward: "" }, owner)).status, 400, "hadiah wajib diisi");
+  assert.equal((await call("PUT", "/api/store/loyalty", { enabled: true, target: 2, min_spend: 10000, reward: "1 Es Teh gratis" }, owner)).status, 200);
+  const pos = (id: string, phone: string) => call("POST", "/api/store/orders", { orderType: "takeaway", items: [{ id, qty: 1 }], payment: { method: "cash", amountReceived: null }, phone }, kasir);
+  const a = await pos(nasi.json.id, "0812-3456-7890");
+  assert.equal(a.json.loyalty.stamped, true);
+  assert.equal(a.json.loyalty.card.phone, "6281234567890");
+  const small = await pos(teh.json.id, "+62 812 3456 7890");
+  assert.equal(small.json.loyalty.stamped, false, "di bawah minimal belanja");
+  assert.equal((await call("POST", "/api/store/loyalty/stamp", { orderId: a.json.id, phone: "081234567890" }, kasir)).json.stamped, false, "pesanan yang sama tidak dapat stempel lagi");
+  const b = await pos(nasi.json.id, "081234567890");
+  assert.equal(b.json.loyalty.card.ready, true);
+  const look = await call("GET", "/api/store/loyalty/lookup?phone=081234567890", undefined, kasir);
+  assert.equal(look.json.card.stamps, 2);
+  const red = await call("POST", "/api/store/loyalty/redeem", { phone: "081234567890" }, kasir);
+  assert.equal(red.json.card.stamps, 0);
+  assert.equal(red.json.card.rewards, 1);
+  assert.equal((await call("POST", "/api/store/loyalty/redeem", { phone: "081234567890" }, kasir)).status, 409);
+  assert.equal((await call("GET", "/api/store/loyalty", undefined, kasir)).status, 403, "daftar pelanggan hanya manajemen");
+
+  // Pembeli QR mengambil stempel sendiri setelah bayar.
+  await call("POST", "/api/store/tables", { label: "Meja 1" }, owner);
+  const code = (db.raw.prepare("SELECT code FROM dining_tables").get() as { code: string }).code;
+  const q = await call("POST", "/api/public/orders", { tableCode: code, customerName: "Dewi", items: [{ id: nasi.json.id, qty: 1 }] });
+  assert.equal((await call("POST", `/api/public/orders/${q.json.token}/stamp`, { phone: "085711112222" })).status, 409, "belum dibayar");
+  const qid = (db.raw.prepare("SELECT id FROM orders WHERE public_token = ?").get(q.json.token) as { id: string }).id;
+  await call("PATCH", `/api/store/orders/${qid}/status`, { status: "preparing" }, kasir);
+  await call("PATCH", `/api/store/orders/${qid}/pay`, { method: "qris", amountReceived: null }, kasir);
+  assert.equal((await call("POST", `/api/public/orders/${q.json.token}/stamp`, { phone: "12" })).status, 400);
+  const claim = await call("POST", `/api/public/orders/${q.json.token}/stamp`, { phone: "085711112222" });
+  assert.equal(claim.status, 200);
+  assert.equal(claim.json.card.stamps, 1);
+  assert.equal((await call("POST", `/api/public/orders/${q.json.token}/stamp`, { phone: "085799998888" })).status, 409);
+  const st = await call("GET", `/api/public/orders/${q.json.token}`);
+  assert.equal(st.json.loyalty.card.stamps, 1);
+  assert.equal(JSON.stringify(st.json).includes("6285711112222"), false, "nomor HP tidak dikirim balik ke halaman publik");
+});
+
+test("antrean tunggu: harus dinyalakan, posisi dihitung, kasir memanggil dan mendudukkan", async () => {
+  const { call, login } = await setup();
+  const owner = await login("owner@t");
+  const kasir = await login("kasir@t");
+  const s = await call("PUT", "/api/store/waitlist-settings", { enabled: false }, owner);
+  const code = s.json.code;
+  assert.equal((await call("POST", `/api/public/waitlist/${code}`, { name: "A", party: 2 })).status, 403);
+  await call("PUT", "/api/store/waitlist-settings", { enabled: true }, owner);
+  const a = await call("POST", `/api/public/waitlist/${code}`, { name: "Andi", party: 2 });
+  const b = await call("POST", `/api/public/waitlist/${code}`, { name: "Budi", party: 4, phone: "0812 1111 2222" });
+  assert.equal(b.status, 201);
+  assert.equal(b.json.number, a.json.number + 1);
+  assert.equal((await call("POST", `/api/public/waitlist/${code}`, { name: "C", party: 1, phone: "abc" })).status, 400);
+  assert.equal((await call("GET", `/api/public/waitlist/entry/${b.json.token}`)).json.ahead, 1);
+  const list = await call("GET", "/api/store/waitlist", undefined, kasir);
+  assert.equal(list.json.open.length, 2);
+  assert.equal(list.json.open[1].phone, "6281211112222");
+  const feed = await call("GET", "/api/store/orders?scope=active", undefined, kasir);
+  assert.equal(feed.json.waiting.length, 2);
+  const first = list.json.open[0].id;
+  assert.equal((await call("PATCH", `/api/store/waitlist/${first}`, { status: "called" }, kasir)).status, 200);
+  assert.equal((await call("GET", `/api/public/waitlist/entry/${a.json.token}`)).json.entry.status, "called");
+  assert.equal((await call("GET", `/api/public/waitlist/entry/${b.json.token}`)).json.ahead, 0);
+  assert.equal((await call("PATCH", `/api/store/waitlist/${first}`, { status: "seated", table_label: "Meja 3" }, kasir)).status, 200);
+  assert.equal((await call("PATCH", `/api/store/waitlist/${first}`, { status: "called" }, kasir)).status, 409);
+  await call("DELETE", `/api/public/waitlist/entry/${b.json.token}`);
+  assert.equal((await call("GET", "/api/store/waitlist", undefined, kasir)).json.open.length, 0);
+});
+
+test("saran pasangan & margin: pasangan pilihan pemilik tampil di menu, modal tercatat saat terjual", async () => {
+  const { call, login, db } = await setup();
+  const owner = await login("owner@t");
+  const kasir = await login("kasir@t");
+  const teh = await call("POST", "/api/store/items", { category_id: null, name: "Teh", price: 5000, cost: 1500 }, owner);
+  const nasi = await call("POST", "/api/store/items", { category_id: null, name: "Nasi", price: 20000, cost: 9000, pair_ids: [teh.json.id, "asing"] }, owner);
+  await call("POST", "/api/store/tables", { label: "Meja 1" }, owner);
+  const code = (db.raw.prepare("SELECT code FROM dining_tables").get() as { code: string }).code;
+  const menu = await call("GET", `/api/public/table/${code}`);
+  const n = menu.json.items.find((i: { id: string }) => i.id === nasi.json.id);
+  assert.deepEqual(n.pairs, [teh.json.id]);
+  assert.equal(n.cost, undefined, "modal tidak bocor ke pembeli");
+  await call("POST", "/api/store/orders", { orderType: "takeaway", items: [{ id: nasi.json.id, qty: 2 }, { id: teh.json.id, qty: 1 }], payment: { method: "cash", amountReceived: null } }, kasir);
+  const rep = await call("GET", "/api/store/analytics?range=today", undefined, owner);
+  const m = rep.json.margins.find((x: { name: string }) => x.name === "Nasi");
+  assert.equal(m.revenue, 40000);
+  assert.equal(m.cost, 18000);
+  assert.equal(rep.json.costCoverage.costed, 2);
+});

@@ -1,7 +1,7 @@
 // Ilustrasi sederhana untuk simulasi di landing page.
 // Sengaja digambar datar (bukan foto stok) supaya jelas ini peraga, bukan klaim foto toko sungguhan.
 
-export type FoodKind = "geprek" | "nasgor" | "soto" | "jeruk" | "kopi" | "teh" | "esteh" | "pisang" | "kerupuk" | "air";
+export type FoodKind = "geprek" | "nasgor" | "soto" | "jeruk" | "kopi" | "teh" | "esteh" | "pisang" | "kerupuk" | "air" | "bubur";
 
 export function Food({ kind, view = 0 }: { kind: FoodKind; view?: 0 | 1 }) {
   // view 1 = sudut dekat, dipakai sebagai "foto kedua" di galeri.
@@ -25,6 +25,7 @@ const BG: Record<FoodKind, string> = {
   pisang: "#ead9bf",
   kerupuk: "#e9dfcf",
   air: "#d6e2e4",
+  bubur: "#dfd2bd",
 };
 
 const plate = (
@@ -132,6 +133,25 @@ const ART: Record<FoodKind, React.ReactNode> = {
       <rect x="40" y="20" width="20" height="8" rx="2" fill="#2d6fb3" />
       <path d="M38 30h24v52a4 4 0 0 1-4 4H42a4 4 0 0 1-4-4z" fill="#eaf4f7" stroke="#9fc3cf" />
       <rect x="38" y="48" width="24" height="14" fill="#2d6fb3" />
+    </>
+  ),
+  bubur: (
+    <>
+      <circle cx="50" cy="52" r="38" fill="#f2efe8" />
+      <circle cx="50" cy="52" r="31" fill="#f4ead2" />
+      <path d="M36 44c6-3 10 1 16-1s9-4 13 0" stroke="#e6d6b4" strokeWidth="3" fill="none" strokeLinecap="round" />
+      {[[40, 50, 20], [47, 46, -15], [55, 53, 35], [44, 58, -40], [58, 45, 10]].map(([x, y, r], i) => (
+        <rect key={i} x={x} y={y} width="10" height="3" rx="1.5" transform={`rotate(${r} ${x} ${y})`} fill="#d9b27a" />
+      ))}
+      <rect x="60" y="58" width="12" height="5" rx="2.5" transform="rotate(-25 60 58)" fill="#c98a3a" />
+      <rect x="30" y="38" width="11" height="5" rx="2.5" transform="rotate(20 30 38)" fill="#c98a3a" />
+      {[[52, 40], [38, 55], [62, 50], [48, 62], [56, 60]].map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r="1.6" fill="#5b8d3b" />
+      ))}
+      {[[45, 52], [53, 57], [60, 42], [41, 44]].map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r="1.3" fill="#8a4f22" />
+      ))}
+      <path d="M44 48c3 2 7 2 10-1" stroke="#7a4a2a" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity="0.7" />
     </>
   ),
 };

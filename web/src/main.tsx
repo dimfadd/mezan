@@ -29,6 +29,13 @@ const SettingsPage = lazyNamed(store, "SettingsPage");
 const AccountPage = lazyNamed(store, "AccountPage");
 const ReportsPage = lazyNamed(store, "ReportsPage");
 const MenuDesignPage = lazyNamed(store, "MenuDesignPage");
+const KitchenPage = lazyNamed(store, "KitchenPage");
+const CashPage = lazyNamed(store, "CashPage");
+const WaitlistPage = lazyNamed(store, "WaitlistPage");
+const LoyaltyPage = lazyNamed(store, "LoyaltyPage");
+const waitlist = () => import("./pages/customer/WaitlistJoin");
+const WaitlistJoinPage = lazyNamed(waitlist, "WaitlistJoinPage");
+const WaitlistStatusPage = lazyNamed(waitlist, "WaitlistStatusPage");
 const AdminShell = lazyNamed(admin, "AdminShell");
 const AdminOverview = lazyNamed(admin, "AdminOverview");
 const AdminTenants = lazyNamed(admin, "AdminTenants");
@@ -73,10 +80,17 @@ createRoot(document.getElementById("root")!).render(
               <Route path="/daftar" element={<RegisterPage />} />
               <Route path="/m/:code" element={<CustomerMenuPage />} />
               <Route path="/m/:code/pesanan/:token" element={<OrderStatusPage />} />
+              <Route path="/struk/:token" element={<OrderStatusPage />} />
+              <Route path="/antre/:code" element={<WaitlistJoinPage />} />
+              <Route path="/antre/:code/:token" element={<WaitlistStatusPage />} />
               <Route path="/toko" element={<Gate need="store"><StoreShell /></Gate>}>
                 <Route index element={<Navigate to="pesanan" replace />} />
                 <Route path="pesanan" element={<OrdersPage />} />
                 <Route path="kasir" element={<PosPage />} />
+                <Route path="dapur" element={<KitchenPage />} />
+                <Route path="kas" element={<CashPage />} />
+                <Route path="antrean" element={<WaitlistPage />} />
+                <Route path="pelanggan" element={<Gate need="management"><LoyaltyPage /></Gate>} />
                 <Route path="menu" element={<MenuManagePage />} />
                 <Route path="stok" element={<StockPage />} />
                 <Route path="akun" element={<AccountPage />} />

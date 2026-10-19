@@ -48,6 +48,8 @@ export async function seedDemo(db: DB): Promise<boolean> {
     period_end: now + 20 * DAY, address: "Jl. Contoh No. 1", phone: "", tax_rate: 0, service_rate: 0,
     inventory_enabled: 1, qr_ordering_enabled: 1, tz_offset_minutes: TZ,
     takeaway_code: "contoh-bawa", takeaway_qr_enabled: 1,
+    loyalty_enabled: 1, loyalty_target: 10, loyalty_min_spend: 15000, loyalty_reward: "1 Es Teh Manis gratis",
+    waitlist_enabled: 1, waitlist_code: "contoh-antre",
     welcome_note: "Pesan dari meja, bayar di kasir setelah makan.", welcome_note_en: "Order from your table, pay at the cashier after your meal.", created_at: now - 60 * DAY,
   });
   const owner = newId(), manager = newId(), staff1 = newId(), staff2 = newId();
@@ -61,7 +63,7 @@ export async function seedDemo(db: DB): Promise<boolean> {
   ["Makanan", "Camilan", "Minuman", "Titipan"].forEach((name, i) => {
     const id = newId();
     cats[name] = id;
-    ins("categories", { id, tenant_id: tenantId, name, name_en: ({ Makanan: "Mains", Camilan: "Snacks", Minuman: "Drinks", Titipan: "Packaged goods" } as Record<string, string>)[name] ?? "", sort: i + 1, created_at: now - 60 * DAY });
+    ins("categories", { id, tenant_id: tenantId, name, name_en: ({ Makanan: "Mains", Camilan: "Snacks", Minuman: "Drinks", Titipan: "Packaged goods" } as Record<string, string>)[name] ?? "", station: name === "Minuman" ? "bar" : "kitchen", sort: i + 1, created_at: now - 60 * DAY });
   });
 
   const menu: [string, string, number, string, string, number?][] = [
@@ -71,6 +73,7 @@ export async function seedDemo(db: DB): Promise<boolean> {
     ["Makanan", "Soto Ayam Lamongan", 17000, "Kuah kuning bening, suwiran ayam, koya, telur rebus setengah.", ""],
     ["Makanan", "Nasi Uduk Komplit", 16000, "Nasi uduk, ayam goreng, orek tempe, bihun, sambal kacang.", ""],
     ["Makanan", "Tahu Tempe Penyet", 12000, "Tahu dan tempe goreng, sambal terasi, lalapan.", "vegetarian"],
+    ["Makanan", "Bubur Ayam", 13000, "Bubur nasi, suwiran ayam, cakwe, kacang, kerupuk. Hanya pagi.", "baru"],
     ["Camilan", "Pisang Goreng Keju", 10000, "Lima potong pisang kepok, keju parut, susu kental manis.", ""],
     ["Camilan", "Tahu Crispy", 8000, "Tahu goreng tepung renyah, cocol sambal kecap.", "vegetarian"],
     ["Minuman", "Es Teh Manis", 5000, "Teh tubruk diseduh pagi, gula bisa dikurangi.", ""],
@@ -112,6 +115,12 @@ export async function seedDemo(db: DB): Promise<boolean> {
     "Air Mineral 600 ml": { name: "Mineral water", description: "Cold bottle from the fridge." },
     "Kerupuk Udang": { name: "Prawn crackers", description: "Per pack.", allergens: "Contains shrimp" },
   };
+  // Modal (HPP) contoh per porsi, kira-kira 30-50% dari harga jual.
+  const COST: Record<string, number> = {
+    "Nasi Goreng Kampung": 9500, "Mie Ayam Bakso": 9000, "Ayam Geprek Sambal Bawang": 9800, "Soto Ayam Lamongan": 7000,
+    "Nasi Uduk Komplit": 8500, "Tahu Tempe Penyet": 4500, "Bubur Ayam": 5000, "Pisang Goreng Keju": 4000, "Tahu Crispy": 2600,
+    "Es Teh Manis": 1200, "Es Jeruk Peras": 3200, "Kopi Susu Gula Aren": 5200, "Teh Tarik": 3500, "Air Mineral 600 ml": 2800, "Kerupuk Udang": 1500,
+  };
   const items: { id: string; name: string; price: number; cat: string; weight: number; stock: boolean }[] = [];
   menu.forEach(([cat, name, price, description, tags, stock], i) => {
     const id = newId();
@@ -124,9 +133,12 @@ export async function seedDemo(db: DB): Promise<boolean> {
       spice_level: details[name]?.spice ?? null, prep_minutes: details[name]?.prep ?? null, allergens: details[name]?.allergens ?? "",
       name_en: english[name]?.name ?? "", description_en: english[name]?.description ?? "", portion_en: english[name]?.portion ?? "",
       components_en: english[name]?.components ?? "", allergens_en: english[name]?.allergens ?? "",
+      cost: COST[name] ?? null,
+      // Menu sarapan: hanya 06.00 sampai 10.00.
+      ...(name === "Bubur Ayam" ? { avail_from: 360, avail_to: 600 } : {}),
     });
     // bobot popularitas supaya laporan punya pola yang masuk akal
-    const weight = name.includes("Es Teh") ? 9 : tags.includes("favorit") || tags.includes("bestseller") ? 6 : name.includes("Teh Tarik") ? 1 : 3;
+    const weight = name.includes("Es Teh") ? 9 : tags.includes("favorit") || tags.includes("bestseller") ? 6 : name.includes("Teh Tarik") || name === "Bubur Ayam" ? 1 : 3;
     items.push({ id, name, price, cat, weight, stock: stock != null });
   });
 
@@ -139,7 +151,21 @@ export async function seedDemo(db: DB): Promise<boolean> {
   }
 
   // Riwayat pesanan 45 hari ke belakang.
-  const weighted = items.filter((i) => !i.stock).flatMap((i) => Array(i.weight).fill(i));
+  const weighted = items.filter((i) => !i.stock && i.name !== "Bubur Ayam").flatMap((i) => Array(i.weight).fill(i));
+  const esTeh = items.find((i) => i.name === "Es Teh Manis")!;
+  const bubur = items.find((i) => i.name === "Bubur Ayam")!;
+  const feedbackComments: [number, string][] = [
+    [5, "Sambalnya pas, ayamnya renyah."], [5, ""], [4, "Enak, cuma agak lama datangnya."], [5, "Kopi susunya juara."],
+    [4, ""], [3, "Kuah sotonya agak asin hari ini."], [5, "Porsinya besar, pas buat makan siang."], [2, "Nasi gorengnya dingin waktu sampai."],
+    [4, "Es jeruknya segar, bukan sirup."], [5, ""], [4, "Tempat bersih, pelayan ramah."], [3, ""],
+  ];
+  const members = [
+    ["6281234567801", "Andi"], ["6281234567802", "Sari"], ["6281234567803", "Budi"], ["6281234567804", "Wulan"], ["6281234567805", "Rizky"],
+  ].map(([phone, name]) => ({ id: newId(), phone, name, total: 0, last: 0 }));
+  for (const m of members) ins("loyalty_members", { id: m.id, tenant_id: tenantId, phone: m.phone, name: m.name, created_at: now - 40 * DAY });
+  let fbCount = 0;
+  const pendingMember = new Map<string, string>();
+  const pendingShift: { id: string; open: number; close: number; diff: number }[] = [];
   const names = ["Andi", "Sari", "Budi", "Wulan", "Rizky", "Tika", "Fajar", "Lina", "Yoga", "Nia", ""];
   const hourWeights = [7, 7, 8, 11, 11, 12, 12, 12, 13, 13, 15, 16, 17, 18, 18, 19, 19, 19, 20, 20, 21];
   {
@@ -165,9 +191,14 @@ export async function seedDemo(db: DB): Promise<boolean> {
           const it = pick(weighted);
           lines.set(it.id, (lines.get(it.id) ?? 0) + 1 + (rand() < 0.2 ? 1 : 0));
         }
-        if (rand() < 0.5) lines.set(items[8].id, (lines.get(items[8].id) ?? 0) + 1);
+        if (rand() < 0.5) lines.set(esTeh.id, (lines.get(esTeh.id) ?? 0) + 1);
+        const hour = new Date(ts + TZ * 60_000).getUTCHours();
+        if (hour >= 6 && hour < 10 && rand() < 0.35) lines.set(bubur.id, 1);
+        // Happy hour contoh: minuman diskon 20% jam 15.00 sampai 17.00.
+        const happy = hour >= 15 && hour < 17;
+        const unitPrice = (it: (typeof items)[number]) => (happy && it.cat === "Minuman" ? Math.round((it.price * 0.8) / 100) * 100 : it.price);
         let subtotal = 0;
-        for (const [id, qty] of lines) subtotal += items.find((i) => i.id === id)!.price * qty;
+        for (const [id, qty] of lines) subtotal += unitPrice(items.find((i) => i.id === id)!) * qty;
         const totals = computeTotals(subtotal, 0, 0);
         const isToday = d === 0;
         const recent = now - ts < 40 * 60_000;
@@ -185,14 +216,61 @@ export async function seedDemo(db: DB): Promise<boolean> {
           note: "", cancel_reason: cancelled ? "Pelanggan batal" : null, public_token: randomToken(16),
           created_by: source === "pos" ? staff1 : null, paid_by: paid ? pick([staff1, staff1, manager]) : null,
           created_at: ts, updated_at: ts, paid_at: paid ? ts + 30 * 60_000 : null,
+          accepted_at: status === "new" ? null : ts + 60_000,
         });
         for (const [itemId, qty] of lines) {
           const it = items.find((i) => i.id === itemId)!;
-          ins("order_items", { id: newId(), order_id: id, menu_item_id: it.id, category_name: it.cat, name: it.name, price: it.price, qty, note: "" });
+          const price = unitPrice(it);
+          ins("order_items", {
+            id: newId(), order_id: id, menu_item_id: it.id, category_name: it.cat, name: it.name, price, qty, note: "",
+            station: it.cat === "Minuman" ? "bar" : "kitchen", list_price: price !== it.price ? it.price : null, unit_cost: COST[it.name] ?? null,
+          });
+        }
+        // Sebagian pembeli memberi nilai setelah makan.
+        if (status === "done" && d <= 30 && rand() < 0.12) {
+          const [rating, comment] = feedbackComments[fbCount++ % feedbackComments.length];
+          ins("order_feedback", { id: newId(), tenant_id: tenantId, order_id: id, rating, comment, created_at: ts + 50 * 60_000 });
+          for (const itemId of lines.keys()) {
+            if (rand() < 0.6) ins("item_feedback", { id: newId(), tenant_id: tenantId, order_id: id, menu_item_id: itemId, liked: rating >= 4 || rand() < 0.4 ? 1 : 0, created_at: ts + 50 * 60_000 });
+          }
+        }
+        // Pelanggan tetap dengan kartu stempel.
+        if (paid && totals.total >= 15000 && rand() < 0.15) {
+          const m = pick(members);
+          m.total++;
+          m.last = ts;
+          ins("loyalty_events", { id: newId(), tenant_id: tenantId, member_id: m.id, order_id: id, kind: "stamp", delta: 1, user_id: staff1, created_at: ts });
+          pendingMember.set(id, m.id);
         }
       }
     }
   }
+
+  members.forEach((m, i) => {
+    // Pelanggan pertama dibuat siap tukar hadiah supaya alurnya bisa dicoba di kasir.
+    const stamps = i === 0 && m.total >= 10 ? 10 : m.total % 10;
+    pending.push(stmt(db, "UPDATE loyalty_members SET stamps = ?, total_stamps = ?, rewards = ?, last_visit_at = ? WHERE id = ?", stamps, m.total, Math.floor((m.total - stamps) / 10), m.last || null, m.id));
+  });
+  for (const [orderId, memberId] of pendingMember) pending.push(stmt(db, "UPDATE orders SET member_id = ? WHERE id = ?", memberId, orderId));
+
+  // Promo jam tertentu, shift kasir, dan antrean contoh.
+  ins("price_rules", { id: newId(), tenant_id: tenantId, name: "Happy hour", percent: 20, days: 127, start_min: 900, end_min: 1020, category_ids: cats.Minuman, active: 1, created_at: now - 30 * DAY });
+  const today = businessDay(now, TZ);
+  const todayStart = Date.parse(`${today}T00:00:00Z`) - TZ * 60_000;
+  for (let d = 3; d >= 1; d--) {
+    const open = todayStart - d * DAY + 7 * 3600_000;
+    const sid = newId();
+    const diff = [0, -5000, 2000][d - 1];
+    ins("cash_shifts", { id: sid, tenant_id: tenantId, status: "closed", opened_by: staff1, opened_at: open, opening_cash: 200000, closed_by: staff1, closed_at: open + 14 * 3600_000, expected_cash: 0, counted_cash: diff, note: "" });
+    ins("cash_moves", { id: newId(), tenant_id: tenantId, shift_id: sid, kind: "out", amount: 20000, note: "Beli es batu", user_id: staff1, created_at: open + 3 * 3600_000 });
+    // Angka laci dihitung dari pesanan tunai di shift itu setelah semua pesanan tersimpan.
+    pendingShift.push({ id: sid, open, close: open + 14 * 3600_000, diff });
+  }
+  if (now > todayStart + 7 * 3600_000) {
+    ins("cash_shifts", { id: newId(), tenant_id: tenantId, status: "open", opened_by: staff1, opened_at: todayStart + 7 * 3600_000, opening_cash: 200000, note: "" });
+  }
+  ins("waitlist", { id: newId(), tenant_id: tenantId, number: 1, business_day: today, name: "Keluarga Hadi", party_size: 5, phone: "6281299990001", source: "qr", status: "waiting", token: randomToken(12), created_at: now - 9 * 60_000 });
+  ins("waitlist", { id: newId(), tenant_id: tenantId, number: 2, business_day: today, name: "Maya", party_size: 2, phone: "", source: "kasir", status: "waiting", token: randomToken(12), created_at: now - 3 * 60_000 });
 
   ins("subscription_payments", {
     id: newId(), tenant_id: tenantId, plan_id: planIds.resto, amount: 199000, months: 1, method: "transfer",
@@ -201,5 +279,15 @@ export async function seedDemo(db: DB): Promise<boolean> {
 
   // Kirim bertahap supaya tidak melebihi batas ukuran satu batch di database cloud.
   for (let k = 0; k < pending.length; k += 400) await db.batch(pending.slice(k, k + 400));
+  for (const sh of pendingShift) {
+    const r = await first<{ cash: number; out: number }>(
+      db,
+      `SELECT (SELECT COALESCE(SUM(total), 0) FROM orders WHERE tenant_id = ? AND payment_method = 'cash' AND payment_status = 'paid' AND status != 'cancelled' AND paid_at >= ? AND paid_at < ?) AS cash,
+              (SELECT COALESCE(SUM(amount), 0) FROM cash_moves WHERE shift_id = ? AND kind = 'out') AS out`,
+      tenantId, sh.open, sh.close, sh.id,
+    );
+    const expected = 200000 + (r?.cash ?? 0) - (r?.out ?? 0);
+    await db.batch([stmt(db, "UPDATE cash_shifts SET expected_cash = ?, counted_cash = ? WHERE id = ?", expected, expected + sh.diff, sh.id)]);
+  }
   return true;
 }

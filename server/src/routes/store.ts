@@ -4,7 +4,11 @@ import type { Env } from "../app";
 import { all, first, run, stmt, type Stmt } from "../db/types";
 import { ALL_STORE, MANAGEMENT, requireStore, storeOf, tenantLocked } from "../lib/auth";
 import { fail } from "../lib/http";
-import { createOrder, loadOrderItems, restockCancelledOrder } from "../lib/orders";
+import { createOrder, loadOrderItems, loadPriceRules, restockCancelledOrder } from "../lib/orders";
+import { attachPairs, forgetPairs } from "../lib/pairs";
+import { awardStamp, normalizePhone } from "../lib/loyalty";
+import { opsRoutes } from "./ops";
+import { guestRoutes } from "./guests";
 import { hashPassword, newId, randomCode } from "../lib/security";
 import { EXT, MEDIA_LIMITS } from "../lib/storage";
 import { analyticsRoutes } from "./analytics";
@@ -35,6 +39,13 @@ const settingsSchema = z.object({
   inventory_enabled: bool,
   qr_ordering_enabled: bool,
   logo_url: z.string().max(300).nullable(),
+  google_review_url: z
+    .string()
+    .trim()
+    .max(300)
+    .default("")
+    .refine((v) => v === "" || /^https:\/\/([a-z0-9-]+\.)*(google\.[a-z.]+|goo\.gl|g\.page)\//i.test(v), "Tautan ulasan harus tautan Google Maps (diawali https://g.page/, https://maps.app.goo.gl/, atau https://www.google.com/).")
+    .optional(),
 });
 
 storeRoutes.put("/settings", mgmt, async (c) => {
@@ -45,9 +56,9 @@ storeRoutes.put("/settings", mgmt, async (c) => {
   await run(
     c.var.db,
     `UPDATE tenants SET name=?, kind=?, address=?, phone=?, welcome_note=?, welcome_note_en=?, tax_rate=?, service_rate=?,
-       inventory_enabled=?, qr_ordering_enabled=?, logo_url=? WHERE id=?`,
+       inventory_enabled=?, qr_ordering_enabled=?, logo_url=?, google_review_url=? WHERE id=?`,
     b.name, b.kind, b.address, b.phone, b.welcome_note, b.welcome_note_en, b.tax_rate, b.service_rate,
-    b.inventory_enabled, b.qr_ordering_enabled, b.logo_url, t.id,
+    b.inventory_enabled, b.qr_ordering_enabled, b.logo_url, b.google_review_url ?? t.google_review_url, t.id,
   );
   return c.json({ ok: true });
 });
@@ -73,28 +84,34 @@ storeRoutes.get("/categories", async (c) => {
   return c.json({
     categories: await all(
       c.var.db,
-      `SELECT c.id, c.name, c.name_en, c.sort, (SELECT COUNT(*) FROM menu_items m WHERE m.category_id = c.id AND m.archived = 0) AS item_count
+      `SELECT c.id, c.name, c.name_en, c.sort, c.station, (SELECT COUNT(*) FROM menu_items m WHERE m.category_id = c.id AND m.archived = 0) AS item_count
        FROM categories c WHERE c.tenant_id = ? ORDER BY c.sort, c.name`,
       t.id,
     ),
   });
 });
 
-const categorySchema = z.object({ name: z.string().trim().min(1, "Nama kategori wajib diisi.").max(40), name_en: z.string().trim().max(40).default("") });
+const categorySchema = z.object({
+  name: z.string().trim().min(1, "Nama kategori wajib diisi.").max(40),
+  name_en: z.string().trim().max(40).default(""),
+  station: z.enum(["kitchen", "bar"]).optional(),
+});
+// Kategori baru bernama minuman otomatis ke bar; selebihnya ke dapur.
+const guessStation = (name: string) => (/minum|kopi|drink|jus|teh|coffee|tea/i.test(name) ? "bar" : "kitchen");
 
 storeRoutes.post("/categories", mgmt, async (c) => {
   const t = storeOf(c);
   const b = categorySchema.parse(await c.req.json());
   const max = await first<{ s: number | null }>(c.var.db, "SELECT MAX(sort) AS s FROM categories WHERE tenant_id = ?", t.id);
   const id = newId();
-  await run(c.var.db, "INSERT INTO categories (id, tenant_id, name, name_en, sort, created_at) VALUES (?, ?, ?, ?, ?, ?)", id, t.id, b.name, b.name_en, (max?.s ?? 0) + 1, Date.now());
+  await run(c.var.db, "INSERT INTO categories (id, tenant_id, name, name_en, station, sort, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", id, t.id, b.name, b.name_en, b.station ?? guessStation(b.name), (max?.s ?? 0) + 1, Date.now());
   return c.json({ id }, 201);
 });
 
 storeRoutes.put("/categories/:id", mgmt, async (c) => {
   const t = storeOf(c);
   const b = categorySchema.parse(await c.req.json());
-  const n = await run(c.var.db, "UPDATE categories SET name = ?, name_en = ? WHERE id = ? AND tenant_id = ?", b.name, b.name_en, c.req.param("id"), t.id);
+  const n = await run(c.var.db, "UPDATE categories SET name = ?, name_en = ?, station = COALESCE(?, station) WHERE id = ? AND tenant_id = ?", b.name, b.name_en, b.station ?? null, c.req.param("id"), t.id);
   if (!n) fail(404, "Kategori tidak ditemukan.");
   return c.json({ ok: true });
 });
@@ -122,7 +139,7 @@ storeRoutes.get("/items", async (c) => {
       c.var.db,
       `SELECT id, category_id, name, description, price, image_url, video_url, tags, available, track_stock, stock_qty,
               low_stock_at, unit, sort, portion, components, spice_level, prep_minutes, allergens,
-              name_en, description_en, portion_en, components_en, allergens_en,
+              name_en, description_en, portion_en, components_en, allergens_en, avail_days, avail_from, avail_to, pair_ids, cost,
               (SELECT COALESCE(SUM(oi.qty), 0) FROM order_items oi JOIN orders o ON o.id = oi.order_id
                 WHERE oi.menu_item_id = m.id AND o.tenant_id = m.tenant_id AND o.status != 'cancelled' AND o.created_at > ?) AS sold_30d
        FROM menu_items m WHERE tenant_id = ? AND archived = 0 ORDER BY sort, name`,
@@ -131,7 +148,14 @@ storeRoutes.get("/items", async (c) => {
     ),
     loadGalleries(c.var.db, t.id),
   ]);
-  return c.json({ items: items.map((i) => ({ ...i, media: galleries.get(i.id) ?? [] })) });
+  const rules = await loadPriceRules(c.var.db, t.id);
+  const sellable = new Set(items.filter((i) => i.available).map((i) => i.id));
+  const withPairs = await attachPairs(c.var.db, t.id, items as (typeof items[number] & { category_id: string | null; pair_ids: string })[], (id) => sellable.has(id));
+  return c.json({
+    // Modal (HPP) hanya untuk pemilik/manajer.
+    items: withPairs.map(({ cost, ...i }) => ({ ...i, ...(MANAGEMENT.includes(c.var.user!.role) ? { cost } : {}), media: galleries.get(i.id) ?? [] })),
+    pricing: { tz: t.tz_offset_minutes, now: Date.now(), rules },
+  });
 });
 
 const itemSchema = z.object({
@@ -155,6 +179,11 @@ const itemSchema = z.object({
   track_stock: bool.default(0),
   low_stock_at: z.number().int().min(0).max(100000).default(5),
   unit: z.string().trim().min(1).max(20).default("porsi"),
+  avail_days: z.number().int().min(1, "Pilih minimal satu hari.").max(127).default(127),
+  avail_from: z.number().int().min(0).max(1439).nullable().default(null),
+  avail_to: z.number().int().min(0).max(1439).nullable().default(null),
+  pair_ids: z.array(z.string().max(64)).max(3, "Maksimal 3 menu pasangan.").default([]),
+  cost: z.number().int().min(0).max(1_000_000_000).nullable().default(null),
 });
 
 async function checkCategory(c: { var: Env["Variables"] }, tenantId: string, categoryId: string | null) {
@@ -162,6 +191,22 @@ async function checkCategory(c: { var: Env["Variables"] }, tenantId: string, cat
   if (!(await first(c.var.db, "SELECT 1 FROM categories WHERE id = ? AND tenant_id = ?", categoryId, tenantId))) {
     fail(400, "Kategori tidak ditemukan.");
   }
+}
+
+/** Jam tersedia: dua-duanya diisi atau dua-duanya kosong. */
+function schedule(b: { avail_days: number; avail_from: number | null; avail_to: number | null }) {
+  if ((b.avail_from == null) !== (b.avail_to == null)) fail(400, "Isi jam mulai dan jam selesai, atau kosongkan keduanya.");
+  if (b.avail_from != null && b.avail_from === b.avail_to) fail(400, "Jam mulai dan jam selesai tidak boleh sama.");
+  return [b.avail_days, b.avail_from, b.avail_to] as const;
+}
+
+/** Hanya menu milik toko sendiri (dan bukan menu itu sendiri) yang boleh jadi pasangan. */
+async function pairIds(c: { var: Env["Variables"] }, tenantId: string, ids: string[], self: string | null) {
+  const uniq = [...new Set(ids)].filter((x) => x !== self);
+  if (!uniq.length) return "";
+  const ok = await all<{ id: string }>(c.var.db, `SELECT id FROM menu_items WHERE tenant_id = ? AND archived = 0 AND id IN (${uniq.map(() => "?").join(",")})`, tenantId, ...uniq);
+  const valid = new Set(ok.map((r) => r.id));
+  return uniq.filter((x) => valid.has(x)).join(",");
 }
 
 function checkMediaUrl(tenantId: string, url: string | null) {
@@ -185,11 +230,11 @@ storeRoutes.post("/items", mgmt, async (c) => {
       c.var.db,
       `INSERT INTO menu_items (id, tenant_id, category_id, name, description, price, image_url, video_url, tags, available,
          track_stock, low_stock_at, unit, sort, created_at, portion, components, spice_level, prep_minutes, allergens,
-         name_en, description_en, portion_en, components_en, allergens_en)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         name_en, description_en, portion_en, components_en, allergens_en, avail_days, avail_from, avail_to, pair_ids, cost)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id, t.id, b.category_id, b.name, b.description, b.price, cover.image_url, cover.video_url, b.tags, b.available,
       b.track_stock, b.low_stock_at, b.unit, (max?.s ?? 0) + 1, Date.now(), b.portion, b.components, b.spice_level, b.prep_minutes, b.allergens,
-      b.name_en, b.description_en, b.portion_en, b.components_en, b.allergens_en,
+      b.name_en, b.description_en, b.portion_en, b.components_en, b.allergens_en, ...schedule(b), await pairIds(c, t.id, b.pair_ids, null), b.cost,
     ),
     ...replaceGallery(c.var.db, t.id, id, b.media),
   ]);
@@ -210,14 +255,15 @@ storeRoutes.put("/items/:id", mgmt, async (c) => {
       c.var.db,
       `UPDATE menu_items SET category_id=?, name=?, description=?, price=?, image_url=?, video_url=?, tags=?, available=?,
          track_stock=?, low_stock_at=?, unit=?, portion=?, components=?, spice_level=?, prep_minutes=?, allergens=?,
-         name_en=?, description_en=?, portion_en=?, components_en=?, allergens_en=?
+         name_en=?, description_en=?, portion_en=?, components_en=?, allergens_en=?, avail_days=?, avail_from=?, avail_to=?, pair_ids=?, cost=?
        WHERE id=? AND tenant_id=?`,
       b.category_id, b.name, b.description, b.price, cover.image_url, cover.video_url, b.tags, b.available,
       b.track_stock, b.low_stock_at, b.unit, b.portion, b.components, b.spice_level, b.prep_minutes, b.allergens,
-      b.name_en, b.description_en, b.portion_en, b.components_en, b.allergens_en, id, t.id,
+      b.name_en, b.description_en, b.portion_en, b.components_en, b.allergens_en, ...schedule(b), await pairIds(c, t.id, b.pair_ids, id), b.cost, id, t.id,
     ),
     ...replaceGallery(c.var.db, t.id, id, b.media),
   ]);
+  forgetPairs(t.id);
   return c.json({ ok: true });
 });
 
@@ -409,18 +455,22 @@ storeRoutes.get("/orders", async (c) => {
     c.var.db,
     `SELECT o.id, o.number, o.business_day, o.table_label, o.source, o.order_type, o.customer_name, o.status, o.payment_status,
             o.payment_method, o.amount_received, o.subtotal, o.tax, o.service, o.total, o.note, o.cancel_reason, o.created_at,
-            o.updated_at, o.paid_at, o.geo_check, o.geo_distance_m, u.name AS created_by_name
+            o.updated_at, o.paid_at, o.geo_check, o.geo_distance_m, o.public_token, o.accepted_at, o.offline,
+            (SELECT phone FROM loyalty_members lm WHERE lm.id = o.member_id) AS member_phone, u.name AS created_by_name
      FROM orders o LEFT JOIN users u ON u.id = o.created_by
      WHERE ${where.join(" AND ")} ORDER BY o.created_at DESC LIMIT ${limit}`,
     ...args,
   );
   const items = await loadOrderItems(c.var.db, orders.map((o) => o.id));
   // Panggilan pelayan ikut di polling papan pesanan, supaya tidak ada permintaan tambahan.
-  const calls =
-    scope === "active"
-      ? await all(c.var.db, "SELECT id, table_label, kind, geo_check, created_at FROM service_calls WHERE tenant_id = ? AND status = 'open' ORDER BY created_at", t.id)
-      : [];
-  return c.json({ orders: orders.map((o) => ({ ...o, items: items.get(o.id) ?? [] })), calls });
+  if (scope !== "active") return c.json({ orders: orders.map((o) => ({ ...o, items: items.get(o.id) ?? [] })), calls: [] });
+  // Ikut di polling papan pesanan (bukan permintaan terpisah): panggilan meja, antrean tunggu, dan apakah shift sudah dibuka.
+  const [calls, waiting, shift] = await Promise.all([
+    all(c.var.db, "SELECT id, table_label, kind, geo_check, created_at FROM service_calls WHERE tenant_id = ? AND status = 'open' ORDER BY created_at", t.id),
+    all<{ id: string }>(c.var.db, "SELECT id FROM waitlist WHERE tenant_id = ? AND status = 'waiting' AND created_at > ? ORDER BY created_at LIMIT 60", t.id, Date.now() - 18 * 3600_000),
+    first(c.var.db, "SELECT 1 AS open FROM cash_shifts WHERE tenant_id = ? AND status = 'open'", t.id),
+  ]);
+  return c.json({ orders: orders.map((o) => ({ ...o, items: items.get(o.id) ?? [] })), calls, waiting: waiting.map((w) => w.id), shift_open: !!shift });
 });
 
 const posSchema = z.object({
@@ -430,6 +480,10 @@ const posSchema = z.object({
   note: z.string().trim().max(200).default(""),
   items: z.array(z.object({ id: z.string(), qty: z.number().int().min(1).max(999), note: z.string().trim().max(120).optional() })).min(1, "Keranjang masih kosong.").max(60),
   payment: z.object({ method: z.enum(["cash", "qris", "transfer", "card"]), amountReceived: money.nullable().default(null) }).nullable().default(null),
+  // Kasir offline: ID dari perangkat (kiriman ulang aman) dan waktu asli pesanan dicatat.
+  clientId: z.string().regex(/^[a-zA-Z0-9-]{8,64}$/).optional(),
+  offlineAt: z.number().int().optional(),
+  phone: z.string().trim().max(30).optional(),
 });
 
 storeRoutes.post("/orders", async (c) => {
@@ -442,6 +496,11 @@ storeRoutes.post("/orders", async (c) => {
     if (!tb) fail(400, "Meja tidak ditemukan.");
     tableLabel = tb.label;
   }
+  // Waktu offline yang masuk akal saja: paling lama 3 hari ke belakang dan tidak di masa depan.
+  const now = Date.now();
+  const offline = b.offlineAt && b.offlineAt > now - 3 * 86400_000 && b.offlineAt <= now + 5 * 60_000 ? { at: Math.min(b.offlineAt, now) } : null;
+  const phone = b.phone ? normalizePhone(b.phone) : null;
+  if (b.phone && !phone && !offline) fail(400, "Nomor HP untuk kartu stempel belum benar. Contoh: 0812 3456 7890.");
   const order = await createOrder(c.var.db, {
     tenant: t,
     source: "pos",
@@ -453,8 +512,11 @@ storeRoutes.post("/orders", async (c) => {
     lines: b.items,
     userId: c.var.user!.id,
     payment: b.payment,
+    clientId: b.clientId ?? null,
+    offline,
   });
-  return c.json(order, 201);
+  const loyalty = phone && b.payment && !order.duplicate ? await awardStamp(c.var.db, t, order.id, phone, b.customerName, c.var.user!.id) : null;
+  return c.json({ ...order, loyalty }, order.duplicate ? 200 : 201);
 });
 
 const NEXT: Record<string, string[]> = {
@@ -476,7 +538,9 @@ storeRoutes.patch("/orders/:id/status", async (c) => {
   }
   const now = Date.now();
   const s: Stmt[] = [
-    stmt(c.var.db, `UPDATE orders SET status = ?, cancel_reason = ?, updated_at = ? WHERE id = ? AND status = ?${b.status === "cancelled" && !MANAGEMENT.includes(c.var.user!.role) ? " AND payment_status = 'unpaid'" : ""}`, b.status, b.status === "cancelled" ? b.reason ?? "" : null, now, o.id, o.status),
+    stmt(c.var.db, `UPDATE orders SET status = ?, cancel_reason = ?, updated_at = ?, accepted_at = COALESCE(accepted_at, CASE WHEN ? = 'preparing' THEN ? END)
+                    WHERE id = ? AND status = ?${b.status === "cancelled" && !MANAGEMENT.includes(c.var.user!.role) ? " AND payment_status = 'unpaid'" : ""}`,
+      b.status, b.status === "cancelled" ? b.reason ?? "" : null, now, b.status, now, o.id, o.status),
   ];
   if (b.status === "cancelled") s.push(...(await restockCancelledOrder(c.var.db, t.id, o.id, c.var.user!.id)));
   await c.var.db.batch(s);
@@ -485,8 +549,10 @@ storeRoutes.patch("/orders/:id/status", async (c) => {
 
 storeRoutes.patch("/orders/:id/pay", async (c) => {
   const t = storeOf(c);
-  const b = z.object({ method: z.enum(["cash", "qris", "transfer", "card"]), amountReceived: money.nullable().default(null) }).parse(await c.req.json());
-  const o = await first<{ id: string; total: number; payment_status: string; status: string }>(c.var.db, "SELECT id, total, payment_status, status FROM orders WHERE id = ? AND tenant_id = ?", c.req.param("id"), t.id);
+  const b = z.object({ method: z.enum(["cash", "qris", "transfer", "card"]), amountReceived: money.nullable().default(null), phone: z.string().trim().max(30).optional() }).parse(await c.req.json());
+  const phone = b.phone ? normalizePhone(b.phone) : null;
+  if (b.phone && !phone) fail(400, "Nomor HP untuk kartu stempel belum benar. Contoh: 0812 3456 7890.");
+  const o = await first<{ id: string; total: number; payment_status: string; status: string; customer_name: string }>(c.var.db, "SELECT id, total, payment_status, status, customer_name FROM orders WHERE id = ? AND tenant_id = ?", c.req.param("id"), t.id);
   if (!o) fail(404, "Pesanan tidak ditemukan.");
   if (o.status === "cancelled") fail(409, "Pesanan ini sudah dibatalkan.");
   if (o.payment_status === "paid") fail(409, "Pesanan ini sudah lunas.");
@@ -494,7 +560,8 @@ storeRoutes.patch("/orders/:id/pay", async (c) => {
   const now = Date.now();
   const n = await run(c.var.db, "UPDATE orders SET payment_status = 'paid', payment_method = ?, amount_received = ?, paid_by = ?, paid_at = ?, updated_at = ? WHERE id = ? AND payment_status = 'unpaid' AND status != 'cancelled'", b.method, b.amountReceived, c.var.user!.id, now, now, o.id);
   if (!n) fail(409, "Pesanan ini baru saja diubah di perangkat lain. Muat ulang.");
-  return c.json({ ok: true });
+  const loyalty = phone ? await awardStamp(c.var.db, t, o.id, phone, o.customer_name, c.var.user!.id) : null;
+  return c.json({ ok: true, loyalty });
 });
 
 // ---------- Stok ----------
@@ -608,3 +675,5 @@ storeRoutes.get("/subscription", mgmt, async (c) => {
 });
 
 storeRoutes.route("/analytics", analyticsRoutes);
+storeRoutes.route("/", opsRoutes);
+storeRoutes.route("/", guestRoutes);

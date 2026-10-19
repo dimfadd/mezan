@@ -63,7 +63,7 @@ analyticsRoutes.get("/", async (c) => {
   const paid = "o.tenant_id = ? AND o.business_day BETWEEN ? AND ? AND o.status != 'cancelled' AND o.payment_status = 'paid'";
   const tz = t.tz_offset_minutes * 60;
 
-  const [daily, hourly, weekday, topItems, categories, payments, sources, itemsSold, staff, idle] = await Promise.all([
+  const [daily, hourly, weekday, topItems, categories, payments, sources, itemsSold, staff, idle, margins, fbSum, fbDist, fbRecent, itemFb, promo, costCoverage] = await Promise.all([
     all<{ day: string; omzet: number; orders: number }>(db,
       `SELECT o.business_day AS day, SUM(o.total) AS omzet, COUNT(*) AS orders FROM orders o WHERE ${paid} GROUP BY o.business_day`, t.id, from, to),
     all<{ hour: number; orders: number; omzet: number }>(db,
@@ -96,6 +96,31 @@ analyticsRoutes.get("/", async (c) => {
          SELECT 1 FROM order_items i JOIN orders o ON o.id = i.order_id
          WHERE i.menu_item_id = m.id AND o.business_day BETWEEN ? AND ? AND o.status != 'cancelled')
        ORDER BY m.name LIMIT 12`, t.id, Date.parse(`${to}T23:59:59Z`), from, to),
+    // Margin per menu: modal diambil dari saat terjual; pesanan lama yang belum punya catatan modal memakai modal sekarang.
+    all<{ id: string; name: string; qty: number; revenue: number; cost: number | null; costed_qty: number }>(db,
+      `SELECT COALESCE(i.menu_item_id, i.name) AS id, i.name, SUM(i.qty) AS qty, SUM(i.qty * i.price) AS revenue,
+              SUM(CASE WHEN COALESCE(i.unit_cost, m.cost) IS NOT NULL THEN i.qty * COALESCE(i.unit_cost, m.cost) END) AS cost,
+              SUM(CASE WHEN COALESCE(i.unit_cost, m.cost) IS NOT NULL THEN i.qty ELSE 0 END) AS costed_qty
+       FROM order_items i JOIN orders o ON o.id = i.order_id LEFT JOIN menu_items m ON m.id = i.menu_item_id
+       WHERE ${paid} GROUP BY 1 ORDER BY revenue DESC`, t.id, from, to),
+    first<{ n: number; avg: number | null }>(db,
+      `SELECT COUNT(*) AS n, AVG(f.rating) AS avg FROM order_feedback f JOIN orders o ON o.id = f.order_id
+       WHERE f.tenant_id = ? AND o.business_day BETWEEN ? AND ?`, t.id, from, to),
+    all<{ rating: number; n: number }>(db,
+      `SELECT f.rating, COUNT(*) AS n FROM order_feedback f JOIN orders o ON o.id = f.order_id
+       WHERE f.tenant_id = ? AND o.business_day BETWEEN ? AND ? GROUP BY f.rating`, t.id, from, to),
+    all<{ rating: number; comment: string; created_at: number; number: number; customer_name: string; table_label: string | null }>(db,
+      `SELECT f.rating, f.comment, f.created_at, o.number, o.customer_name, o.table_label FROM order_feedback f JOIN orders o ON o.id = f.order_id
+       WHERE f.tenant_id = ? AND o.business_day BETWEEN ? AND ? AND (f.comment != '' OR f.rating <= 3) ORDER BY f.created_at DESC LIMIT 12`, t.id, from, to),
+    all<{ name: string; likes: number; dislikes: number }>(db,
+      `SELECT m.name, SUM(x.liked) AS likes, SUM(1 - x.liked) AS dislikes FROM item_feedback x JOIN menu_items m ON m.id = x.menu_item_id
+       JOIN orders o ON o.id = x.order_id WHERE x.tenant_id = ? AND o.business_day BETWEEN ? AND ?
+       GROUP BY x.menu_item_id ORDER BY (SUM(x.liked) * 1.0 / COUNT(*)) ASC, COUNT(*) DESC`, t.id, from, to),
+    first<{ discount: number; qty: number }>(db,
+      `SELECT COALESCE(SUM((i.list_price - i.price) * i.qty), 0) AS discount, COALESCE(SUM(i.qty), 0) AS qty
+       FROM order_items i JOIN orders o ON o.id = i.order_id WHERE ${paid} AND i.list_price IS NOT NULL`, t.id, from, to),
+    first<{ total: number; costed: number }>(db,
+      "SELECT COUNT(*) AS total, COUNT(cost) AS costed FROM menu_items WHERE tenant_id = ? AND archived = 0", t.id),
   ]);
 
   // Lengkapi hari yang kosong supaya grafik tidak melompat.
@@ -123,6 +148,16 @@ analyticsRoutes.get("/", async (c) => {
     sources,
     staff,
     idle,
+    margins,
+    costCoverage: { total: costCoverage?.total ?? 0, costed: costCoverage?.costed ?? 0 },
+    promo: { discount: promo?.discount ?? 0, qty: promo?.qty ?? 0 },
+    feedback: {
+      count: fbSum?.n ?? 0,
+      avg: fbSum?.avg ? Math.round(fbSum.avg * 10) / 10 : null,
+      dist: [1, 2, 3, 4, 5].map((r) => ({ rating: r, n: fbDist.find((d) => d.rating === r)?.n ?? 0 })),
+      recent: fbRecent,
+      items: itemFb,
+    },
   });
 });
 

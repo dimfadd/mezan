@@ -1,5 +1,8 @@
 import { useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Film, ImagePlus, Pencil, Plus, Star, ThumbsUp, Trash2, UtensilsCrossed } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Film, ImagePlus, Pencil, Plus, Star, ThumbsUp, Trash2, UtensilsCrossed, Clock3, Percent, X } from "lucide-react";
+import { ALL_DAYS, hasSchedule, scheduleText } from "../../../../shared/schedule";
+import { ScheduleFields } from "./ScheduleFields";
+import { PriceRules } from "./PriceRules";
 import { Empty, ErrorState, Field, Loading, Modal, MoneyInput, PageHead, Switch, Thumb, useConfirm, useToast } from "../../components/ui";
 import { api } from "../../lib/api";
 import { rupiah } from "../../lib/format";
@@ -9,7 +12,7 @@ import { uploadMedia } from "../../lib/upload";
 import { mediaSummary, type MediaRef } from "../../components/Gallery";
 import { Chilis } from "../../components/DishInfo";
 import { isManagement, useSession } from "../../lib/session";
-import { TAG_LABEL, type Category, type MenuItem } from "./types";
+import { STATION_LABEL, TAG_LABEL, type Category, type MenuItem } from "./types";
 
 export function MenuManagePage() {
   const { user, tenant } = useSession();
@@ -19,6 +22,7 @@ export function MenuManagePage() {
   const toast = useToast();
   const [editing, setEditing] = useState<Partial<MenuItem> | null>(null);
   const [catsOpen, setCatsOpen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
   const [filter, setFilter] = useState<"all" | "off" | "noen">("all");
 
   const grouped = useMemo(() => {
@@ -53,6 +57,9 @@ export function MenuManagePage() {
         actions={
           mgmt && (
             <>
+              <button className="btn" onClick={() => setRulesOpen(true)}>
+                <Percent /> Promo jam
+              </button>
               <button className="btn" onClick={() => setCatsOpen(true)}>
                 Atur kategori
               </button>
@@ -124,6 +131,12 @@ export function MenuManagePage() {
                             <div className="meta">
                               <span className="money small strong">{rupiah(it.price)}</span>
                               {!it.available && <span className="badge badge-danger">Habis</span>}
+                              {hasSchedule(it) && <span className="badge"><Clock3 aria-hidden="true" /> {scheduleText(it)}</span>}
+                              {mgmt && it.cost != null && it.price > 0 && (
+                                <span className={`badge ${(it.price - it.cost) / it.price < 0.3 ? "badge-warn" : ""}`} title={`Modal ${rupiah(it.cost)}`}>
+                                  Margin {Math.round(((it.price - it.cost) / it.price) * 100)}%
+                                </span>
+                              )}
                               {low ? <span className="badge badge-warn">Stok {it.stock_qty} {it.unit}</span> : null}
                               {it.tags.split(",").filter(Boolean).map((t) => (
                                 <span key={t} className="badge">{TAG_LABEL[t] ?? t}</span>
@@ -157,6 +170,7 @@ export function MenuManagePage() {
           tenantId={tenant?.id ?? ""}
           planName={tenant?.plan_name ?? ""}
           stockOn={!!tenant?.inventory_enabled}
+          allItems={items.data?.items ?? []}
           salesNote={salesNote(editing, items.data?.items ?? [])}
           onClose={() => setEditing(null)}
           onSaved={() => {
@@ -166,6 +180,7 @@ export function MenuManagePage() {
           }}
         />
       )}
+      {mgmt && <PriceRules open={rulesOpen} categories={cats.data?.categories ?? []} onClose={() => setRulesOpen(false)} />}
       {mgmt && (
         <CategoryManager
           open={catsOpen}
@@ -199,10 +214,12 @@ function ItemEditor({
   tenantId,
   planName,
   stockOn,
+  allItems,
   salesNote,
   onClose,
   onSaved,
 }: {
+  allItems: MenuItem[];
   item: Partial<MenuItem>;
   categories: Category[];
   limits: { photos: number; videos: number };
@@ -236,7 +253,13 @@ function ItemEditor({
     track_stock: item.track_stock ?? 0,
     low_stock_at: item.low_stock_at ?? 5,
     unit: item.unit ?? "porsi",
+    avail_days: item.avail_days ?? ALL_DAYS,
+    avail_from: item.avail_from ?? null,
+    avail_to: item.avail_to ?? null,
+    pair_ids: (item.pair_ids ?? "").split(",").filter(Boolean),
+    cost: (item.cost ?? "") as number | "",
   });
+  const timed = f.avail_from != null || f.avail_days !== ALL_DAYS;
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -249,7 +272,7 @@ function ItemEditor({
     setErrors(errs);
     if (Object.keys(errs).length) return;
     setBusy(true);
-    const body = { ...f, category_id: f.category_id || null, tags: f.tags.join(","), price: Number(f.price), prep_minutes: f.prep_minutes === "" ? null : f.prep_minutes };
+    const body = { ...f, category_id: f.category_id || null, tags: f.tags.join(","), price: Number(f.price), prep_minutes: f.prep_minutes === "" ? null : f.prep_minutes, cost: f.cost === "" ? null : f.cost };
     try {
       if (isNew) await api.post("/api/store/items", body);
       else await api.put(`/api/store/items/${item.id}`, body);
@@ -319,6 +342,7 @@ function ItemEditor({
             <input id="it-unit" className="input" value={f.unit} onChange={(e) => setF({ ...f, unit: e.target.value })} maxLength={20} />
           </Field>
         </div>
+        <CostField price={f.price} cost={f.cost} onChange={(cost) => setF({ ...f, cost })} />
         <Field label="Deskripsi" htmlFor="it-desc" hint="Tulis isi, porsi, atau rasa. Ini yang dibaca pelanggan sebelum memesan.">
           <textarea id="it-desc" className="textarea" value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} maxLength={500} placeholder="Mis. Nasi goreng bumbu terasi, telur ceplok, kerupuk, acar." />
         </Field>
@@ -388,6 +412,20 @@ function ItemEditor({
         </section>
 
 
+        <section className="stack" aria-labelledby="it-sched-h" style={{ borderTop: "1px solid var(--line)", paddingTop: 16 }}>
+          <div>
+            <h3 id="it-sched-h">Jam tersedia</h3>
+            <p className="small muted" style={{ marginTop: 4 }}>Untuk menu sarapan, menu malam, atau menu akhir pekan. Di luar jam, menu tetap terlihat dengan keterangan jamnya tapi tidak bisa dipesan.</p>
+          </div>
+          <div className="row wrap" role="group" aria-label="Jam tersedia">
+            <button type="button" className="chip" aria-pressed={!timed} onClick={() => setF({ ...f, avail_days: ALL_DAYS, avail_from: null, avail_to: null })}>Sepanjang jam buka</button>
+            <button type="button" className="chip" aria-pressed={timed} onClick={() => setF({ ...f, avail_from: f.avail_from ?? 360, avail_to: f.avail_to ?? 600 })}>Jam tertentu</button>
+          </div>
+          {timed && <ScheduleFields days={f.avail_days} from={f.avail_from} to={f.avail_to} onChange={(v) => setF({ ...f, avail_days: v.days, avail_from: v.from, avail_to: v.to })} allowAllDay />}
+        </section>
+
+        <PairPicker self={item.id} items={allItems} value={f.pair_ids} onChange={(pair_ids) => setF({ ...f, pair_ids })} />
+
         <details className="en-block" open={!!(f.name_en || f.description_en)}>
           <summary>
             <span className="strong">English, untuk pembeli asing</span>
@@ -441,6 +479,7 @@ function CategoryManager({ open, categories, onClose, onChanged }: { open: boole
   const [editName, setEditName] = useState("");
   const [editEn, setEditEn] = useState("");
   const [nameEn, setNameEn] = useState("");
+  const setStation = (c: Category, station: string) => run(() => api.put(`/api/store/categories/${c.id}`, { name: c.name, name_en: c.name_en ?? "", station }), `${c.name} dikirim ke layar ${STATION_LABEL[station].toLowerCase()}.`);
 
   const run = async (fn: () => Promise<unknown>, ok?: string) => {
     try {
@@ -462,7 +501,7 @@ function CategoryManager({ open, categories, onClose, onChanged }: { open: boole
   return (
     <Modal open={open} onClose={onClose} title="Kategori menu">
       <div className="stack">
-        <p className="small muted">Urutan di sini sama dengan urutan di menu pelanggan.</p>
+        <p className="small muted">Urutan di sini sama dengan urutan di menu pelanggan. Pilih Dapur atau Bar supaya pesanan muncul di layar dapur yang tepat.</p>
         {categories.length === 0 && <p className="muted">Belum ada kategori.</p>}
         {categories.map((c, i) => (
           <div key={c.id} className="row" style={{ borderBottom: "1px solid var(--line)", paddingBottom: 8 }}>
@@ -487,6 +526,10 @@ function CategoryManager({ open, categories, onClose, onChanged }: { open: boole
                   {c.name_en && <span className="small muted"> · EN: {c.name_en}</span>}
                   <span className="muted small"> · {c.item_count ?? 0} menu</span>
                 </span>
+                <select className="select select-sm" value={c.station ?? "kitchen"} onChange={(e) => setStation(c, e.target.value)} aria-label={`Bagian dapur untuk ${c.name}`} title="Layar dapur yang menerima menu kategori ini">
+                  <option value="kitchen">Dapur</option>
+                  <option value="bar">Bar</option>
+                </select>
                 <button className="icon-btn" aria-label={`Naikkan ${c.name}`} disabled={i === 0} onClick={() => move(i, -1)}><ArrowUp /></button>
                 <button className="icon-btn" aria-label={`Turunkan ${c.name}`} disabled={i === categories.length - 1} onClick={() => move(i, 1)}><ArrowDown /></button>
                 <button className="icon-btn" aria-label={`Ganti nama ${c.name}`} onClick={() => { setEditId(c.id); setEditName(c.name); setEditEn(c.name_en ?? ""); }}><Pencil /></button>
@@ -646,5 +689,68 @@ function GalleryEditor({
         <input ref={videoInput} type="file" accept="video/mp4,video/webm" hidden onChange={(e) => add(e.target.files, "video")} />
       </div>
     </div>
+  );
+}
+
+/** Modal (HPP) per porsi, dengan margin yang langsung terlihat. */
+function CostField({ price, cost, onChange }: { price: number | ""; cost: number | ""; onChange: (v: number | "") => void }) {
+  const p = Number(price) || 0;
+  const c = cost === "" ? null : cost;
+  const margin = c != null && p > 0 ? p - c : null;
+  const pct = margin != null ? Math.round((margin / p) * 100) : null;
+  return (
+    <div className="form-row">
+      <Field label="Modal per porsi (HPP, opsional)" htmlFor="it-cost" hint="Bahan + kemasan untuk satu porsi. Hanya terlihat pemilik dan manajer, dipakai di laporan margin.">
+        <MoneyInput id="it-cost" value={cost} onChange={onChange} />
+      </Field>
+      <div className="field">
+        <span className="field-label">Untung per porsi</span>
+        {margin == null ? (
+          <p className="small muted" style={{ paddingTop: 10 }}>Isi harga dan modal untuk melihat margin.</p>
+        ) : (
+          <p style={{ paddingTop: 8 }}>
+            <span className="strong money">{rupiah(margin)}</span>{" "}
+            <span className={`badge ${pct! < 30 ? "badge-warn" : "badge-ok"}`}>{pct}% dari harga</span>
+            {pct! < 30 && <span className="hint" style={{ display: "block", marginTop: 4 }}>Di bawah 30%: pertimbangkan naikkan harga atau kurangi porsi bahan mahal.</span>}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Maksimal 3 menu pasangan (biasanya minuman untuk makanan). Kosong = diambil dari yang sering dipesan bersama. */
+function PairPicker({ self, items, value, onChange }: { self?: string; items: MenuItem[]; value: string[]; onChange: (v: string[]) => void }) {
+  const [pick, setPick] = useState("");
+  const byId = new Map(items.map((i) => [i.id, i]));
+  const options = items.filter((i) => i.id !== self && !value.includes(i.id));
+  return (
+    <section className="stack-sm" aria-labelledby="it-pair-h" style={{ borderTop: "1px solid var(--line)", paddingTop: 16 }}>
+      <div>
+        <h3 id="it-pair-h">Cocok dipesan bersama</h3>
+        <p className="small muted" style={{ marginTop: 4 }}>
+          Muncul sebagai saran saat pembeli membuka menu ini dan di keranjang, juga di layar kasir. Kalau dikosongkan, diambil otomatis dari menu yang sering dipesan bersama.
+        </p>
+      </div>
+      {value.length > 0 && (
+        <div className="row wrap">
+          {value.map((id) => (
+            <span key={id} className="chip" aria-pressed="true">
+              {byId.get(id)?.name ?? "Menu dihapus"}
+              <button type="button" className="chip-x" onClick={() => onChange(value.filter((x) => x !== id))} aria-label={`Hapus ${byId.get(id)?.name ?? "menu"} dari pasangan`}><X /></button>
+            </span>
+          ))}
+        </div>
+      )}
+      {value.length < 3 && options.length > 0 && (
+        <div className="row" style={{ gap: 8 }}>
+          <select className="select" value={pick} onChange={(e) => setPick(e.target.value)} aria-label="Pilih menu pasangan">
+            <option value="">Pilih menu...</option>
+            {options.map((i) => <option key={i.id} value={i.id}>{i.name} · {rupiah(i.price)}</option>)}
+          </select>
+          <button type="button" className="btn" disabled={!pick} onClick={() => { onChange([...value, pick]); setPick(""); }}><Plus /> Tambah</button>
+        </div>
+      )}
+    </section>
   );
 }

@@ -6,6 +6,9 @@ export interface OrderItem {
   qty: number;
   note: string;
   person?: string;
+  station?: "kitchen" | "bar";
+  ready_at?: number | null;
+  list_price?: number | null;
 }
 
 export interface ServiceCall {
@@ -40,6 +43,10 @@ export interface Order {
   created_by_name: string | null;
   geo_check?: "" | "ok" | "far" | "unknown";
   geo_distance_m?: number | null;
+  public_token?: string;
+  accepted_at?: number | null;
+  offline?: number;
+  member_phone?: string | null;
   items: OrderItem[];
 }
 
@@ -70,12 +77,19 @@ export interface MenuItem {
   portion_en: string;
   components_en: string;
   allergens_en: string;
+  avail_days: number;
+  avail_from: number | null;
+  avail_to: number | null;
+  pair_ids: string;
+  pairs?: string[];
+  cost?: number | null;
 }
 
 export interface Category {
   id: string;
   name: string;
   name_en?: string;
+  station?: "kitchen" | "bar";
   sort: number;
   item_count?: number;
 }
@@ -98,3 +112,21 @@ export const STATUS_LABEL: Record<Order["status"], string> = {
 };
 
 export const TAG_LABEL: Record<string, string> = { bestseller: "Best seller", favorit: "Rekomendasi", pedas: "Pedas", vegetarian: "Vegetarian", baru: "Menu baru" };
+
+export const STATION_LABEL: Record<string, string> = { kitchen: "Dapur", bar: "Bar / minuman" };
+
+export interface Pricing {
+  tz: number;
+  now: number;
+  rules: import("../../../../shared/schedule").PriceRule[];
+}
+
+export interface LoyaltyCard {
+  phone: string;
+  name: string;
+  stamps: number;
+  target: number;
+  reward: string;
+  ready: boolean;
+  rewards: number;
+}

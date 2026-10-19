@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Bell, BellOff, Printer, QrCode, Search, ShoppingBasket, MapPinOff, BellRing, Check, ReceiptText } from "lucide-react";
+import { Bell, BellOff, Printer, QrCode, Search, ShoppingBasket, MapPinOff, BellRing, Check, ReceiptText, MessageCircle, WifiOff, CircleCheck } from "lucide-react";
+import { ReceiptShare } from "../../components/ReceiptShare";
 import { useOrderFeed, soundEnabled } from "../../components/Shell";
 import { Empty, ErrorState, Loading, Modal, PageHead, Segmented, useConfirm, useToast } from "../../components/ui";
 import { PaymentModal } from "../../components/PaymentModal";
@@ -8,7 +9,7 @@ import { api } from "../../lib/api";
 import { ago, PAY_LABEL, rupiah, time } from "../../lib/format";
 import { useApi, useMediaQuery } from "../../lib/hooks";
 import { useSession } from "../../lib/session";
-import { STATUS_LABEL, type Order } from "./types";
+import { STATUS_LABEL, type LoyaltyCard, type Order } from "./types";
 
 type Col = "new" | "preparing" | "ready";
 
@@ -173,6 +174,7 @@ function Ticket({ order: o, onChanged }: { order: Order; onChanged: () => Promis
   const [paying, setPaying] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [reason, setReason] = useState("");
+  const [share, setShare] = useState<{ phone?: string; card?: LoyaltyCard | null } | null>(null);
   const waitMin = Math.floor((Date.now() - o.created_at) / 60000);
   const persons = [...new Set(o.items.map((i) => i.person ?? "").filter(Boolean))];
 
@@ -188,12 +190,13 @@ function Ticket({ order: o, onChanged }: { order: Order; onChanged: () => Promis
     }
   };
 
-  const pay = async (p: { method: string; amountReceived: number | null }) => {
+  const pay = async (p: { method: string; amountReceived: number | null; phone?: string }) => {
     setBusy(true);
     try {
-      await api.patch(`/api/store/orders/${o.id}/pay`, p);
+      const r = await api.patch<{ loyalty?: { card: LoyaltyCard; stamped: boolean } | null }>(`/api/store/orders/${o.id}/pay`, p);
       setPaying(false);
-      toast(`Pesanan #${o.number} lunas.`);
+      toast(r.loyalty?.stamped ? `Pesanan #${o.number} lunas. Stempel ${r.loyalty.card.stamps}/${r.loyalty.card.target}.` : `Pesanan #${o.number} lunas.`);
+      if (p.phone) setShare({ phone: p.phone, card: r.loyalty?.card ?? null });
       await onChanged();
     } catch (e) {
       toast((e as Error).message, "error");
@@ -218,6 +221,7 @@ function Ticket({ order: o, onChanged }: { order: Order; onChanged: () => Promis
               {o.source === "qr" ? <QrCode aria-hidden="true" /> : <ShoppingBasket aria-hidden="true" />}
               {o.source === "qr" ? (o.order_type === "takeaway" ? "QR bawa pulang" : "QR meja") : "Kasir"}
             </span>
+            {!!o.offline && <span className="badge"><WifiOff aria-hidden="true" /> Dicatat offline</span>}
             <span className={`tiny ${waitMin >= 15 && o.status !== "done" ? "strong" : "muted"}`} style={waitMin >= 15 && o.status !== "done" ? { color: "var(--danger)" } : undefined}>
               {time(o.created_at)} · {ago(o.created_at)}
             </span>
@@ -233,9 +237,10 @@ function Ticket({ order: o, onChanged }: { order: Order; onChanged: () => Promis
         )}
         <ul className="ticket-items">
           {o.items.map((i) => (
-            <li key={i.id}>
+            <li key={i.id} className={i.ready_at && o.status === "preparing" ? "is-ready" : undefined}>
               <span className="q num">{i.qty}×</span>
               <span>
+                {i.ready_at && o.status === "preparing" && <CircleCheck aria-label="Sudah selesai di dapur" className="ready-ico" />}
                 {persons.length > 1 && i.person && <span className="person-tag">{i.person}</span>}
                 {i.name}
                 {i.note && <span className="note">Catatan: {i.note}</span>}
@@ -304,6 +309,11 @@ function Ticket({ order: o, onChanged }: { order: Order; onChanged: () => Promis
               Batalkan
             </button>
           )}
+          {o.public_token && (
+            <button className="btn btn-ghost btn-sm" aria-label={`Kirim struk pesanan ${o.number} ke WhatsApp`} title="Kirim struk ke WhatsApp" onClick={() => setShare({ phone: o.member_phone ? `0${o.member_phone.slice(2)}` : "" })}>
+              <MessageCircle />
+            </button>
+          )}
           <button
             className="btn btn-ghost btn-sm"
             aria-label={`Cetak struk pesanan ${o.number}`}
@@ -314,6 +324,14 @@ function Ticket({ order: o, onChanged }: { order: Order; onChanged: () => Promis
         </div>
       </div>
       <PaymentModal open={paying} total={o.total} busy={busy} onClose={() => setPaying(false)} onPay={pay} title={`Bayar pesanan #${o.number}`} />
+      <ReceiptShare
+        open={!!share}
+        order={o.public_token ? { number: o.number, total: o.total, token: o.public_token, paid: o.payment_status === "paid" || !!share?.card } : null}
+        phone={share?.phone}
+        card={share?.card}
+        title={`Struk pesanan #${o.number}`}
+        onClose={() => setShare(null)}
+      />
       <Modal
         open={cancelOpen}
         onClose={() => setCancelOpen(false)}

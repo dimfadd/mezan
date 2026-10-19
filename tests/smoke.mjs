@@ -68,16 +68,20 @@ for (const theme of ["light", "dark"]) {
   const { c, p } = await ctx("hp");
   await p.goto(`${BASE}/`);
   await shot(p, "landing-hp");
+  // Antrean tamu dari QR pintu
+  await p.goto(`${BASE}/antre/contoh-antre`);
+  await p.waitForSelector("#w-name");
+  await shot(p, "antre-daftar-hp");
   await c.close();
 }
 
 // Toko (pemilik)
-const pages = ["pesanan", "kasir", "laporan", "menu", "meja", "stok", "karyawan", "pengaturan"];
+const pages = ["pesanan", "kasir", "dapur", "kas", "antrean", "pelanggan", "laporan", "menu", "meja", "stok", "karyawan", "pengaturan"];
 for (const size of ["pc", "tablet", "hp"]) {
   const { c, p } = await ctx(size);
   await login(p, "pemilik@contoh.id");
   for (const pg of pages) {
-    if (size !== "pc" && !["pesanan", "kasir", "laporan", "menu"].includes(pg)) continue;
+    if (size !== "pc" && !["pesanan", "kasir", "dapur", "kas", "antrean", "laporan", "menu"].includes(pg)) continue;
     await p.goto(`${BASE}/toko/${pg}`);
     await p.waitForLoadState("networkidle");
     await shot(p, `toko-${pg}-${size}`);
@@ -87,7 +91,7 @@ for (const size of ["pc", "tablet", "hp"]) {
 {
   const { c, p } = await ctx("pc", "dark");
   await login(p, "pemilik@contoh.id");
-  for (const pg of ["pesanan", "laporan", "kasir"]) {
+  for (const pg of ["pesanan", "laporan", "kasir", "dapur", "kas"]) {
     await p.goto(`${BASE}/toko/${pg}`);
     await p.waitForLoadState("networkidle");
     await shot(p, `toko-${pg}-pc-dark`);

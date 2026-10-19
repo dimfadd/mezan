@@ -4,7 +4,11 @@ import type { Env } from "../app";
 import { all, first, run, stmt } from "../db/types";
 import { TENANT_SELECT, tenantLocked, type Tenant } from "../lib/auth";
 import { fail } from "../lib/http";
-import { createOrder, loadOrderItems } from "../lib/orders";
+import { createOrder, loadOrderItems, loadPriceRules } from "../lib/orders";
+import { attachPairs } from "../lib/pairs";
+import { awardStamp, memberCard, normalizePhone } from "../lib/loyalty";
+import { businessDay } from "../lib/http";
+import { randomToken } from "../lib/security";
 import { loadGalleries } from "../lib/gallery";
 import { checkGeo, geoActive } from "../lib/geo";
 import { newId } from "../lib/security";
@@ -51,11 +55,11 @@ publicRoutes.get("/table/:code", async (c) => {
     c.var.db,
     `SELECT id, category_id, name, description, price, image_url, video_url, tags, available, track_stock, stock_qty,
             portion, components, spice_level, prep_minutes, allergens,
-            name_en, description_en, portion_en, components_en, allergens_en
+            name_en, description_en, portion_en, components_en, allergens_en, avail_days, avail_from, avail_to, pair_ids
      FROM menu_items WHERE tenant_id = ? AND archived = 0 ORDER BY sort, name`,
     tenant.id,
   );
-  const galleries = await loadGalleries(c.var.db, tenant.id);
+  const [galleries, rules] = await Promise.all([loadGalleries(c.var.db, tenant.id), loadPriceRules(c.var.db, tenant.id)]);
   const useStock = !!tenant.inventory_enabled;
   const locked = tenantLocked(tenant);
   return c.json({
@@ -76,8 +80,13 @@ publicRoutes.get("/table/:code", async (c) => {
     table: table ? { label: table.label, area: table.area } : null,
     // Koordinat toko tidak dikirim; pembeli cukup tahu apakah lokasinya akan dicek.
     geo: { check: geoActive(tenant), strict: geoActive(tenant) && tenant.geo_mode === "block" },
+    // Harga promo & jadwal menu dihitung ulang di HP memakai jam toko (now + tz), dan sekali lagi di server saat pesanan masuk.
+    pricing: { tz: tenant.tz_offset_minutes, now: Date.now(), rules: rules.map(({ id, name, percent, days, start_min, end_min, category_ids, active }) => ({ id, name, percent, days, start_min, end_min, category_ids, active })) },
     categories,
-    items: items.map(({ track_stock, stock_qty, ...it }) => ({
+    items: (await attachPairs(c.var.db, tenant.id, items as (typeof items[number] & { category_id: string | null; pair_ids: string })[], (id) => {
+      const x = items.find((i) => i.id === id);
+      return !!x && !!x.available && !(useStock && !!x.track_stock && x.stock_qty <= 0);
+    })).map(({ track_stock, stock_qty, pair_ids: _p, ...it }) => ({
       ...it,
       media: galleries.get(it.id) ?? [],
       // Pelanggan hanya perlu tahu "habis" atau "tinggal sedikit", bukan angka stok gudang.
@@ -175,7 +184,8 @@ publicRoutes.get("/orders/:token", async (c) => {
   const o = await first<Record<string, unknown> & { id: string; tenant_id: string }>(
     c.var.db,
     `SELECT o.id, o.tenant_id, o.tenant_id AS tid, o.number, o.table_label, o.customer_name, o.status, o.payment_status, o.subtotal, o.tax, o.service,
-            o.total, o.note, o.created_at, o.cancel_reason, o.order_type, t.name AS store_name,
+            o.total, o.note, o.created_at, o.cancel_reason, o.order_type, o.payment_method, o.paid_at, o.member_id, o.source,
+            t.name AS store_name, t.address AS store_address,
             COALESCE(dt.code, CASE WHEN o.source = 'qr' AND o.table_id IS NULL AND t.takeaway_qr_enabled = 1 THEN t.takeaway_code END) AS table_code
      FROM orders o JOIN tenants t ON t.id = o.tenant_id LEFT JOIN dining_tables dt ON dt.id = o.table_id
      WHERE o.public_token = ?`,
@@ -189,8 +199,21 @@ publicRoutes.get("/orders/:token", async (c) => {
     : new Map<string, string>();
   const itemsOut = items.map((i) => ({ ...i, name_en: (i.menu_item_id && enNames.get(i.menu_item_id)) || "" }));
   const tenant = await first<Tenant>(c.var.db, `${TENANT_SELECT} WHERE t.id = ?`, o.tenant_id);
-  const { id: _id, tenant_id: _t, tid: _tid, ...rest } = o;
-  return c.json({ order: { ...rest, items: itemsOut }, theme: tenant ? publicTheme(tenant) : DEFAULT_THEME });
+  const fb = await first<{ rating: number }>(c.var.db, "SELECT rating FROM order_feedback WHERE order_id = ?", o.id);
+  let card = null;
+  if (tenant?.loyalty_enabled && o.member_id) {
+    const m = await first<{ phone: string }>(c.var.db, "SELECT phone FROM loyalty_members WHERE id = ?", o.member_id);
+    if (m) card = await memberCard(c.var.db, tenant, m.phone);
+  }
+  const { id: _id, tenant_id: _t, tid: _tid, member_id: _m, ...rest } = o;
+  return c.json({
+    order: { ...rest, items: itemsOut },
+    theme: tenant ? publicTheme(tenant) : DEFAULT_THEME,
+    feedback: { sent: !!fb, rating: fb?.rating ?? null, review_url: tenant?.google_review_url || null },
+    loyalty: tenant?.loyalty_enabled
+      ? { target: tenant.loyalty_target, reward: tenant.loyalty_reward, min_spend: tenant.loyalty_min_spend, card: card ? { stamps: card.stamps, ready: card.ready } : null }
+      : null,
+  });
 });
 
 // ---------- Meja bersama: keranjang pesan bareng + panggil pelayan ----------
@@ -319,5 +342,168 @@ publicRoutes.delete("/table/:code/calls/:kind", async (c) => {
   const { table } = await resolveCode(c, c.req.param("code"));
   if (!table) fail(400, serverMsgs("id").tableOnly);
   await run(c.var.db, "UPDATE service_calls SET status = 'cancelled', done_at = ? WHERE table_id = ? AND kind = ? AND status = 'open'", Date.now(), table.id, c.req.param("kind"));
+  return c.json({ ok: true });
+});
+
+
+// ---------- Ulasan pembeli ----------
+
+const FEEDBACK_DAYS = 7;
+const feedbackSchema = z.object({
+  rating: z.number().int().min(1).max(5),
+  comment: z.string().trim().max(500).default(""),
+  items: z.array(z.object({ id: z.string().min(1).max(64), liked: z.boolean() })).max(40).default([]),
+  lang: z.string().optional(),
+});
+
+type TokenOrder = { id: string; tenant_id: string; status: string; payment_status: string; created_at: number; paid_at: number | null; total: number; member_id: string | null; customer_name: string };
+async function orderByToken(c: { var: Env["Variables"] }, token: string, lang: Lang) {
+  const o = await first<TokenOrder>(c.var.db, "SELECT id, tenant_id, status, payment_status, created_at, paid_at, total, member_id, customer_name FROM orders WHERE public_token = ?", token);
+  if (!o) fail(404, serverMsgs(lang).orderMissing);
+  const tenant = await first<Tenant>(c.var.db, `${TENANT_SELECT} WHERE t.id = ?`, o.tenant_id);
+  if (!tenant) fail(404, serverMsgs(lang).storeMissing);
+  return { o, tenant };
+}
+
+publicRoutes.post("/orders/:token/feedback", async (c) => {
+  const b = feedbackSchema.parse(await c.req.json());
+  const lang = pickLang(b.lang);
+  const M = serverMsgs(lang);
+  const { o, tenant } = await orderByToken(c, c.req.param("token"), lang);
+  if (o.status === "cancelled" || !(o.status === "done" || o.status === "ready" || o.payment_status === "paid")) fail(409, M.feedbackTooEarly);
+  if (Date.now() - o.created_at > FEEDBACK_DAYS * 86400_000) fail(409, M.feedbackTooLate);
+  if (await first(c.var.db, "SELECT 1 FROM order_feedback WHERE order_id = ?", o.id)) fail(409, M.feedbackDone);
+  // Hanya menu yang memang ada di pesanan ini yang bisa dinilai.
+  const inOrder = new Set((await all<{ menu_item_id: string }>(c.var.db, "SELECT DISTINCT menu_item_id FROM order_items WHERE order_id = ? AND menu_item_id IS NOT NULL", o.id)).map((r) => r.menu_item_id));
+  const now = Date.now();
+  const db = c.var.db;
+  try {
+    await db.batch([
+      stmt(db, "INSERT INTO order_feedback (id, tenant_id, order_id, rating, comment, created_at) VALUES (?, ?, ?, ?, ?, ?)", newId(), tenant.id, o.id, b.rating, b.comment, now),
+      ...[...new Map(b.items.filter((i) => inOrder.has(i.id)).map((i) => [i.id, i])).values()].map((i) =>
+        stmt(db, "INSERT INTO item_feedback (id, tenant_id, order_id, menu_item_id, liked, created_at) VALUES (?, ?, ?, ?, ?, ?)", newId(), tenant.id, o.id, i.id, i.liked ? 1 : 0, now),
+      ),
+    ]);
+  } catch (e) {
+    if (String(e).includes("UNIQUE")) fail(409, M.feedbackDone);
+    throw e;
+  }
+  // Tautan ulasan Google ditampilkan ke semua pembeli, apa pun nilainya: Google melarang hanya meminta ulasan dari yang puas.
+  return c.json({ ok: true, review_url: tenant.google_review_url || null }, 201);
+});
+
+// ---------- Kartu stempel untuk pesanan QR ----------
+
+publicRoutes.post("/orders/:token/stamp", async (c) => {
+  const b = z.object({ phone: z.string().max(30), lang: z.string().optional() }).parse(await c.req.json());
+  const lang = pickLang(b.lang);
+  const M = serverMsgs(lang);
+  const { o, tenant } = await orderByToken(c, c.req.param("token"), lang);
+  if (!tenant.loyalty_enabled) fail(409, M.loyaltyOff);
+  const phone = normalizePhone(b.phone);
+  if (!phone) fail(400, M.phoneInvalid);
+  if (o.payment_status !== "paid" || o.status === "cancelled") fail(409, M.stampNotYet);
+  if (Date.now() - (o.paid_at ?? o.created_at) > 24 * 3600_000) fail(409, M.stampExpired);
+  if (o.member_id) fail(409, M.stampTaken);
+  if (o.total < tenant.loyalty_min_spend) fail(409, M.stampMinSpend(`Rp${new Intl.NumberFormat("id-ID").format(tenant.loyalty_min_spend)}`));
+  const r = await awardStamp(c.var.db, tenant, o.id, phone, o.customer_name, null);
+  if (!r || !r.stamped) fail(409, M.stampTaken);
+  return c.json({ card: { stamps: r.card.stamps, ready: r.card.ready } });
+});
+
+// ---------- Antrean tunggu ----------
+
+type WaitRow = { id: string; number: number; name: string; party_size: number; status: string; token: string; table_label: string | null; created_at: number; called_at: number | null; tenant_id: string; business_day: string };
+
+async function waitlistTenant(c: { var: Env["Variables"] }, code: string, lang: Lang) {
+  const tenant = await first<Tenant>(c.var.db, `${TENANT_SELECT} WHERE t.waitlist_code = ?`, code);
+  if (!tenant) fail(404, serverMsgs(lang).tableUnknown);
+  return tenant;
+}
+
+async function waitingAhead(db: Env["Variables"]["db"], w: WaitRow) {
+  const r = await first<{ n: number }>(db, "SELECT COUNT(*) AS n FROM waitlist WHERE tenant_id = ? AND business_day = ? AND status = 'waiting' AND created_at < ?", w.tenant_id, w.business_day, w.created_at);
+  return r?.n ?? 0;
+}
+
+publicRoutes.get("/waitlist/:code", async (c) => {
+  const lang = pickLang(c.req.query("lang"));
+  const t = await waitlistTenant(c, c.req.param("code"), lang);
+  const day = businessDay(Date.now(), t.tz_offset_minutes);
+  const r = await first<{ n: number }>(c.var.db, "SELECT COUNT(*) AS n FROM waitlist WHERE tenant_id = ? AND business_day = ? AND status = 'waiting'", t.id, day);
+  return c.json({
+    store: { name: t.name, logo_url: t.logo_url, theme: publicTheme(t) },
+    open: !!t.waitlist_enabled && !tenantLocked(t),
+    waiting: r?.n ?? 0,
+    geo: { check: geoActive(t), strict: geoActive(t) && t.geo_mode === "block" },
+  });
+});
+
+const joinSchema = z.object({
+  name: z.string().trim().min(1).max(40),
+  party: z.number().int().min(1).max(50),
+  phone: z.string().trim().max(30).default(""),
+  lang: z.string().optional(),
+  loc: z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180), acc: z.number().min(0).max(100000) }).nullable().optional(),
+});
+
+publicRoutes.post("/waitlist/:code", async (c) => {
+  const raw = await c.req.json();
+  const lang = pickLang(raw?.lang);
+  const M = serverMsgs(lang);
+  const b = joinSchema.parse(raw);
+  const t = await waitlistTenant(c, c.req.param("code"), lang);
+  if (!t.waitlist_enabled || tenantLocked(t)) fail(403, M.waitlistOff);
+  const geo = checkGeo(t, b.loc);
+  if (t.geo_mode === "block") {
+    if (geo.check === "unknown") fail(403, M.locationNeeded);
+    if (geo.check === "far") fail(403, M.tooFar(km(geo.distance!)));
+  }
+  const phone = b.phone ? normalizePhone(b.phone) : "";
+  if (phone === null) fail(400, M.phoneInvalid);
+  const entry = await addToWaitlist(c.var.db, t, { name: b.name, party: b.party, phone, source: "qr" });
+  if (!entry) fail(429, M.waitlistFull);
+  return c.json(entry, 201);
+});
+
+/** Dipakai QR pintu dan kasir. Null kalau antrean hari ini sudah terlalu panjang. */
+export async function addToWaitlist(db: Env["Variables"]["db"], t: Tenant, e: { name: string; party: number; phone: string; source: "qr" | "kasir"; note?: string }) {
+  const now = Date.now();
+  const day = businessDay(now, t.tz_offset_minutes);
+  const open = await first<{ n: number }>(db, "SELECT COUNT(*) AS n FROM waitlist WHERE tenant_id = ? AND business_day = ? AND status IN ('waiting','called')", t.id, day);
+  if ((open?.n ?? 0) >= 60) return null;
+  const token = randomToken(12);
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const row = await first<{ n: number | null }>(db, "SELECT MAX(number) AS n FROM waitlist WHERE tenant_id = ? AND business_day = ?", t.id, day);
+    const number = (row?.n ?? 0) + 1;
+    try {
+      await run(
+        db,
+        "INSERT INTO waitlist (id, tenant_id, number, business_day, name, party_size, phone, note, source, token, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        newId(), t.id, number, day, e.name, e.party, e.phone, e.note ?? "", e.source, token, now,
+      );
+      return { token, number };
+    } catch (err) {
+      if (String(err).includes("UNIQUE") && attempt < 4) continue;
+      throw err;
+    }
+  }
+  return null;
+}
+
+publicRoutes.get("/waitlist/entry/:token", async (c) => {
+  const lang = pickLang(c.req.query("lang"));
+  const w = await first<WaitRow>(c.var.db, "SELECT * FROM waitlist WHERE token = ?", c.req.param("token"));
+  if (!w) fail(404, serverMsgs(lang).waitlistMissing);
+  const t = await first<Tenant>(c.var.db, `${TENANT_SELECT} WHERE t.id = ?`, w.tenant_id);
+  return c.json({
+    entry: { number: w.number, name: w.name, party: w.party_size, status: w.status, table_label: w.table_label, created_at: w.created_at, called_at: w.called_at },
+    ahead: w.status === "waiting" ? await waitingAhead(c.var.db, w) : 0,
+    store: { name: t?.name ?? "", theme: t ? publicTheme(t) : DEFAULT_THEME, code: t?.waitlist_code ?? null },
+  });
+});
+
+publicRoutes.delete("/waitlist/entry/:token", async (c) => {
+  await run(c.var.db, "UPDATE waitlist SET status = 'cancelled', done_at = ? WHERE token = ? AND status IN ('waiting','called')", Date.now(), c.req.param("token"));
   return c.json({ ok: true });
 });

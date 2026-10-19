@@ -2,8 +2,10 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   BarChart3, Boxes, ClipboardList, LogOut, Menu as MenuIcon, Palette, QrCode, Settings, ShoppingBasket, UserRound,
-  Users, UtensilsCrossed, AlertTriangle,
+  Users, UtensilsCrossed, AlertTriangle, ChefHat, Hourglass, Wallet, Stamp, WifiOff, RefreshCw, Trash2, CheckCircle2,
 } from "lucide-react";
+import { OutboxProvider, useOutbox } from "../lib/outbox";
+import { rupiah, time } from "../lib/format";
 import { isManagement, useSession } from "../lib/session";
 import { useApi, useMediaQuery } from "../lib/hooks";
 import { date, ROLE_LABEL } from "../lib/format";
@@ -15,11 +17,13 @@ import type { Order, ServiceCall } from "../pages/store/types";
 interface Feed {
   orders: Order[] | null;
   calls: ServiceCall[];
+  waiting: string[];
+  shiftOpen: boolean | null;
   error: string | null;
   reload: () => Promise<void>;
   newCount: number;
 }
-const FeedCtx = createContext<Feed>({ orders: null, calls: [], error: null, reload: async () => {}, newCount: 0 });
+const FeedCtx = createContext<Feed>({ orders: null, calls: [], waiting: [], shiftOpen: null, error: null, reload: async () => {}, newCount: 0 });
 export const useOrderFeed = () => useContext(FeedCtx);
 
 function chime() {
@@ -50,15 +54,16 @@ export function soundEnabled() {
 }
 
 function FeedProvider({ children }: { children: ReactNode }) {
-  const { data, error, reload } = useApi<{ orders: Order[]; calls?: ServiceCall[] }>("/api/store/orders?scope=active", { poll: 7000 });
+  const { data, error, reload } = useApi<{ orders: Order[]; calls?: ServiceCall[]; waiting?: string[]; shift_open?: boolean }>("/api/store/orders?scope=active", { poll: 7000 });
   const orders = data?.orders ?? null;
   const calls = data?.calls ?? [];
+  const waiting = data?.waiting ?? [];
   // Angka di menu Pesanan = pesanan baru + panggilan meja yang belum ditanggapi.
   const newCount = (orders?.filter((o) => o.status === "new").length ?? 0) + calls.length;
   const seen = useRef<Set<string> | null>(null);
   useEffect(() => {
     if (!orders) return;
-    const ids = new Set([...orders.filter((o) => o.status === "new").map((o) => o.id), ...calls.map((c) => c.id)]);
+    const ids = new Set([...orders.filter((o) => o.status === "new").map((o) => o.id), ...calls.map((c) => c.id), ...waiting]);
     if (seen.current) {
       const fresh = [...ids].some((id) => !seen.current!.has(id));
       if (fresh && soundEnabled()) chime();
@@ -66,8 +71,12 @@ function FeedProvider({ children }: { children: ReactNode }) {
     seen.current = ids;
     document.title = newCount > 0 ? `(${newCount}) Pesanan baru · Pesan.in` : "Pesan.in";
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orders, newCount, calls.length]);
-  return <FeedCtx.Provider value={{ orders, calls, error: error?.message ?? null, reload: () => reload(true), newCount }}>{children}</FeedCtx.Provider>;
+  }, [orders, newCount, calls.length, waiting.length]);
+  return (
+    <FeedCtx.Provider value={{ orders, calls, waiting, shiftOpen: data ? !!data.shift_open : null, error: error?.message ?? null, reload: () => reload(true), newCount }}>
+      {children}
+    </FeedCtx.Provider>
+  );
 }
 
 // ---------- Navigasi ----------
@@ -129,16 +138,98 @@ function SubscriptionBanner() {
 }
 
 export function StoreShell() {
+  const { tenant } = useSession();
+  if (!tenant) return null;
   return (
     <FeedProvider>
-      <ShellInner />
+      <OutboxBridge tenantId={tenant.id}>
+        <ShellInner />
+      </OutboxBridge>
     </FeedProvider>
+  );
+}
+
+function OutboxBridge({ tenantId, children }: { tenantId: string; children: ReactNode }) {
+  const { reload } = useOrderFeed();
+  return (
+    <OutboxProvider tenantId={tenantId} onSynced={() => reload()}>
+      {children}
+    </OutboxProvider>
+  );
+}
+
+/** Status kasir offline: berapa pesanan menunggu dikirim, dan yang ditolak server. */
+function OfflineBanner() {
+  const { entries, online, syncing, flush, discard, lastSynced } = useOutbox();
+  const [open, setOpen] = useState(false);
+  const [shown, setShown] = useState<{ count: number; numbers: number[] } | null>(null);
+  useEffect(() => {
+    if (!lastSynced) return;
+    setShown(lastSynced);
+    const id = window.setTimeout(() => setShown(null), 8000);
+    return () => window.clearTimeout(id);
+  }, [lastSynced]);
+  const failed = entries.filter((e) => e.error);
+  if (entries.length === 0) {
+    if (shown) {
+      return (
+        <div className="banner ok" role="status">
+          <CheckCircle2 aria-hidden="true" />
+          <div>{shown.count} pesanan offline terkirim. Nomornya: {shown.numbers.map((n) => `#${n}`).join(", ")}.</div>
+        </div>
+      );
+    }
+    if (online) return null;
+    return (
+      <div className="banner" role="status">
+        <WifiOff aria-hidden="true" />
+        <div>Internet terputus. Kasir tetap bisa mencatat pesanan; semuanya dikirim otomatis saat sinyal kembali. Pesanan QR dari meja belum bisa masuk sampai internet tersambung.</div>
+      </div>
+    );
+  }
+  return (
+    <div className={`banner offline-box${failed.length ? " danger" : ""}`} role="status">
+      <WifiOff aria-hidden="true" />
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div className="row between wrap" style={{ gap: 8 }}>
+          <span>
+            {online ? "Mengirim" : "Offline"} · {entries.length - failed.length} pesanan menunggu dikirim
+            {failed.length ? ` · ${failed.length} ditolak server` : ""}
+          </span>
+          <span className="row" style={{ gap: 6 }}>
+            <button type="button" className="btn btn-sm" onClick={() => setOpen((v) => !v)}>{open ? "Tutup" : "Lihat"}</button>
+            <button type="button" className="btn btn-sm" disabled={syncing} onClick={() => flush()}>
+              <RefreshCw /> {syncing ? "Mengirim..." : "Kirim sekarang"}
+            </button>
+          </span>
+        </div>
+        {open && (
+          <ul className="offline-list">
+            {entries.map((e) => (
+              <li key={e.clientId}>
+                <span className="strong">Offline {e.label}</span>
+                <span className="muted small">{time(e.at)} · {e.summary}</span>
+                <span className="money">{rupiah(e.total)}</span>
+                {e.error && (
+                  <>
+                    <span className="small" style={{ gridColumn: "1 / -1", color: "var(--danger)" }}>Ditolak: {e.error}</span>
+                    <button type="button" className="btn btn-sm btn-ghost" style={{ gridColumn: "1 / -1", justifySelf: "start" }} onClick={() => discard(e.clientId)}>
+                      <Trash2 /> Hapus dari antrean kirim
+                    </button>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
   );
 }
 
 function ShellInner() {
   const { user, tenant, logout } = useSession();
-  const { newCount } = useOrderFeed();
+  const { newCount, waiting } = useOrderFeed();
   const nav = useNavigate();
   const loc = useLocation();
   const [more, setMore] = useState(false);
@@ -148,11 +239,16 @@ function ShellInner() {
   const mgmt = isManagement(user.role);
   const stockOn = !!tenant.inventory_enabled;
 
+  const waitOn = !!tenant.waitlist_enabled;
   const items: NavItem[] = [
     { to: "/toko/pesanan", label: "Pesanan", icon: <ClipboardList />, count: newCount },
     { to: "/toko/kasir", label: "Kasir", icon: <ShoppingBasket /> },
+    { to: "/toko/dapur", label: "Layar dapur", short: "Dapur", icon: <ChefHat /> },
     ...(mgmt ? [{ to: "/toko/laporan", label: "Laporan", icon: <BarChart3 /> }] : []),
     { to: "/toko/menu", label: mgmt ? "Menu & produk" : "Menu", short: "Menu", icon: <UtensilsCrossed /> },
+    ...(mgmt || waitOn ? [{ to: "/toko/antrean", label: "Antrean tunggu", short: "Antrean", icon: <Hourglass />, count: waitOn ? waiting.length : 0 }] : []),
+    { to: "/toko/kas", label: "Kas & shift", short: "Kas", icon: <Wallet /> },
+    ...(mgmt ? [{ to: "/toko/pelanggan", label: "Kartu stempel", short: "Stempel", icon: <Stamp /> }] : []),
     ...(mgmt ? [{ to: "/toko/tampilan", label: "Tampilan menu", short: "Tampilan", icon: <Palette /> }] : []),
     ...(mgmt ? [{ to: "/toko/meja", label: "Meja & QR", short: "Meja", icon: <QrCode /> }] : []),
     ...(stockOn ? [{ to: "/toko/stok", label: "Stok", icon: <Boxes /> }] : []),
@@ -207,6 +303,7 @@ function ShellInner() {
       <main className="main" id="main">
         <EphemeralBanner />
         <SubscriptionBanner />
+        <OfflineBanner />
         <Outlet />
       </main>
 

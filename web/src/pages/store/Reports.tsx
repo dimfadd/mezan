@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Download } from "lucide-react";
+import { Download, Star } from "lucide-react";
 import { BarChart, HBars } from "../../components/charts";
 import { Empty, ErrorState, Loading, PageHead, Segmented } from "../../components/ui";
 import { date, number, PAY_LABEL, rupiah, rupiahShort } from "../../lib/format";
@@ -18,6 +18,49 @@ interface Report {
   sources: { source: string; orders: number; omzet: number }[];
   staff: { name: string; orders: number; omzet: number }[];
   idle: { name: string; price: number }[];
+  margins: { id: string; name: string; qty: number; revenue: number; cost: number | null; costed_qty: number }[];
+  costCoverage: { total: number; costed: number };
+  promo: { discount: number; qty: number };
+  feedback: {
+    count: number;
+    avg: number | null;
+    dist: { rating: number; n: number }[];
+    recent: { rating: number; comment: string; created_at: number; number: number; customer_name: string; table_label: string | null }[];
+    items: { name: string; likes: number; dislikes: number }[];
+  };
+}
+
+type Klass = "star" | "horse" | "puzzle" | "dog";
+const KLASS: Record<Klass, { label: string; tip: string; badge: string }> = {
+  star: { label: "Andalan", tip: "Laris dan untungnya besar. Pertahankan kualitas, taruh di urutan atas.", badge: "badge-ok" },
+  horse: { label: "Laris tapi tipis", tip: "Banyak dipesan, tapi untung per porsinya (dalam rupiah) kecil. Naikkan harga sedikit, tawarkan ukuran besar, atau jadikan pendamping menu andalan.", badge: "badge-warn" },
+  puzzle: { label: "Untung tapi jarang", tip: "Untungnya besar tapi jarang dipesan. Beri foto/video, label Rekomendasi, atau jadikan pasangan menu laris.", badge: "badge-info" },
+  dog: { label: "Perlu dievaluasi", tip: "Jarang dipesan dan untungnya kecil. Pertimbangkan diganti atau dihapus.", badge: "badge-danger" },
+};
+
+/**
+ * Pengelompokan menu ala menu engineering (Kasavana & Smith):
+ * laris = terjual minimal 70% dari rata-rata per menu; untung besar = untung per porsi di atas rata-rata tertimbang.
+ */
+function classify(rows: Report["margins"]) {
+  const costed = rows.filter((r) => r.cost != null && r.costed_qty === r.qty && r.qty > 0);
+  if (costed.length < 2) return { rows: [], avgMargin: 0 };
+  const totalQty = costed.reduce((a, r) => a + r.qty, 0);
+  const totalMargin = costed.reduce((a, r) => a + (r.revenue - r.cost!), 0);
+  const avgMargin = totalMargin / totalQty;
+  const popLine = (totalQty / costed.length) * 0.7;
+  return {
+    avgMargin,
+    rows: costed
+      .map((r) => {
+        const unit = (r.revenue - r.cost!) / r.qty;
+        const pop = r.qty >= popLine;
+        const prof = unit >= avgMargin;
+        const k: Klass = pop && prof ? "star" : pop ? "horse" : prof ? "puzzle" : "dog";
+        return { ...r, unit, pct: r.revenue ? ((r.revenue - r.cost!) / r.revenue) * 100 : 0, k };
+      })
+      .sort((a, b) => (["star", "horse", "puzzle", "dog"].indexOf(a.k) - ["star", "horse", "puzzle", "dog"].indexOf(b.k)) || b.qty - a.qty),
+  };
 }
 
 const DOW = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
@@ -148,6 +191,8 @@ function ReportBody({ r, prevLabel }: { r: Report; prevLabel: string }) {
           {k.unpaid_count > 0 && <li style={{ color: "var(--warn-text)" }}>Ada {number(k.unpaid_count)} pesanan belum dibayar senilai <strong>{rupiah(k.unpaid)}</strong>. Cek di halaman Pesanan.</li>}
           {k.cancelled > 0 && <li>{number(k.cancelled)} pesanan dibatalkan ({rupiah(k.cancelled_value)}).</li>}
           {(k.tax > 0 || k.service > 0) && <li>Termasuk di omzet: pajak {rupiah(k.tax)} dan service {rupiah(k.service)}.</li>}
+          {r.promo.discount > 0 && <li>Potongan promo jam tertentu: {rupiah(r.promo.discount)} untuk {number(r.promo.qty)} item.</li>}
+          {r.feedback.count > 0 && r.feedback.avg != null && <li>Rata-rata penilaian pembeli: <strong>{r.feedback.avg.toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} dari 5</strong> ({number(r.feedback.count)} penilaian).</li>}
         </ul>
       </section>
 
@@ -298,7 +343,7 @@ function ReportBody({ r, prevLabel }: { r: Report; prevLabel: string }) {
             </div>
           </div>
           {r.idle.length === 0 ? (
-            <p className="muted small">Semua menu terjual minimal sekali. Bagus.</p>
+            <p className="muted small">Semua menu terjual minimal sekali.</p>
           ) : (
             <div className="stack-sm">
               {r.idle.map((i) => (
@@ -311,6 +356,127 @@ function ReportBody({ r, prevLabel }: { r: Report; prevLabel: string }) {
           )}
         </section>
       </div>
+
+      <MarginSection r={r} />
+      <FeedbackSection r={r} />
     </div>
+  );
+}
+
+function MarginSection({ r }: { r: Report }) {
+  const { rows, avgMargin } = classify(r.margins);
+  const costedRows = r.margins.filter((m) => m.cost != null);
+  const revenue = costedRows.reduce((a, m) => a + m.revenue, 0);
+  const cost = costedRows.reduce((a, m) => a + (m.cost ?? 0), 0);
+  const cov = r.costCoverage;
+  return (
+    <section className="panel flush" aria-labelledby="margin-title">
+      <div style={{ padding: "18px 18px 8px" }}>
+        <h2 id="margin-title">Untung per menu</h2>
+        <p className="small muted">
+          Dari modal (HPP) yang diisi di Menu & produk. Sudah diisi untuk {cov.costed} dari {cov.total} menu.
+          {cov.costed < cov.total ? " Menu yang belum diisi tidak ikut dihitung." : ""}
+        </p>
+      </div>
+      {costedRows.length === 0 ? (
+        <div style={{ padding: "0 18px 18px" }}>
+          <p className="small">Isi modal per porsi di halaman Menu & produk (kolom "Modal per porsi"), lalu laporan ini menunjukkan menu mana yang laris tapi untungnya tipis.</p>
+        </div>
+      ) : (
+        <>
+          <div className="kpis" style={{ padding: "0 18px 12px" }}>
+            <div className="kpi"><span className="label">Penjualan menu ber-HPP</span><span className="value">{rupiah(revenue)}</span></div>
+            <div className="kpi"><span className="label">Modal</span><span className="value">{rupiah(cost)}</span></div>
+            <div className="kpi hero"><span className="label">Laba kotor</span><span className="value">{rupiah(revenue - cost)}</span><span className="delta">{revenue ? Math.round(((revenue - cost) / revenue) * 100) : 0}% dari penjualan, sebelum pajak, gaji, dan sewa</span></div>
+          </div>
+          {rows.length > 0 && (
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr><th>Menu</th><th>Kelompok</th><th className="r">Terjual</th><th className="r">Untung/porsi</th><th className="r">Margin</th><th className="r">Laba kotor</th></tr>
+                </thead>
+                <tbody>
+                  {rows.map((m) => (
+                    <tr key={m.id}>
+                      <td className="strong">{m.name}</td>
+                      <td><span className={`badge ${KLASS[m.k].badge}`} title={KLASS[m.k].tip}>{KLASS[m.k].label}</span></td>
+                      <td className="r num">{number(m.qty)}</td>
+                      <td className="r money">{rupiah(Math.round(m.unit))}</td>
+                      <td className="r num">{Math.round(m.pct)}%</td>
+                      <td className="r money">{rupiah(m.revenue - (m.cost ?? 0))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {rows.length > 0 && (
+            <ul className="klass-legend">
+              {(Object.keys(KLASS) as Klass[]).filter((k) => rows.some((x) => x.k === k)).map((k) => (
+                <li key={k}><span className={`badge ${KLASS[k].badge}`}>{KLASS[k].label}</span> {KLASS[k].tip}</li>
+              ))}
+              <li className="muted">Rata-rata untung per porsi: {rupiah(Math.round(avgMargin))}.</li>
+            </ul>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+function FeedbackSection({ r }: { r: Report }) {
+  const f = r.feedback;
+  return (
+    <section className="panel" aria-labelledby="fb-title">
+      <div className="panel-head">
+        <div>
+          <h2 id="fb-title">Penilaian pembeli</h2>
+          <p>Dari halaman pesanan/struk digital setelah makan. Nilai rendah juga masuk ke sini, tidak disaring.</p>
+        </div>
+      </div>
+      {f.count === 0 ? (
+        <p className="small muted">Belum ada penilaian di periode ini. Pembeli bisa menilai dari halaman status pesanan QR, atau dari tautan struk yang dikirim kasir lewat WhatsApp.</p>
+      ) : (
+        <div className="grid-2">
+          <div className="stack" style={{ alignContent: "start" }}>
+            <div className="row" style={{ gap: 10, alignItems: "baseline" }}>
+              <span className="fb-avg num">{f.avg?.toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
+              <span className="muted">dari 5 · {number(f.count)} penilaian</span>
+            </div>
+            <HBars format={(v) => `${v}`} rows={[...f.dist].reverse().map((d) => ({ key: String(d.rating), name: `${d.rating} bintang`, value: d.n }))} />
+            {f.items.length > 0 && (
+              <div className="stack-sm">
+                <h3>Per menu</h3>
+                {f.items.slice(0, 8).map((i) => {
+                  const pct = Math.round((i.likes / (i.likes + i.dislikes)) * 100);
+                  return (
+                    <div key={i.name} className="row between small" style={{ borderTop: "1px solid var(--line)", paddingTop: 6 }}>
+                      <span>{i.name}</span>
+                      <span className={pct < 60 ? "strong" : "muted"} style={pct < 60 ? { color: "var(--danger)" } : undefined}>{pct}% suka · {i.likes + i.dislikes} nilai</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <div className="stack-sm" style={{ alignContent: "start" }}>
+            <h3>Catatan terbaru</h3>
+            {f.recent.length === 0 ? (
+              <p className="small muted">Belum ada catatan.</p>
+            ) : (
+              f.recent.map((c, i) => (
+                <div key={i} className="fb-note">
+                  <span className="fb-stars" aria-label={`${c.rating} dari 5`}>
+                    {Array.from({ length: 5 }, (_, k) => <Star key={k} aria-hidden="true" className={k < c.rating ? "on" : ""} />)}
+                  </span>
+                  {c.comment ? <p>{c.comment}</p> : <p className="muted small">Tanpa catatan.</p>}
+                  <span className="tiny muted">#{c.number}{c.table_label ? ` · ${c.table_label}` : ""}{c.customer_name ? ` · ${c.customer_name}` : ""} · {date(c.created_at, { day: "numeric", month: "short" })}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </section>
   );
 }

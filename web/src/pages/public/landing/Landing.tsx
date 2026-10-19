@@ -5,6 +5,7 @@ import { useSession } from "../../../lib/session";
 import { Story } from "./Story";
 import { Features } from "./Features";
 import { Extras } from "./Extras";
+import { Ops } from "./Ops";
 import "../../../styles/landing.css";
 
 function homeFor(role?: string) {
@@ -67,6 +68,14 @@ export function LandingPage() {
         <Extras />
       </section>
 
+      <section className="lp-sec" aria-labelledby="ops-h">
+        <div className="lp-sec-head">
+          <h2 id="ops-h">Yang menjaga dapur dan laci tetap rapi</h2>
+          <p>Kasir yang tetap mencatat saat sinyal hilang, uang laci yang bisa dicocokkan, dapur yang tahu urutan, dan untung yang terlihat per menu.</p>
+        </div>
+        <Ops />
+      </section>
+
       <section className="lp-sec" aria-labelledby="class-h">
         <div className="lp-sec-head">
           <h2 id="class-h">Cocok untuk gerobak sampai resto</h2>
@@ -81,6 +90,7 @@ export function LandingPage() {
               <li><Check aria-hidden="true" /> Beberapa foto per menu, ditambah video di paket Kafe</li>
               <li><Check aria-hidden="true" /> Kasir, papan pesanan, stok, dan laporan</li>
               <li><Check aria-hidden="true" /> Bisa dipakai satu orang dari satu HP</li>
+              <li><Check aria-hidden="true" /> Kasir tetap mencatat saat internet putus</li>
             </ul>
           </article>
           <article className="lp-class premium">

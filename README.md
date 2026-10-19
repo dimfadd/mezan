@@ -92,6 +92,27 @@ Pengaman: kombinasi warna yang kontrasnya di bawah WCAG AA (4,5:1) ditolak di ed
 - Pembeli bisa memilih tampilan daftar atau kotak (grid) di menu QR. Pilihannya disimpan di HP; kalau belum memilih, ikut tata letak pilihan toko.
 - Label **Best seller** tampil sebagai stempel jempol di foto menu. Di editor menu, pemilik melihat jumlah terjual 30 hari terakhir dan urutannya, supaya label ini sesuai data.
 
+## Kasir offline, shift, layar dapur
+
+- **Kasir tetap jalan saat internet putus.** Daftar menu, meja, dan sesi login disimpan di perangkat; pesanan baru masuk "kotak keluar" (Offline 1, 2, ...) dan dikirim otomatis saat sinyal kembali, dengan waktu aslinya (harga promo, tanggal, dan shift ikut waktu itu). Tiap pesanan membawa ID dari perangkat, jadi kiriman ulang tidak dobel. Penjualan offline tidak ditolak karena stok/jadwal (barangnya sudah keluar); stok turun sampai nol, tidak minus. Pesanan QR dari pembeli tetap butuh internet. Lihat `web/src/lib/outbox.tsx`.
+- **Kas & shift**: buka shift dengan modal awal, catat uang keluar/masuk laci, tutup dengan menghitung uang. Isi laci seharusnya = modal + penjualan tunai (dari waktu bayar) + masuk - keluar; selisih tersimpan saat tutup. Satu shift terbuka per toko. Riwayat hanya untuk pemilik/manajer. Kasir diingatkan (tidak dipaksa) kalau shift belum dibuka.
+- **Layar dapur per bagian**: kategori diarahkan ke Dapur atau Bar (kategori bernama minuman/kopi/teh otomatis ke Bar). Tiket menampilkan waktu sejak diterima, berubah kuning saat lewat waktu saji menu dan merah di 1,5x. Item dicentang satu per satu; kalau semua bagian selesai, pesanan otomatis jadi "Siap diantar". Bisa layar penuh untuk tablet di dapur.
+
+## Pelanggan: stempel, ulasan, antrean
+
+- **Kartu stempel lewat nomor HP**: kasir mengetik nomor saat menerima bayar (kartu langsung tampil, hadiah bisa ditukar di situ). Pembeli QR bisa mengambil stempel sendiri dari halaman pesanan setelah dibayar (sampai 24 jam). Satu pesanan = maksimal satu stempel (indeks unik), ada minimal belanja. Nomor HP tidak dikirim balik ke halaman publik.
+- **Struk digital lewat WhatsApp**: setelah bayar, kasir menekan "Kirim" yang membuka WhatsApp di perangkat kasir dengan tautan `/struk/<token>`. Tidak memakai WhatsApp API berbayar.
+- **Penilaian**: bintang 1-5, jempol per menu, catatan. Masuk laporan pemilik apa adanya. Tombol "Tulis ulasan di Google Maps" (tautan diisi di Pengaturan) ditampilkan ke **semua** pembeli setelah menilai, bukan hanya yang memberi bintang tinggi: Google melarang review gating dan bisa menghapus ulasan toko yang melakukannya.
+- **Antrean tunggu**: QR di pintu (`/antre/<kode>`), tamu mengisi nama, jumlah orang, dan WA opsional, lalu melihat nomor dan posisinya. Saat kasir menekan Panggil, HP tamu berbunyi/bergetar (kalau halamannya terbuka) dan kasir bisa mengirim pesan WhatsApp. Tidak ada perkiraan waktu tunggu karena belum ada data yang cukup akurat.
+
+## Menu per jam, happy hour, pasangan, modal
+
+- **Jam tersedia per menu** (mis. bubur 06.00-10.00, menu akhir pekan). Di luar jam menu tetap terlihat dengan keterangan, tapi tidak bisa dipesan dari QR maupun kasir.
+- **Promo jam tertentu**: diskon persen untuk kategori pilihan pada hari & jam tertentu, dibulatkan ke ratusan rupiah. Beberapa promo tidak ditumpuk; yang dipakai diskon terbesar. Harga dihitung di server memakai jam toko, dan di HP memakai selisih jam server (bukan jam HP). Harga normal tersimpan di item pesanan, potongannya muncul di laporan.
+- **Saran pasangan**: maksimal 3 per menu, dipilih pemilik atau diambil dari menu yang sering dipesan bersama (60 hari, kategori berbeda). Tampil di detail menu, keranjang pembeli, dan layar kasir ("Tawarkan juga").
+- **Modal (HPP) per porsi**: hanya terlihat pemilik/manajer. Modal disimpan per item saat terjual. Laporan menampilkan laba kotor dan mengelompokkan menu (menu engineering): Andalan, Laris tapi tipis, Untung tapi jarang, Perlu dievaluasi.
+- **Mode video ala TikTok** di menu pembeli: satu menu satu layar, geser vertikal. Hanya video yang terlihat yang diputar, media dimuat untuk slide sekitar saja.
+
 ## Landing page dengan simulasi
 
 Halaman depan (`web/src/pages/public/landing/`) memperagakan aplikasi lewat animasi, bukan klaim:
@@ -99,21 +120,25 @@ Halaman depan (`web/src/pages/public/landing/`) memperagakan aplikasi lewat anim
 - **Simulasi satu pesanan** dari Meja 4: pindai QR, lihat galeri, tambah catatan, kirim, tiket masuk ke kasir, dibuat, dibayar, omzet bertambah. HP pembeli dan layar kasir bergerak bersamaan. Di HP hanya satu layar yang tampil bergantian.
 - **Tab fitur** yang berpindah sendiri (kasir, stok, laporan, tampilan brand, dua bahasa, hak akses), masing-masing dengan peraga kecil. Tampilan brand memakai preset asli dari `shared/menuTheme.ts`, dua bahasa memakai kamus asli dari `shared/i18n.ts`.
 - Animasi berhenti saat tidak terlihat atau tab browser disembunyikan, bisa dijeda, dan langsung diam (bisa diklik per langkah) kalau perangkat meminta gerak dikurangi.
+- Bagian "Hal kecil yang terasa di meja" dan "Yang menjaga dapur dan laci tetap rapi" memperagakan fitur meja (panggil pelayan, pesan bareng, stempel, antrean, mode video, pasangan, jam & happy hour, struk & rating) dan fitur operasional (layar dapur, kasir offline, shift, modal & untung).
 - Dimuat terpisah dari menu QR, jadi pembeli yang memindai QR tidak ikut mengunduhnya.
 
 ## Siapa bisa apa
 
 | Fitur | Pelanggan | Karyawan | Manajer | Pemilik | Admin Pesan.in |
 |---|---|---|---|---|---|
-| Lihat menu (foto/video), pesan dari meja (sendiri atau bareng), panggil pelayan, pantau status | ya | | | | |
+| Lihat menu (foto/video, mode video), pesan dari meja (sendiri atau bareng), panggil pelayan, pantau status | ya | | | | |
+| Beri penilaian, ambil stempel, daftar antrean tunggu | ya | | | | |
 | Papan pesanan, terima/tolak, tandai siap, terima bayar, tanggapi panggilan meja | | ya | ya | ya | |
-| Kasir (catat pesanan walk-in), cetak struk | | ya | ya | ya | |
+| Kasir (catat pesanan walk-in, juga saat offline), cetak struk, kirim struk WhatsApp | | ya | ya | ya | |
+| Layar dapur, buka/tutup shift & catat kas laci, kelola antrean, tukar hadiah stempel | | ya | ya | ya | |
 | Tandai menu habis/tersedia | | ya | ya | ya | |
 | Lihat stok | | ya | ya | ya | |
 | Ubah menu, harga, foto, video, kategori | | | ya | ya | |
 | Atur tampilan menu (paket premium) | | | ya | ya | |
 | Meja & QR, catat stok masuk/rusak | | | ya | ya | |
-| Laporan penjualan & ekspor CSV | | | ya | ya | |
+| Laporan penjualan, margin per menu, penilaian, ekspor CSV | | | ya | ya | |
+| Riwayat shift & selisih laci, daftar pelanggan stempel, promo jam, modal (HPP) | | | ya | ya | |
 | Kelola akun karyawan | | | karyawan saja | ya | |
 | Kelola toko, paket, catat pembayaran langganan | | | | | ya |
 
@@ -146,7 +171,7 @@ web/
 - **Uang dalam rupiah bulat (INTEGER)**, waktu dalam epoch milidetik, laporan memakai tanggal bisnis zona waktu toko (default WIB).
 - **Pesanan masuk memakai polling tiap 5-7 detik**, bukan WebSocket. Lebih sederhana dan jalan di Workers tanpa Durable Objects. Cukup untuk warung/kafe; pertimbangkan Durable Objects kalau ada toko dengan ratusan pesanan per jam.
 - **Video**: MP4/WebM maks 15 MB dan 20 detik, hanya di paket yang mengizinkan. GIF masih diterima (maks 3 MB) tapi tampilan menyarankan MP4 karena jauh lebih kecil. Foto diperkecil otomatis ke WebP 1200px di browser sebelum diunggah.
-- **PWA**: tampilan aplikasi disimpan offline, data API tidak pernah di-cache supaya pesanan dan stok selalu terbaru.
+- **PWA**: tampilan aplikasi disimpan offline. Data API tidak di-cache oleh service worker; kasir menyimpan salinan menu/meja/sesi terakhir sendiri di perangkat supaya bisa dipakai saat internet putus.
 
 ## Belum dikerjakan
 
@@ -160,8 +185,9 @@ Ini yang perlu ada sebelum Pesan.in dijual ke toko sungguhan:
 6. **Uji di Cloudflare** (`worker.ts`) dan pembatas percobaan login berbasis Cloudflare (yang sekarang hanya di memori server).
 7. **Terjemahan otomatis** isi menu ke bahasa Inggris (butuh layanan penerjemah berbayar). Sekarang pemilik mengisi manual.
 8. **Domain/subdomain sendiri untuk toko premium** (mis. menu.namaresto.com) dan font unggahan sendiri. Sekarang font dipilih dari daftar Google Fonts yang dikurasi.
-9. **Logo & ikon final.** Ikon PWA saat ini placeholder huruf "m".
-10. **Mode offline untuk kasir** (antre pesanan saat internet putus lalu kirim ulang).
+9. **Logo final dari desainer.** Ikon "p" sekarang buatan sendiri (`web/public/icons/icon.svg`).
+10. **Notifikasi push** untuk antrean tunggu (Web Push). Sekarang HP tamu berbunyi hanya kalau halamannya terbuka; kasir bisa mengabari lewat WhatsApp.
+11. **Kasir offline lebih lanjut**: ubah status/bayar pesanan lama saat offline, dan cetak struk untuk pesanan yang belum tersinkron. Sekarang yang bisa offline: catat pesanan baru (bayar langsung atau nanti).
 
 ## Deploy untuk testing (Vercel)
 

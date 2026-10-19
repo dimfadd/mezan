@@ -1,7 +1,7 @@
 // Service worker Pesan.in.
 // Strategi: tampilan aplikasi (HTML/JS/CSS/font) disimpan supaya cepat dibuka dan tetap terbuka saat sinyal putus.
 // Data API TIDAK disimpan: pesanan dan stok harus selalu yang terbaru.
-const VERSION = "pesanin-v2";
+const VERSION = "pesanin-v3";
 const SHELL = ["/", "/manifest.webmanifest", "/icons/icon.svg", "/icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {

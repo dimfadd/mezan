@@ -8,3 +8,7 @@ export { StaffPage } from "./Staff";
 export { AccountPage, SettingsPage } from "./Settings";
 export { ReportsPage } from "./Reports";
 export { MenuDesignPage } from "./MenuDesign";
+export { KitchenPage } from "./Kitchen";
+export { CashPage } from "./Cash";
+export { WaitlistPage } from "./Waitlist";
+export { LoyaltyPage } from "./Loyalty";
