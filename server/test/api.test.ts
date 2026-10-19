@@ -255,3 +255,25 @@ test("unggah langsung ke Blob: izin hanya untuk manajemen, folder toko sendiri, 
   assert.equal((await call("POST", "/api/media-upload", ev(`media/${tenantId}/${newId()}.webp`), kasir)).status, 403);
   assert.equal((await call("POST", "/api/media-upload", ev(`media/${tenantId}/${newId()}.webp`))).status, 401);
 });
+
+test("bahasa: isi Inggris tersimpan, galat untuk pembeli ikut bahasanya, kasir tetap Indonesia", async () => {
+  const { call, login, db } = await setup();
+  const owner = await login("owner@t");
+  const cat = await call("POST", "/api/store/categories", { name: "Minuman", name_en: "Drinks" }, owner);
+  const item = await call("POST", "/api/store/items", { category_id: cat.json.id, name: "Es Teh", price: 5000, name_en: "Iced tea", description_en: "Sweet", available: 0 }, owner);
+  await call("POST", "/api/store/tables", { label: "M" }, owner);
+  const code = (db.raw.prepare("SELECT code FROM dining_tables").get() as { code: string }).code;
+  const menu = (await call("GET", `/api/public/table/${code}?lang=en`)).json;
+  assert.equal(menu.categories[0].name_en, "Drinks");
+  assert.equal(menu.items[0].name_en, "Iced tea");
+
+  const en = await call("POST", "/api/public/orders", { tableCode: code, customerName: "Sam", lang: "en", items: [{ id: item.json.id, qty: 1 }] });
+  assert.equal(en.json.error, "Iced tea is sold out.");
+  const enName = await call("POST", "/api/public/orders", { tableCode: code, customerName: "", lang: "en", items: [{ id: item.json.id, qty: 1 }] });
+  assert.match(enName.json.error, /Add your name/);
+  assert.match((await call("GET", "/api/public/table/zzzzzzzz?lang=en")).json.error, /table code/);
+  const idMsg = await call("POST", "/api/public/orders", { tableCode: code, customerName: "Andi", items: [{ id: item.json.id, qty: 1 }] });
+  assert.equal(idMsg.json.error, "Es Teh sedang habis.");
+  const pos = await call("POST", "/api/store/orders", { orderType: "takeaway", items: [{ id: item.json.id, qty: 1 }] }, owner);
+  assert.equal(pos.json.error, "Es Teh sedang habis.", "layar kasir tetap bahasa Indonesia");
+});

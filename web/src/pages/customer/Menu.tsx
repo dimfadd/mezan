@@ -5,11 +5,12 @@ import { Empty, ErrorState, Field, Loading, Modal, Thumb, useToast } from "../..
 import { api } from "../../lib/api";
 import { rupiah } from "../../lib/format";
 import { useApi } from "../../lib/hooks";
-import { TAG_LABEL } from "../store/types";
+import { LangSwitch, useLang } from "../../lib/lang";
 import { ThemedRoot } from "../../components/ThemedRoot";
 import { Gallery, mediaSummary, type MediaRef } from "../../components/Gallery";
 import { DishFacts } from "../../components/DishInfo";
 import { DEFAULT_THEME, type MenuTheme } from "../../../../shared/menuTheme";
+import { loc, QUICK_NOTES, type Lang } from "../../../../shared/i18n";
 
 interface Dish {
   id: string;
@@ -28,11 +29,16 @@ interface Dish {
   spice_level: number | null;
   prep_minutes: number | null;
   allergens: string;
+  name_en: string;
+  description_en: string;
+  portion_en: string;
+  components_en: string;
+  allergens_en: string;
 }
 interface MenuData {
-  store: { name: string; address: string; welcome_note: string; tax_rate: number; service_rate: number; accepting_orders: boolean; theme?: MenuTheme };
+  store: { name: string; address: string; welcome_note: string; welcome_note_en: string; tax_rate: number; service_rate: number; accepting_orders: boolean; theme?: MenuTheme };
   table: { label: string; area: string };
-  categories: { id: string; name: string }[];
+  categories: { id: string; name: string; name_en: string }[];
   items: Dish[];
 }
 interface CartLine {
@@ -60,9 +66,13 @@ function saveJSON(key: string, v: unknown) {
   }
 }
 
+/** Keterangan Inggris di bawah nama asli. Nama asli tetap utama supaya pelayan paham saat disebut. */
+const subtitle = (lang: Lang, d: Dish) => (lang === "en" && d.name_en && d.name_en !== d.name ? d.name_en : null);
+
 export function CustomerMenuPage() {
   const { code = "" } = useParams();
-  const { data, error, loading, reload } = useApi<MenuData>(`/api/public/table/${code}`);
+  const { lang, setLang, t } = useLang();
+  const { data, error, loading, reload } = useApi<MenuData>(`/api/public/table/${code}?lang=${lang}`);
   const [cart, setCart] = useState<CartLine[]>(() => loadJSON(cartKey(code), []));
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<Dish | null>(null);
@@ -72,8 +82,8 @@ export function CustomerMenuPage() {
 
   useEffect(() => saveJSON(cartKey(code), cart), [cart, code]);
   useEffect(() => {
-    if (data) document.title = `${data.store.name} · Menu`;
-  }, [data]);
+    if (data) document.title = `${data.store.name} · ${t.menu}`;
+  }, [data, t]);
 
   const byId = useMemo(() => new Map((data?.items ?? []).map((i) => [i.id, i])), [data]);
   // Buang item yang sudah tidak ada/habis dari keranjang lama.
@@ -84,12 +94,13 @@ export function CustomerMenuPage() {
   const sections = useMemo(() => {
     if (!data) return [];
     const s = q.trim().toLowerCase();
-    const match = (i: Dish) => !s || i.name.toLowerCase().includes(s) || i.description.toLowerCase().includes(s);
-    const list = data.categories.map((c) => ({ id: c.id, name: c.name, items: data.items.filter((i) => i.category_id === c.id && match(i)) }));
+    // Cari di kedua bahasa, supaya "fried rice" maupun "nasi goreng" sama-sama ketemu.
+    const match = (i: Dish) => !s || [i.name, i.description, i.name_en, i.description_en].some((x) => x?.toLowerCase().includes(s));
+    const list = data.categories.map((c) => ({ id: c.id, name: loc(lang, c.name, c.name_en), items: data.items.filter((i) => i.category_id === c.id && match(i)) }));
     const none = data.items.filter((i) => (!i.category_id || !data.categories.some((c) => c.id === i.category_id)) && match(i));
-    if (none.length) list.push({ id: "lain", name: "Lainnya", items: none });
+    if (none.length) list.push({ id: "lain", name: t.other, items: none });
     return list.filter((x) => x.items.length > 0);
-  }, [data, q]);
+  }, [data, q, lang, t]);
 
   const addLine = (id: string, qty: number, note: string) => {
     setCart((c) => {
@@ -99,10 +110,13 @@ export function CustomerMenuPage() {
     });
   };
 
-  if (error) {
+  if (error && !data) {
     return (
       <div className="cust">
-        <ErrorState message={error.message} onRetry={error.status === 404 ? undefined : () => reload()} />
+        <div className="cust-top" style={{ padding: "16px 16px 0", justifyContent: "flex-end" }}>
+          <LangSwitch lang={lang} setLang={setLang} />
+        </div>
+        <ErrorState title={t.loadFail} retryLabel={t.retry} message={error.message} onRetry={error.status === 404 ? undefined : () => reload()} />
       </div>
     );
   }
@@ -115,34 +129,45 @@ export function CustomerMenuPage() {
   }
 
   const theme = data.store.theme ?? DEFAULT_THEME;
+  const welcome = loc(lang, data.store.welcome_note, data.store.welcome_note_en);
   return (
     <ThemedRoot theme={theme}>
     <div className="cust">
       <header className="cust-head">
-        {theme.logo && <img className="cust-logo" src={theme.logo} alt={`Logo ${data.store.name}`} />}
-        <span className="table-tag">
-          <UtensilsCrossed aria-hidden="true" /> {data.table.label}
-          {data.table.area && ` · ${data.table.area}`}
-        </span>
+        <div className="cust-top">
+          {theme.logo ? <img className="cust-logo" src={theme.logo} alt={`Logo ${data.store.name}`} /> : (
+            <span className="table-tag">
+              <UtensilsCrossed aria-hidden="true" /> {data.table.label}
+              {data.table.area && ` · ${data.table.area}`}
+            </span>
+          )}
+          <LangSwitch lang={lang} setLang={setLang} />
+        </div>
+        {theme.logo && (
+          <span className="table-tag">
+            <UtensilsCrossed aria-hidden="true" /> {data.table.label}
+            {data.table.area && ` · ${data.table.area}`}
+          </span>
+        )}
         <h1 className="store">{data.store.name}</h1>
-        {data.store.welcome_note && <p className="muted">{data.store.welcome_note}</p>}
+        {welcome && <p className="muted">{welcome}</p>}
         {!data.store.accepting_orders && (
           <div className="banner info" style={{ margin: "8px 0 0" }}>
             <Clock3 aria-hidden="true" />
-            <div>Saat ini pesanan lewat HP belum dibuka. Silakan lihat menu, lalu pesan ke kasir atau pelayan.</div>
+            <div>{t.notOpen}</div>
           </div>
         )}
         {myOrders.length > 0 && (
           <Link className="btn btn-sm" style={{ justifySelf: "start", marginTop: 6 }} to={`/m/${code}/pesanan/${myOrders[myOrders.length - 1].token}`}>
-            Lihat status pesanan #{myOrders[myOrders.length - 1].number} <ChevronRight />
+            {t.seeStatus} #{myOrders[myOrders.length - 1].number} <ChevronRight />
           </Link>
         )}
       </header>
 
-      <nav className="cust-nav" aria-label="Kategori menu">
+      <nav className="cust-nav" aria-label={t.menu}>
         <div className="cust-search">
           <Search aria-hidden="true" />
-          <input className="input" type="search" placeholder="Cari menu" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Cari menu" />
+          <input className="input" type="search" placeholder={t.search} value={q} onChange={(e) => setQ(e.target.value)} aria-label={t.search} />
         </div>
         {!q && sections.length > 1 && (
           <div className="chips">
@@ -164,7 +189,7 @@ export function CustomerMenuPage() {
       </nav>
 
       {sections.length === 0 ? (
-        <Empty title={q ? "Menu tidak ditemukan" : "Menu belum diisi"}>{q ? `Tidak ada menu yang cocok dengan "${q}".` : "Toko ini belum memasukkan menu."}</Empty>
+        <Empty title={q ? t.notFound : t.emptyMenu}>{q ? t.noMatch(q) : t.emptyMenuBody}</Empty>
       ) : (
         sections.map((s) => (
           <section key={s.id} id={`sec-${s.id}`} className="cust-section" aria-labelledby={`h-${s.id}`}>
@@ -172,18 +197,21 @@ export function CustomerMenuPage() {
             <div className="dish-list">
               {s.items.map((d) => {
                 const inCart = validCart.filter((l) => l.id === d.id).reduce((n, l) => n + l.qty, 0);
+                const sub = subtitle(lang, d);
+                const desc = loc(lang, d.description, d.description_en);
                 return (
-                  <button key={d.id} className={`dish${d.sold_out ? " sold" : ""}`} onClick={() => setOpen(d)} aria-label={`${d.name}, ${rupiah(d.price)}${d.sold_out ? ", habis" : ""}. Lihat detail`}>
+                  <button key={d.id} className={`dish${d.sold_out ? " sold" : ""}`} onClick={() => setOpen(d)} aria-label={`${d.name}${sub ? `, ${sub}` : ""}, ${rupiah(d.price)}${d.sold_out ? `, ${t.soldOut}` : ""}. ${t.seeDetail}`}>
                     {inCart > 0 && <span className="count added">{inCart}</span>}
                     <div style={{ minWidth: 0 }}>
                       <div className="name">{d.name}</div>
-                      {d.description && <div className="desc">{d.description}</div>}
+                      {sub && <div className="name-en">{sub}</div>}
+                      {desc && <div className="desc">{desc}</div>}
                       <div className="price">{rupiah(d.price)}</div>
                       <div className="tags">
-                        {d.sold_out && <span className="badge badge-danger">Habis</span>}
-                        {d.few_left != null && <span className="badge badge-warn">Tinggal {d.few_left}</span>}
-                        {d.tags.split(",").filter(Boolean).map((t) => (
-                          <span key={t} className={`badge ${t === "pedas" ? "badge-danger" : t === "favorit" ? "badge-new" : ""}`}>{TAG_LABEL[t] ?? t}</span>
+                        {d.sold_out && <span className="badge badge-danger">{t.soldOut}</span>}
+                        {d.few_left != null && <span className="badge badge-warn">{t.fewLeft(d.few_left)}</span>}
+                        {d.tags.split(",").filter(Boolean).map((tg) => (
+                          <span key={tg} className={`badge ${tg === "pedas" ? "badge-danger" : tg === "favorit" ? "badge-new" : ""}`}>{t.tags[tg] ?? tg}</span>
                         ))}
                       </div>
                     </div>
@@ -197,7 +225,7 @@ export function CustomerMenuPage() {
                       )}
                       {(d.media.length > 1 || d.video_url) && (
                         <span className="play">
-                          {d.video_url ? <Play aria-hidden="true" /> : <Images aria-hidden="true" />} {mediaSummary(d.media) || "Video"}
+                          {d.video_url ? <Play aria-hidden="true" /> : <Images aria-hidden="true" />} {mediaSummary(d.media, lang) || t.videos(1)}
                         </span>
                       )}
                     </div>
@@ -212,18 +240,19 @@ export function CustomerMenuPage() {
       {count > 0 && (
         <button className="cartbar" onClick={() => setCartOpen(true)}>
           <span>
-            {count} item · <span className="money">{rupiah(subtotal)}</span>
+            {t.items(count)} · <span className="money">{rupiah(subtotal)}</span>
           </span>
           <span className="go">
-            {data.store.accepting_orders ? "Lihat pesanan" : "Lihat pilihan"} <ChevronRight aria-hidden="true" />
+            {data.store.accepting_orders ? t.viewOrder : t.viewChoices} <ChevronRight aria-hidden="true" />
           </span>
         </button>
       )}
 
-      {open && <DishModal dish={open} canOrder={data.store.accepting_orders} onClose={() => setOpen(null)} onAdd={(qty, note) => { addLine(open.id, qty, note); setOpen(null); }} />}
+      {open && <DishModal dish={open} lang={lang} canOrder={data.store.accepting_orders} onClose={() => setOpen(null)} onAdd={(qty, note) => { addLine(open.id, qty, note); setOpen(null); }} />}
       <CartModal
         open={cartOpen}
         code={code}
+        lang={lang}
         data={data}
         lines={validCart}
         setLines={setCart}
@@ -234,57 +263,73 @@ export function CustomerMenuPage() {
   );
 }
 
-function DishModal({ dish, canOrder, onClose, onAdd }: { dish: Dish; canOrder: boolean; onClose: () => void; onAdd: (qty: number, note: string) => void }) {
+function DishModal({ dish, lang, canOrder, onClose, onAdd }: { dish: Dish; lang: Lang; canOrder: boolean; onClose: () => void; onAdd: (qty: number, note: string) => void }) {
+  const { t } = useLang();
   const [qty, setQty] = useState(1);
-  const [note, setNote] = useState("");
+  const [picks, setPicks] = useState<string[]>([]);
+  const [free, setFree] = useState("");
   const [full, setFull] = useState<number | null>(null);
+  const sub = subtitle(lang, dish);
+  const desc = loc(lang, dish.description, dish.description_en);
+  // Pilihan cepat dikirim ke dapur dalam bahasa Indonesia; ketikan bebas dikirim apa adanya.
+  const note = [...picks, free.trim()].filter(Boolean).join(", ").slice(0, 120);
+  const toggleQuick = (idText: string) => setPicks((p) => (p.includes(idText) ? p.filter((x) => x !== idText) : [...p, idText]));
 
   return (
     <Modal open onClose={onClose} label={dish.name}>
       <div className="dish-media has-gallery">
-        <Gallery media={dish.media} name={dish.name} onExpand={dish.media.length ? setFull : undefined} />
-        <button type="button" className="icon-btn" onClick={onClose} aria-label="Tutup" style={{ position: "absolute", top: 8, right: 8, background: "rgb(20 17 12 / 0.65)", color: "#fff", zIndex: 2 }}>
+        <Gallery media={dish.media} name={dish.name} lang={lang} onExpand={dish.media.length ? setFull : undefined} />
+        <button type="button" className="icon-btn" onClick={onClose} aria-label={t.close} style={{ position: "absolute", top: 8, right: 8, background: "rgb(20 17 12 / 0.65)", color: "#fff", zIndex: 2 }}>
           <X />
         </button>
       </div>
-      <Modal open={full !== null} onClose={() => setFull(null)} label={`Foto ${dish.name} layar penuh`} className="viewer">
-        <button type="button" className="icon-btn viewer-close" onClick={() => setFull(null)} aria-label="Tutup layar penuh">
+      <Modal open={full !== null} onClose={() => setFull(null)} label={t.gallery(dish.name)} className="viewer">
+        <button type="button" className="icon-btn viewer-close" onClick={() => setFull(null)} aria-label={t.closeFullscreen}>
           <X />
         </button>
-        {full !== null && <Gallery media={dish.media} name={dish.name} start={full} fit="contain" />}
+        {full !== null && <Gallery media={dish.media} name={dish.name} lang={lang} start={full} fit="contain" />}
       </Modal>
       <div className="stack">
         <div>
           <h2 className="dish-title">{dish.name}</h2>
+          {sub && <p className="dish-subtitle">{sub}</p>}
           <div className="row wrap" style={{ marginTop: 8 }}>
             <span className="strong money" style={{ fontSize: "1.15rem" }}>{rupiah(dish.price)}</span>
-            {dish.tags.split(",").filter(Boolean).map((t) => (
-              <span key={t} className="badge">{TAG_LABEL[t] ?? t}</span>
+            {dish.tags.split(",").filter(Boolean).map((tg) => (
+              <span key={tg} className="badge">{t.tags[tg] ?? tg}</span>
             ))}
           </div>
         </div>
-        {dish.description && <p style={{ color: "var(--ink-2)" }}>{dish.description}</p>}
-        <DishFacts d={dish} />
+        {desc && <p style={{ color: "var(--ink-2)" }}>{desc}</p>}
+        <DishFacts d={dish} lang={lang} />
         {dish.sold_out ? (
-          <div className="banner danger" style={{ margin: 0 }}>Menu ini sedang habis.</div>
+          <div className="banner danger" style={{ margin: 0 }}>{t.soldOutLong}</div>
         ) : canOrder ? (
           <>
-            <Field label="Catatan untuk dapur (opsional)" htmlFor="dish-note">
-              <input id="dish-note" className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Mis. tidak pedas, tanpa bawang" maxLength={120} />
-            </Field>
-            <div className="row between">
-              <div className="qty" aria-label="Jumlah">
-                <button type="button" onClick={() => setQty((q) => Math.max(1, q - 1))} aria-label="Kurangi"><Minus /></button>
-                <span className="num" aria-live="polite">{qty}</span>
-                <button type="button" onClick={() => setQty((q) => Math.min(dish.few_left ?? 50, q + 1))} aria-label="Tambah"><Plus /></button>
+            <div className="field">
+              <label htmlFor="dish-note">{t.kitchenNote}</label>
+              <div className="chips" role="group" aria-label={t.quickNotes}>
+                {QUICK_NOTES.map((n) => (
+                  <button key={n.id} type="button" className="chip" aria-pressed={picks.includes(n.id)} onClick={() => toggleQuick(n.id)}>
+                    {lang === "en" ? n.en : n.id}
+                  </button>
+                ))}
               </div>
-              <button className="btn btn-primary btn-lg" style={{ flex: 1 }} onClick={() => onAdd(qty, note.trim())}>
-                Tambah · <span className="money">{rupiah(dish.price * qty)}</span>
+              <input id="dish-note" className="input" value={free} onChange={(e) => setFree(e.target.value)} placeholder={t.kitchenNotePh} maxLength={80} />
+            </div>
+            <div className="row between">
+              <div className="qty" aria-label={t.qty}>
+                <button type="button" onClick={() => setQty((q) => Math.max(1, q - 1))} aria-label={t.less}><Minus /></button>
+                <span className="num" aria-live="polite">{qty}</span>
+                <button type="button" onClick={() => setQty((q) => Math.min(dish.few_left ?? 50, q + 1))} aria-label={t.more}><Plus /></button>
+              </div>
+              <button className="btn btn-primary btn-lg" style={{ flex: 1 }} onClick={() => onAdd(qty, note)}>
+                {t.add} · <span className="money">{rupiah(dish.price * qty)}</span>
               </button>
             </div>
           </>
         ) : (
-          <p className="small muted">Pesan menu ini langsung ke kasir atau pelayan.</p>
+          <p className="small muted">{t.orderAtCashier}</p>
         )}
       </div>
     </Modal>
@@ -294,6 +339,7 @@ function DishModal({ dish, canOrder, onClose, onAdd }: { dish: Dish; canOrder: b
 function CartModal({
   open,
   code,
+  lang,
   data,
   lines,
   setLines,
@@ -301,11 +347,13 @@ function CartModal({
 }: {
   open: boolean;
   code: string;
+  lang: Lang;
   data: MenuData;
   lines: CartLine[];
   setLines: (fn: (c: CartLine[]) => CartLine[]) => void;
   onClose: () => void;
 }) {
+  const { t } = useLang();
   const toast = useToast();
   const nav = useNavigate();
   const [name, setName] = useState(() => loadJSON<string>("mezan-name", ""));
@@ -317,6 +365,7 @@ function CartModal({
   const service = Math.round((subtotal * data.store.service_rate) / 100);
   const tax = Math.round(((subtotal + service) * data.store.tax_rate) / 100);
   const total = subtotal + service + tax;
+  const noteLabel = (n: string) => (lang === "en" ? n.split(",").map((x) => QUICK_NOTES.find((q) => q.id === x.trim())?.en ?? x.trim()).join(", ") : n);
 
   const change = (idx: number, d: number) =>
     setLines((c) => {
@@ -329,7 +378,7 @@ function CartModal({
 
   const send = async () => {
     if (!name.trim()) {
-      setNameErr("Isi nama supaya pelayan tahu pesanan ini milik siapa.");
+      setNameErr(t.nameNeeded);
       return;
     }
     setBusy(true);
@@ -339,6 +388,7 @@ function CartModal({
         tableCode: code,
         customerName: name.trim(),
         note,
+        lang,
         items: lines.map((l) => ({ id: l.id, qty: l.qty, note: l.note })),
       });
       const mine = loadJSON<{ token: string; number: number; at: number }[]>(ordersKey(code), []);
@@ -357,35 +407,37 @@ function CartModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={`Pesanan ${data.table.label}`}
+      title={t.orderFor(data.table.label)}
       footer={
         data.store.accepting_orders ? (
           <button className="btn btn-primary btn-lg btn-block" disabled={busy || lines.length === 0} onClick={send}>
-            {busy ? "Mengirim..." : `Kirim pesanan · ${rupiah(total)}`}
+            {busy ? t.sending : `${t.send} · ${rupiah(total)}`}
           </button>
         ) : (
-          <p className="small muted">Tunjukkan daftar ini ke kasir untuk memesan.</p>
+          <p className="small muted">{t.showCashier}</p>
         )
       }
     >
       {lines.length === 0 ? (
-        <Empty title="Belum ada pilihan">Ketuk menu untuk menambahkan.</Empty>
+        <Empty title={t.nothingYet}>{t.tapToAdd}</Empty>
       ) : (
         <div className="stack">
           <div className="cart-lines">
             {lines.map((l, idx) => {
               const d = byId.get(l.id)!;
+              const sub = subtitle(lang, d);
               return (
                 <div className="cart-line" key={`${l.id}-${l.note}`}>
                   <div style={{ minWidth: 0 }}>
                     <div className="strong">{d.name}</div>
-                    {l.note && <div className="small" style={{ color: "var(--warn-text)" }}>{l.note}</div>}
+                    {sub && <div className="tiny muted">{sub}</div>}
+                    {l.note && <div className="small" style={{ color: "var(--warn-text)" }}>{noteLabel(l.note)}</div>}
                     <div className="small muted money">{rupiah(d.price * l.qty)}</div>
                   </div>
                   <div className="qty">
-                    <button onClick={() => change(idx, -1)} aria-label={l.qty === 1 ? `Hapus ${d.name}` : `Kurangi ${d.name}`}>{l.qty === 1 ? <Trash2 /> : <Minus />}</button>
+                    <button onClick={() => change(idx, -1)} aria-label={`${l.qty === 1 ? t.remove : t.less} ${d.name}`}>{l.qty === 1 ? <Trash2 /> : <Minus />}</button>
                     <span className="num">{l.qty}</span>
-                    <button onClick={() => change(idx, 1)} aria-label={`Tambah ${d.name}`}><Plus /></button>
+                    <button onClick={() => change(idx, 1)} aria-label={`${t.more} ${d.name}`}><Plus /></button>
                   </div>
                 </div>
               );
@@ -394,21 +446,21 @@ function CartModal({
           <hr className="divider-dashed" />
           {(service > 0 || tax > 0) && (
             <>
-              <div className="sum-row small muted"><span>Subtotal</span><span className="money">{rupiah(subtotal)}</span></div>
-              {service > 0 && <div className="sum-row small muted"><span>Service {data.store.service_rate}%</span><span className="money">{rupiah(service)}</span></div>}
-              {tax > 0 && <div className="sum-row small muted"><span>Pajak {data.store.tax_rate}%</span><span className="money">{rupiah(tax)}</span></div>}
+              <div className="sum-row small muted"><span>{t.subtotal}</span><span className="money">{rupiah(subtotal)}</span></div>
+              {service > 0 && <div className="sum-row small muted"><span>{t.service} {data.store.service_rate}%</span><span className="money">{rupiah(service)}</span></div>}
+              {tax > 0 && <div className="sum-row small muted"><span>{t.tax} {data.store.tax_rate}%</span><span className="money">{rupiah(tax)}</span></div>}
             </>
           )}
-          <div className="sum-row total"><span>Total</span><span className="money">{rupiah(total)}</span></div>
+          <div className="sum-row total"><span>{t.total}</span><span className="money">{rupiah(total)}</span></div>
           {data.store.accepting_orders && (
             <>
-              <Field label="Nama kamu" htmlFor="c-name" error={nameErr}>
-                <input id="c-name" className="input" value={name} onChange={(e) => { setName(e.target.value); setNameErr(null); }} maxLength={40} autoComplete="given-name" placeholder="Mis. Andi" />
+              <Field label={t.yourName} htmlFor="c-name" error={nameErr}>
+                <input id="c-name" className="input" value={name} onChange={(e) => { setName(e.target.value); setNameErr(null); }} maxLength={40} autoComplete="given-name" placeholder={t.yourNamePh} />
               </Field>
-              <Field label="Catatan pesanan (opsional)" htmlFor="c-note">
-                <input id="c-note" className="input" value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder="Mis. minta sendok tambahan" />
+              <Field label={t.orderNote} htmlFor="c-note">
+                <input id="c-note" className="input" value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder={t.orderNotePh} />
               </Field>
-              <p className="small muted">Pembayaran dilakukan di kasir. Pesanan baru dibuat setelah kasir menerimanya.</p>
+              <p className="small muted">{t.payAtCashier}</p>
             </>
           )}
         </div>

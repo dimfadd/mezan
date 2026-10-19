@@ -24,6 +24,7 @@ export interface StoreInfo {
   inventory_enabled: number;
   qr_ordering_enabled: number;
   welcome_note: string;
+  welcome_note_en: string;
   plan_name: string;
   max_tables: number;
   max_staff: number;

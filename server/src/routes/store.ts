@@ -29,6 +29,7 @@ const settingsSchema = z.object({
   address: z.string().trim().max(200),
   phone: z.string().trim().max(30),
   welcome_note: z.string().trim().max(240),
+  welcome_note_en: z.string().trim().max(240).default(""),
   tax_rate: z.number().min(0).max(30),
   service_rate: z.number().min(0).max(30),
   inventory_enabled: bool,
@@ -43,9 +44,9 @@ storeRoutes.put("/settings", mgmt, async (c) => {
   if (b.inventory_enabled && !t.allow_inventory) fail(403, `Fitur stok belum termasuk di paket ${t.plan_name}.`);
   await run(
     c.var.db,
-    `UPDATE tenants SET name=?, kind=?, address=?, phone=?, welcome_note=?, tax_rate=?, service_rate=?,
+    `UPDATE tenants SET name=?, kind=?, address=?, phone=?, welcome_note=?, welcome_note_en=?, tax_rate=?, service_rate=?,
        inventory_enabled=?, qr_ordering_enabled=?, logo_url=? WHERE id=?`,
-    b.name, b.kind, b.address, b.phone, b.welcome_note, b.tax_rate, b.service_rate,
+    b.name, b.kind, b.address, b.phone, b.welcome_note, b.welcome_note_en, b.tax_rate, b.service_rate,
     b.inventory_enabled, b.qr_ordering_enabled, b.logo_url, t.id,
   );
   return c.json({ ok: true });
@@ -72,28 +73,28 @@ storeRoutes.get("/categories", async (c) => {
   return c.json({
     categories: await all(
       c.var.db,
-      `SELECT c.id, c.name, c.sort, (SELECT COUNT(*) FROM menu_items m WHERE m.category_id = c.id AND m.archived = 0) AS item_count
+      `SELECT c.id, c.name, c.name_en, c.sort, (SELECT COUNT(*) FROM menu_items m WHERE m.category_id = c.id AND m.archived = 0) AS item_count
        FROM categories c WHERE c.tenant_id = ? ORDER BY c.sort, c.name`,
       t.id,
     ),
   });
 });
 
-const categorySchema = z.object({ name: z.string().trim().min(1, "Nama kategori wajib diisi.").max(40) });
+const categorySchema = z.object({ name: z.string().trim().min(1, "Nama kategori wajib diisi.").max(40), name_en: z.string().trim().max(40).default("") });
 
 storeRoutes.post("/categories", mgmt, async (c) => {
   const t = storeOf(c);
   const b = categorySchema.parse(await c.req.json());
   const max = await first<{ s: number | null }>(c.var.db, "SELECT MAX(sort) AS s FROM categories WHERE tenant_id = ?", t.id);
   const id = newId();
-  await run(c.var.db, "INSERT INTO categories (id, tenant_id, name, sort, created_at) VALUES (?, ?, ?, ?, ?)", id, t.id, b.name, (max?.s ?? 0) + 1, Date.now());
+  await run(c.var.db, "INSERT INTO categories (id, tenant_id, name, name_en, sort, created_at) VALUES (?, ?, ?, ?, ?, ?)", id, t.id, b.name, b.name_en, (max?.s ?? 0) + 1, Date.now());
   return c.json({ id }, 201);
 });
 
 storeRoutes.put("/categories/:id", mgmt, async (c) => {
   const t = storeOf(c);
   const b = categorySchema.parse(await c.req.json());
-  const n = await run(c.var.db, "UPDATE categories SET name = ? WHERE id = ? AND tenant_id = ?", b.name, c.req.param("id"), t.id);
+  const n = await run(c.var.db, "UPDATE categories SET name = ?, name_en = ? WHERE id = ? AND tenant_id = ?", b.name, b.name_en, c.req.param("id"), t.id);
   if (!n) fail(404, "Kategori tidak ditemukan.");
   return c.json({ ok: true });
 });
@@ -120,7 +121,8 @@ storeRoutes.get("/items", async (c) => {
     all<{ id: string } & Record<string, unknown>>(
       c.var.db,
       `SELECT id, category_id, name, description, price, image_url, video_url, tags, available, track_stock, stock_qty,
-              low_stock_at, unit, sort, portion, components, spice_level, prep_minutes, allergens
+              low_stock_at, unit, sort, portion, components, spice_level, prep_minutes, allergens,
+              name_en, description_en, portion_en, components_en, allergens_en
        FROM menu_items WHERE tenant_id = ? AND archived = 0 ORDER BY sort, name`,
       t.id,
     ),
@@ -141,6 +143,11 @@ const itemSchema = z.object({
   spice_level: z.number().int().min(0).max(5).nullable().default(null),
   prep_minutes: z.number().int().min(1).max(240).nullable().default(null),
   allergens: z.string().trim().max(120).default(""),
+  name_en: z.string().trim().max(80).default(""),
+  description_en: z.string().trim().max(500).default(""),
+  portion_en: z.string().trim().max(40).default(""),
+  components_en: z.string().trim().max(400).default(""),
+  allergens_en: z.string().trim().max(120).default(""),
   available: bool.default(1),
   track_stock: bool.default(0),
   low_stock_at: z.number().int().min(0).max(100000).default(5),
@@ -174,10 +181,12 @@ storeRoutes.post("/items", mgmt, async (c) => {
     stmt(
       c.var.db,
       `INSERT INTO menu_items (id, tenant_id, category_id, name, description, price, image_url, video_url, tags, available,
-         track_stock, low_stock_at, unit, sort, created_at, portion, components, spice_level, prep_minutes, allergens)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         track_stock, low_stock_at, unit, sort, created_at, portion, components, spice_level, prep_minutes, allergens,
+         name_en, description_en, portion_en, components_en, allergens_en)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id, t.id, b.category_id, b.name, b.description, b.price, cover.image_url, cover.video_url, b.tags, b.available,
       b.track_stock, b.low_stock_at, b.unit, (max?.s ?? 0) + 1, Date.now(), b.portion, b.components, b.spice_level, b.prep_minutes, b.allergens,
+      b.name_en, b.description_en, b.portion_en, b.components_en, b.allergens_en,
     ),
     ...replaceGallery(c.var.db, t.id, id, b.media),
   ]);
@@ -197,10 +206,12 @@ storeRoutes.put("/items/:id", mgmt, async (c) => {
     stmt(
       c.var.db,
       `UPDATE menu_items SET category_id=?, name=?, description=?, price=?, image_url=?, video_url=?, tags=?, available=?,
-         track_stock=?, low_stock_at=?, unit=?, portion=?, components=?, spice_level=?, prep_minutes=?, allergens=?
+         track_stock=?, low_stock_at=?, unit=?, portion=?, components=?, spice_level=?, prep_minutes=?, allergens=?,
+         name_en=?, description_en=?, portion_en=?, components_en=?, allergens_en=?
        WHERE id=? AND tenant_id=?`,
       b.category_id, b.name, b.description, b.price, cover.image_url, cover.video_url, b.tags, b.available,
-      b.track_stock, b.low_stock_at, b.unit, b.portion, b.components, b.spice_level, b.prep_minutes, b.allergens, id, t.id,
+      b.track_stock, b.low_stock_at, b.unit, b.portion, b.components, b.spice_level, b.prep_minutes, b.allergens,
+      b.name_en, b.description_en, b.portion_en, b.components_en, b.allergens_en, id, t.id,
     ),
     ...replaceGallery(c.var.db, t.id, id, b.media),
   ]);

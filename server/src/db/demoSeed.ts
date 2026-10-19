@@ -47,7 +47,7 @@ export async function seedDemo(db: DB): Promise<boolean> {
     id: tenantId, slug: "warung-contoh", name: "Warung Contoh", kind: "warung", plan_id: planIds.resto, status: "active",
     period_end: now + 20 * DAY, address: "Jl. Contoh No. 1", phone: "", tax_rate: 0, service_rate: 0,
     inventory_enabled: 1, qr_ordering_enabled: 1, tz_offset_minutes: TZ,
-    welcome_note: "Pesan dari meja, bayar di kasir setelah makan.", created_at: now - 60 * DAY,
+    welcome_note: "Pesan dari meja, bayar di kasir setelah makan.", welcome_note_en: "Order from your table, pay at the cashier after your meal.", created_at: now - 60 * DAY,
   });
   const owner = newId(), manager = newId(), staff1 = newId(), staff2 = newId();
   const pw = await hashPassword("contoh12345");
@@ -60,7 +60,7 @@ export async function seedDemo(db: DB): Promise<boolean> {
   ["Makanan", "Camilan", "Minuman", "Titipan"].forEach((name, i) => {
     const id = newId();
     cats[name] = id;
-    ins("categories", { id, tenant_id: tenantId, name, sort: i + 1, created_at: now - 60 * DAY });
+    ins("categories", { id, tenant_id: tenantId, name, name_en: ({ Makanan: "Mains", Camilan: "Snacks", Minuman: "Drinks", Titipan: "Packaged goods" } as Record<string, string>)[name] ?? "", sort: i + 1, created_at: now - 60 * DAY });
   });
 
   const menu: [string, string, number, string, string, number?][] = [
@@ -94,6 +94,23 @@ export async function seedDemo(db: DB): Promise<boolean> {
     "Kopi Susu Gula Aren": { portion: "1 gelas 300 ml", components: "Espresso robusta\nSusu segar\nGula aren cair\nEs batu", prep: 5, allergens: "Mengandung susu" },
     "Teh Tarik": { portion: "1 gelas 300 ml", prep: 4, allergens: "Mengandung susu" },
   };
+  // Versi Inggris contoh. Nama asli tetap ditampilkan; name_en jadi keterangan di bawahnya.
+  const english: Record<string, { name: string; description: string; portion?: string; components?: string; allergens?: string }> = {
+    "Nasi Goreng Kampung": { name: "Village-style fried rice", description: "Fried rice with shrimp paste, a fried egg, prawn crackers and pickles.", portion: "1 person", components: "Shrimp-paste fried rice\nFried egg\nPrawn crackers\nCucumber pickles", allergens: "Contains shrimp (paste and crackers)" },
+    "Mie Ayam Bakso": { name: "Chicken noodles with meatballs", description: "Springy egg noodles, soy-glazed chicken, two beef meatballs, boiled greens.", portion: "1 person", components: "Egg noodles\nSoy-glazed chicken\n2 beef meatballs\nBoiled mustard greens\nBroth on the side", allergens: "Contains gluten and egg" },
+    "Ayam Geprek Sambal Bawang": { name: "Smashed crispy chicken, garlic chili", description: "Crispy battered chicken smashed into garlic chili sambal. Ask for a milder level in the note.", portion: "1 person (thigh or breast)", components: "Steamed rice\nCrispy chicken\nGarlic chili sambal\nFresh vegetables", allergens: "Contains gluten" },
+    "Soto Ayam Lamongan": { name: "Turmeric chicken soup", description: "Clear yellow broth, shredded chicken, half a boiled egg, savory cracker powder.", portion: "1 bowl", components: "Turmeric broth\nShredded chicken\nHalf boiled egg\nCracker powder (koya)\nRice on the side" },
+    "Nasi Uduk Komplit": { name: "Coconut rice platter", description: "Coconut rice, fried chicken, sweet tempeh, rice vermicelli, peanut sauce.", portion: "1 person", components: "Coconut rice\nFried chicken\nSweet soy tempeh\nRice vermicelli\nPeanut sauce", allergens: "Contains peanuts" },
+    "Tahu Tempe Penyet": { name: "Smashed tofu & tempeh", description: "Fried tofu and tempeh with shrimp-paste chili and fresh vegetables.", portion: "1 person", components: "Steamed rice\n2 fried tofu\n2 fried tempeh\nShrimp-paste chili\nFresh vegetables", allergens: "Contains soy and shrimp (paste)" },
+    "Pisang Goreng Keju": { name: "Fried banana with cheese", description: "Five pieces of fried banana, grated cheese, sweet condensed milk.", portion: "5 pieces, good for two", components: "Kepok banana\nGrated cheese\nCondensed milk", allergens: "Contains milk" },
+    "Tahu Crispy": { name: "Crispy tofu", description: "Battered fried tofu with sweet soy chili dip.", portion: "8 pieces" },
+    "Es Teh Manis": { name: "Sweet iced tea", description: "Brewed every morning. Ask for less sugar in the note.", portion: "400 ml glass" },
+    "Es Jeruk Peras": { name: "Fresh orange juice", description: "Squeezed to order, not syrup.", portion: "400 ml glass" },
+    "Kopi Susu Gula Aren": { name: "Iced coffee with palm sugar", description: "Local robusta espresso, fresh milk, liquid palm sugar.", portion: "300 ml glass", components: "Robusta espresso\nFresh milk\nPalm sugar syrup\nIce", allergens: "Contains milk" },
+    "Teh Tarik": { name: "Pulled milk tea", description: "Black tea and condensed milk, pulled until frothy.", portion: "300 ml glass", allergens: "Contains milk" },
+    "Air Mineral 600 ml": { name: "Mineral water", description: "Cold bottle from the fridge." },
+    "Kerupuk Udang": { name: "Prawn crackers", description: "Per pack.", allergens: "Contains shrimp" },
+  };
   const items: { id: string; name: string; price: number; cat: string; weight: number; stock: boolean }[] = [];
   menu.forEach(([cat, name, price, description, tags, stock], i) => {
     const id = newId();
@@ -104,6 +121,8 @@ export async function seedDemo(db: DB): Promise<boolean> {
       sort: i + 1, created_at: now - 60 * DAY,
       portion: details[name]?.portion ?? "", components: details[name]?.components ?? "",
       spice_level: details[name]?.spice ?? null, prep_minutes: details[name]?.prep ?? null, allergens: details[name]?.allergens ?? "",
+      name_en: english[name]?.name ?? "", description_en: english[name]?.description ?? "", portion_en: english[name]?.portion ?? "",
+      components_en: english[name]?.components ?? "", allergens_en: english[name]?.allergens ?? "",
     });
     // bobot popularitas supaya laporan punya pola yang masuk akal
     const weight = name.includes("Es Teh") ? 9 : tags.includes("favorit") ? 6 : name.includes("Teh Tarik") ? 1 : 3;

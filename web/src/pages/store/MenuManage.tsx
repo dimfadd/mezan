@@ -19,10 +19,10 @@ export function MenuManagePage() {
   const toast = useToast();
   const [editing, setEditing] = useState<Partial<MenuItem> | null>(null);
   const [catsOpen, setCatsOpen] = useState(false);
-  const [filter, setFilter] = useState<"all" | "off">("all");
+  const [filter, setFilter] = useState<"all" | "off" | "noen">("all");
 
   const grouped = useMemo(() => {
-    const list = (items.data?.items ?? []).filter((i) => filter === "all" || !i.available);
+    const list = (items.data?.items ?? []).filter((i) => filter === "all" || (filter === "off" ? !i.available : !i.name_en && !i.description_en));
     const cs = cats.data?.categories ?? [];
     const groups = cs.map((c) => ({ id: c.id, name: c.name, items: list.filter((i) => i.category_id === c.id) }));
     const none = list.filter((i) => !i.category_id || !cs.some((c) => c.id === i.category_id));
@@ -70,6 +70,11 @@ export function MenuManagePage() {
         <button className="chip" aria-pressed={filter === "off"} onClick={() => setFilter("off")}>
           Sedang habis ({offCount})
         </button>
+        {mgmt && (items.data?.items.length ?? 0) > 0 && (
+          <button className="chip" aria-pressed={filter === "noen"} onClick={() => setFilter("noen")}>
+            Belum ada versi Inggris ({items.data!.items.filter((i) => !i.name_en && !i.description_en).length})
+          </button>
+        )}
       </div>
       {err ? (
         <ErrorState message={err.message} onRetry={() => { items.reload(); cats.reload(); }} />
@@ -87,7 +92,7 @@ export function MenuManagePage() {
         </div>
       ) : grouped.length === 0 ? (
         <div className="panel">
-          <Empty title="Tidak ada menu yang habis">Semua menu sedang tersedia.</Empty>
+          {filter === "off" ? <Empty title="Tidak ada menu yang habis">Semua menu sedang tersedia.</Empty> : <Empty title="Semua menu sudah punya versi Inggris">Pembeli asing bisa membaca seluruh menu.</Empty>}
         </div>
       ) : (
         <div className="stack" style={{ gap: 20 }}>
@@ -209,6 +214,11 @@ function ItemEditor({
     spice_level: item.spice_level ?? null,
     prep_minutes: (item.prep_minutes ?? "") as number | "",
     allergens: item.allergens ?? "",
+    name_en: item.name_en ?? "",
+    description_en: item.description_en ?? "",
+    portion_en: item.portion_en ?? "",
+    components_en: item.components_en ?? "",
+    allergens_en: item.allergens_en ?? "",
     tags: (item.tags ?? "").split(",").filter(Boolean),
     available: item.available ?? 1,
     track_stock: item.track_stock ?? 0,
@@ -362,6 +372,35 @@ function ItemEditor({
         </section>
 
 
+        <details className="en-block" open={!!(f.name_en || f.description_en)}>
+          <summary>
+            <span className="strong">English, untuk pembeli asing</span>
+            <span className="small muted"> · opsional{f.name_en || f.description_en ? " · sudah diisi" : ""}</span>
+          </summary>
+          <div className="form-grid" style={{ marginTop: 12 }}>
+            <p className="small muted">
+              Tampil saat pembeli memilih bahasa EN. Nama asli tetap ditampilkan paling atas supaya pelayan paham saat pembeli menyebutnya; nama Inggris jadi keterangan di bawahnya. Yang dikosongkan memakai versi Indonesia.
+            </p>
+            <Field label="Nama dalam bahasa Inggris" htmlFor="it-name-en" hint='Mis. "Village-style fried rice". Jelaskan, tidak perlu diterjemahkan kata per kata.'>
+              <input id="it-name-en" className="input" lang="en" value={f.name_en} onChange={(e) => setF({ ...f, name_en: e.target.value })} maxLength={80} />
+            </Field>
+            <Field label="Deskripsi (EN)" htmlFor="it-desc-en">
+              <textarea id="it-desc-en" className="textarea" lang="en" value={f.description_en} onChange={(e) => setF({ ...f, description_en: e.target.value })} maxLength={500} />
+            </Field>
+            <div className="form-row">
+              <Field label="Porsi (EN)" htmlFor="it-portion-en" hint="Mis. 1 person, 400 ml glass">
+                <input id="it-portion-en" className="input" lang="en" value={f.portion_en} onChange={(e) => setF({ ...f, portion_en: e.target.value })} maxLength={40} />
+              </Field>
+              <Field label="Alergen (EN)" htmlFor="it-allergen-en" hint="Mis. Contains peanuts">
+                <input id="it-allergen-en" className="input" lang="en" value={f.allergens_en} onChange={(e) => setF({ ...f, allergens_en: e.target.value })} maxLength={120} />
+              </Field>
+            </div>
+            <Field label="Isi / komponen (EN)" htmlFor="it-comp-en" hint="Satu per baris, urutannya sama dengan versi Indonesia.">
+              <textarea id="it-comp-en" className="textarea" lang="en" value={f.components_en} onChange={(e) => setF({ ...f, components_en: e.target.value })} maxLength={400} />
+            </Field>
+          </div>
+        </details>
+
         <Switch checked={!!f.available} onChange={(v) => setF({ ...f, available: v ? 1 : 0 })} label="Tersedia untuk dipesan" hint="Matikan kalau sedang habis. Menu tetap terlihat dengan tanda Habis." />
         {stockOn && (
           <>
@@ -384,6 +423,8 @@ function CategoryManager({ open, categories, onClose, onChanged }: { open: boole
   const [name, setName] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const [editEn, setEditEn] = useState("");
+  const [nameEn, setNameEn] = useState("");
 
   const run = async (fn: () => Promise<unknown>, ok?: string) => {
     try {
@@ -411,25 +452,28 @@ function CategoryManager({ open, categories, onClose, onChanged }: { open: boole
           <div key={c.id} className="row" style={{ borderBottom: "1px solid var(--line)", paddingBottom: 8 }}>
             {editId === c.id ? (
               <form
-                className="row"
+                className="row wrap"
                 style={{ flex: 1 }}
                 onSubmit={(e) => {
                   e.preventDefault();
-                  run(() => api.put(`/api/store/categories/${c.id}`, { name: editName }), "Nama kategori diubah.");
+                  run(() => api.put(`/api/store/categories/${c.id}`, { name: editName, name_en: editEn }), "Nama kategori diubah.");
                   setEditId(null);
                 }}
               >
-                <input className="input" value={editName} onChange={(e) => setEditName(e.target.value)} autoFocus maxLength={40} aria-label="Nama kategori" />
+                <input className="input" style={{ flex: "1 1 140px", width: "auto" }} value={editName} onChange={(e) => setEditName(e.target.value)} autoFocus maxLength={40} aria-label="Nama kategori" />
+                <input className="input" style={{ flex: "1 1 120px", width: "auto" }} lang="en" value={editEn} onChange={(e) => setEditEn(e.target.value)} maxLength={40} placeholder="English" aria-label="Nama kategori dalam bahasa Inggris" />
                 <button className="btn btn-primary btn-sm" type="submit">Simpan</button>
               </form>
             ) : (
               <>
                 <span style={{ flex: 1, minWidth: 0 }}>
-                  <span className="strong">{c.name}</span> <span className="muted small">{c.item_count ?? 0} menu</span>
+                  <span className="strong">{c.name}</span>
+                  {c.name_en && <span className="small muted"> · EN: {c.name_en}</span>}
+                  <span className="muted small"> · {c.item_count ?? 0} menu</span>
                 </span>
                 <button className="icon-btn" aria-label={`Naikkan ${c.name}`} disabled={i === 0} onClick={() => move(i, -1)}><ArrowUp /></button>
                 <button className="icon-btn" aria-label={`Turunkan ${c.name}`} disabled={i === categories.length - 1} onClick={() => move(i, 1)}><ArrowDown /></button>
-                <button className="icon-btn" aria-label={`Ganti nama ${c.name}`} onClick={() => { setEditId(c.id); setEditName(c.name); }}><Pencil /></button>
+                <button className="icon-btn" aria-label={`Ganti nama ${c.name}`} onClick={() => { setEditId(c.id); setEditName(c.name); setEditEn(c.name_en ?? ""); }}><Pencil /></button>
                 <button
                   className="icon-btn"
                   aria-label={`Hapus ${c.name}`}
@@ -446,15 +490,17 @@ function CategoryManager({ open, categories, onClose, onChanged }: { open: boole
           </div>
         ))}
         <form
-          className="row"
+          className="row wrap"
           onSubmit={(e) => {
             e.preventDefault();
             if (!name.trim()) return;
-            run(() => api.post("/api/store/categories", { name }), `Kategori ${name} ditambahkan.`);
+            run(() => api.post("/api/store/categories", { name, name_en: nameEn }), `Kategori ${name} ditambahkan.`);
             setName("");
+            setNameEn("");
           }}
         >
-          <input className="input" placeholder="Nama kategori baru, mis. Paket Hemat" value={name} onChange={(e) => setName(e.target.value)} maxLength={40} aria-label="Nama kategori baru" />
+          <input className="input" style={{ flex: "1 1 160px", width: "auto" }} placeholder="Kategori baru, mis. Paket Hemat" value={name} onChange={(e) => setName(e.target.value)} maxLength={40} aria-label="Nama kategori baru" />
+          <input className="input" style={{ flex: "1 1 120px", width: "auto" }} lang="en" placeholder="English (opsional)" value={nameEn} onChange={(e) => setNameEn(e.target.value)} maxLength={40} aria-label="Nama kategori baru dalam bahasa Inggris" />
           <button className="btn btn-primary" type="submit">
             <Plus /> Tambah
           </button>

@@ -633,6 +633,25 @@ dialog.modal[open] { display: flex; flex-direction: column; animation: pop 0.16s
 .status-steps .label { font-weight: 700; padding-top: 3px; }
 .status-steps .todo .label { color: var(--ink-3); }
 
+/* ---------- Blok isian bahasa Inggris (editor menu) ---------- */
+.en-block { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; background: var(--paper); }
+.en-block summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+
+/* ---------- Pilihan bahasa (halaman pelanggan) ---------- */
+.cust-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.lang-switch {
+  display: inline-flex; align-items: center; gap: 2px; padding: 3px 3px 3px 8px; border-radius: var(--radius);
+  background: var(--surface); border: 1px solid var(--line-strong); color: var(--ink-2); flex: none;
+}
+.lang-switch svg { width: 16px; height: 16px; margin-right: 2px; }
+.lang-switch button {
+  min-width: 40px; min-height: 36px; border: 0; border-radius: calc(var(--radius) - 3px); background: transparent;
+  font-weight: 700; color: var(--ink-2); cursor: pointer; font-size: 0.85rem;
+}
+.lang-switch button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.dish .name-en { font-size: 0.82rem; color: var(--ink-2); font-weight: 600; margin-top: 1px; }
+.dish-subtitle { color: var(--ink-2); font-weight: 600; margin-top: 2px; }
+
 /* ---------- Galeri foto/video menu ---------- */
 .gallery { position: relative; background: var(--surface-2); }
 .gallery-track {

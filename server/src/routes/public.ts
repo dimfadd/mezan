@@ -6,6 +6,7 @@ import { TENANT_SELECT, tenantLocked, type Tenant } from "../lib/auth";
 import { fail } from "../lib/http";
 import { createOrder, loadOrderItems } from "../lib/orders";
 import { loadGalleries } from "../lib/gallery";
+import { pickLang, serverMsgs, type Lang } from "../../../shared/i18n";
 import { DEFAULT_THEME, normalizeTheme } from "../../../shared/menuTheme";
 
 // Paket tanpa branding (atau yang turun paket) otomatis kembali ke template bawaan.
@@ -20,26 +21,28 @@ export function publicTheme(t: Tenant) {
 
 export const publicRoutes = new Hono<Env>();
 
-async function tenantByTable(c: { var: Env["Variables"] }, code: string) {
+async function tenantByTable(c: { var: Env["Variables"] }, code: string, lang: Lang = "id") {
+  const M = serverMsgs(lang);
   const table = await first<{ id: string; tenant_id: string; label: string; area: string; active: number }>(
     c.var.db,
     "SELECT id, tenant_id, label, area, active FROM dining_tables WHERE code = ?",
     code,
   );
-  if (!table || !table.active) fail(404, "Kode meja tidak dikenal. Coba pindai ulang QR di meja.");
+  if (!table || !table.active) fail(404, M.tableUnknown);
   const tenant = await first<Tenant>(c.var.db, `${TENANT_SELECT} WHERE t.id = ?`, table.tenant_id);
-  if (!tenant) fail(404, "Toko tidak ditemukan.");
+  if (!tenant) fail(404, M.storeMissing);
   return { table, tenant };
 }
 
 // Menu untuk pelanggan yang memindai QR meja.
 publicRoutes.get("/table/:code", async (c) => {
-  const { table, tenant } = await tenantByTable(c, c.req.param("code"));
-  const categories = await all(c.var.db, "SELECT id, name FROM categories WHERE tenant_id = ? ORDER BY sort, name", tenant.id);
+  const { table, tenant } = await tenantByTable(c, c.req.param("code"), pickLang(c.req.query("lang")));
+  const categories = await all(c.var.db, "SELECT id, name, name_en FROM categories WHERE tenant_id = ? ORDER BY sort, name", tenant.id);
   const items = await all<Record<string, unknown> & { id: string; track_stock: number; stock_qty: number }>(
     c.var.db,
     `SELECT id, category_id, name, description, price, image_url, video_url, tags, available, track_stock, stock_qty,
-            portion, components, spice_level, prep_minutes, allergens
+            portion, components, spice_level, prep_minutes, allergens,
+            name_en, description_en, portion_en, components_en, allergens_en
      FROM menu_items WHERE tenant_id = ? AND archived = 0 ORDER BY sort, name`,
     tenant.id,
   );
@@ -54,6 +57,7 @@ publicRoutes.get("/table/:code", async (c) => {
       phone: tenant.phone,
       logo_url: tenant.logo_url,
       welcome_note: tenant.welcome_note,
+      welcome_note_en: tenant.welcome_note_en,
       tax_rate: tenant.tax_rate,
       service_rate: tenant.service_rate,
       accepting_orders: !!tenant.qr_ordering_enabled && !locked,
@@ -71,32 +75,33 @@ publicRoutes.get("/table/:code", async (c) => {
   });
 });
 
-const orderSchema = z.object({
+const orderSchema = (lang: Lang) => z.object({
   tableCode: z.string().min(4).max(40),
-  customerName: z.string().trim().min(1, "Isi nama supaya pelayan tahu pesanan ini milik siapa.").max(40),
+  customerName: z.string().trim().min(1, serverMsgs(lang).nameNeeded).max(40),
   note: z.string().trim().max(200).default(""),
   items: z
     .array(z.object({ id: z.string().min(1).max(64), qty: z.number().int().min(1).max(50), note: z.string().trim().max(120).optional() }))
-    .min(1, "Keranjang masih kosong.")
+    .min(1, serverMsgs(lang).cartEmpty)
     .max(40, "Pesanan terlalu banyak untuk sekali kirim."),
 });
 
 publicRoutes.post("/orders", async (c) => {
-  const b = orderSchema.parse(await c.req.json());
-  const { table, tenant } = await tenantByTable(c, b.tableCode);
-  if (tenantLocked(tenant) || !tenant.qr_ordering_enabled) {
-    fail(403, "Toko ini sedang tidak menerima pesanan lewat QR. Silakan pesan ke kasir.");
-  }
+  const raw = await c.req.json();
+  const lang = pickLang(raw?.lang);
+  const M = serverMsgs(lang);
+  const b = orderSchema(lang).parse(raw);
+  const { table, tenant } = await tenantByTable(c, b.tableCode, lang);
+  if (tenantLocked(tenant) || !tenant.qr_ordering_enabled) fail(403, M.notAccepting);
   // Batas anti-iseng dari QR yang difoto orang: jumlah item per pesanan dan pesanan per meja per jam.
   const totalQty = b.items.reduce((n, i) => n + i.qty, 0);
-  if (totalQty > 30) fail(400, "Maksimal 30 item sekali pesan lewat HP. Untuk pesanan besar, pesan ke kasir.");
+  if (totalQty > 30) fail(400, M.tooManyItems);
   const open = await first<{ n: number }>(
     c.var.db,
     "SELECT COUNT(*) AS n FROM orders WHERE table_id = ? AND source = 'qr' AND status IN ('new','preparing') AND created_at > ?",
     table.id,
     Date.now() - 3600_000,
   );
-  if ((open?.n ?? 0) >= 6) fail(429, "Masih ada beberapa pesanan dari meja ini yang belum selesai. Tunggu sebentar ya.");
+  if ((open?.n ?? 0) >= 6) fail(429, M.tooManyOrders);
   const order = await createOrder(c.var.db, {
     tenant,
     source: "qr",
@@ -107,6 +112,7 @@ publicRoutes.post("/orders", async (c) => {
     note: b.note,
     lines: b.items,
     userId: null,
+    lang,
   });
   return c.json({ token: order.token, number: order.number }, 201);
 });
@@ -121,9 +127,14 @@ publicRoutes.get("/orders/:token", async (c) => {
      WHERE o.public_token = ?`,
     c.req.param("token"),
   );
-  if (!o) fail(404, "Pesanan tidak ditemukan.");
-  const items = (await loadOrderItems(c.var.db, [o.id])).get(o.id) ?? [];
+  if (!o) fail(404, serverMsgs(pickLang(c.req.query("lang"))).orderMissing);
+  const items = ((await loadOrderItems(c.var.db, [o.id])).get(o.id) ?? []) as { menu_item_id: string | null }[];
+  const ids = items.map((i) => i.menu_item_id).filter(Boolean) as string[];
+  const enNames = ids.length
+    ? new Map((await all<{ id: string; name_en: string }>(c.var.db, `SELECT id, name_en FROM menu_items WHERE id IN (${ids.map(() => "?").join(",")})`, ...ids)).map((r) => [r.id, r.name_en]))
+    : new Map<string, string>();
+  const itemsOut = items.map((i) => ({ ...i, name_en: (i.menu_item_id && enNames.get(i.menu_item_id)) || "" }));
   const tenant = await first<Tenant>(c.var.db, `${TENANT_SELECT} WHERE t.id = ?`, o.tenant_id);
   const { id: _id, tenant_id: _t, tid: _tid, ...rest } = o;
-  return c.json({ order: { ...rest, items }, theme: tenant ? publicTheme(tenant) : DEFAULT_THEME });
+  return c.json({ order: { ...rest, items: itemsOut }, theme: tenant ? publicTheme(tenant) : DEFAULT_THEME });
 });

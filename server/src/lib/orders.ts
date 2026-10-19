@@ -3,6 +3,7 @@ import { all, first, stmt } from "../db/types";
 import { businessDay, fail } from "./http";
 import { newId, randomToken } from "./security";
 import type { Tenant } from "./auth";
+import { serverMsgs, type Lang } from "../../../shared/i18n";
 
 export interface OrderLineInput {
   id: string;
@@ -21,11 +22,13 @@ export interface CreateOrderInput {
   lines: OrderLineInput[];
   userId: string | null;
   payment?: { method: string; amountReceived: number | null } | null;
+  lang?: Lang;
 }
 
 interface ItemRow {
   id: string;
   name: string;
+  name_en: string;
   price: number;
   available: number;
   track_stock: number;
@@ -47,7 +50,10 @@ export function computeTotals(subtotal: number, taxRate: number, serviceRate: nu
  */
 export async function createOrder(db: DB, input: CreateOrderInput) {
   const t = input.tenant;
-  if (input.lines.length === 0) fail(400, "Keranjang masih kosong.");
+  const lang = input.lang ?? "id";
+  const M = serverMsgs(lang);
+  const nm = (it: ItemRow) => (lang === "en" && it.name_en ? it.name_en : it.name);
+  if (input.lines.length === 0) fail(400, M.cartEmpty);
   const merged = new Map<string, OrderLineInput>();
   for (const l of input.lines) {
     // item yang sama dengan catatan berbeda tetap dipisah
@@ -59,7 +65,7 @@ export async function createOrder(db: DB, input: CreateOrderInput) {
   const ids = [...new Set(input.lines.map((l) => l.id))];
   const items = await all<ItemRow>(
     db,
-    `SELECT m.id, m.name, m.price, m.available, m.track_stock, m.stock_qty, m.archived, c.name AS category_name
+    `SELECT m.id, m.name, m.name_en, m.price, m.available, m.track_stock, m.stock_qty, m.archived, c.name AS category_name
      FROM menu_items m LEFT JOIN categories c ON c.id = m.category_id
      WHERE m.tenant_id = ? AND m.id IN (${ids.map(() => "?").join(",")})`,
     t.id,
@@ -71,8 +77,8 @@ export async function createOrder(db: DB, input: CreateOrderInput) {
   let subtotal = 0;
   for (const l of merged.values()) {
     const it = byId.get(l.id);
-    if (!it || it.archived) fail(400, "Ada menu yang sudah tidak tersedia. Muat ulang halaman menu.");
-    if (!it.available) fail(409, `${it.name} sedang habis.`);
+    if (!it || it.archived) fail(400, M.itemGone);
+    if (!it.available) fail(409, M.soldOut(nm(it)));
     subtotal += it.price * l.qty;
     needed.set(it.id, (needed.get(it.id) ?? 0) + l.qty);
   }
@@ -80,7 +86,7 @@ export async function createOrder(db: DB, input: CreateOrderInput) {
     for (const [id, qty] of needed) {
       const it = byId.get(id)!;
       if (it.track_stock && it.stock_qty < qty) {
-        fail(409, it.stock_qty > 0 ? `${it.name} tinggal ${it.stock_qty}.` : `${it.name} sedang habis.`);
+        fail(409, it.stock_qty > 0 ? M.onlyLeft(nm(it), it.stock_qty) : M.soldOut(nm(it)));
       }
     }
   }
@@ -142,11 +148,11 @@ export async function createOrder(db: DB, input: CreateOrderInput) {
     } catch (e) {
       if (String(e).includes("UNIQUE") && attempt < 4) continue;
       // Dua pesanan berebut stok terakhir: CHECK (stock_qty >= 0) menggagalkan seluruh batch.
-      if (String(e).includes("CHECK")) fail(409, "Stok baru saja habis dipesan orang lain. Muat ulang menu.");
+      if (String(e).includes("CHECK")) fail(409, M.raceSoldOut);
       throw e;
     }
   }
-  fail(409, "Kasir sedang ramai. Coba kirim pesanan lagi.");
+  fail(409, M.busy);
 }
 
 /** Mengembalikan stok saat pesanan dibatalkan. */

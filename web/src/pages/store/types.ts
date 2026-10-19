@@ -53,11 +53,17 @@ export interface MenuItem {
   spice_level: number | null;
   prep_minutes: number | null;
   allergens: string;
+  name_en: string;
+  description_en: string;
+  portion_en: string;
+  components_en: string;
+  allergens_en: string;
 }
 
 export interface Category {
   id: string;
   name: string;
+  name_en?: string;
   sort: number;
   item_count?: number;
 }

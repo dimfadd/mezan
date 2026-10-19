@@ -47,6 +47,16 @@ Ide inti Mezan: pembeli bisa membayangkan pesanannya sebelum memesan. Saat menu 
 
 Jumlah foto & video per menu diatur per paket (Admin > Paket). Bawaan: Warung 3 foto, Kafe 5 foto + 1 video, Resto 6 foto + 2 video. Pemilik mengatur urutan dan sampul di halaman Menu & produk.
 
+## Dua bahasa untuk pembeli (ID / EN)
+
+Menu QR dan halaman status pesanan bisa dipindah Indonesia/Inggris lewat tombol ID | EN. Default mengikuti bahasa HP pembeli; pilihan tersimpan di HP.
+
+- Pemilik mengisi versi Inggris (opsional) per menu: nama, deskripsi, porsi, isi, alergen. Juga nama kategori dan sapaan toko. Yang kosong otomatis memakai teks Indonesia. Filter "Belum ada versi Inggris" di halaman Menu membantu melacak yang belum diterjemahkan.
+- Nama menu asli tetap jadi judul, nama Inggris jadi keterangan di bawahnya, supaya pelayan paham saat pembeli menyebut pesanannya.
+- Catatan cepat ("Not spicy", "No onion") tampil sesuai bahasa pembeli tapi dikirim ke dapur dalam bahasa Indonesia ("Tidak pedas", "Tanpa bawang").
+- Pesan galat untuk pembeli (menu habis, nama kosong, dll) ikut bahasanya. Layar kasir, dapur, dan admin tetap bahasa Indonesia.
+- Teks antarmuka ada di `shared/i18n.ts`.
+
 ## Dua kelas pelanggan
 
 | | UMKM (paket Warung, Kafe) | Bisnis besar (paket Resto) |
@@ -115,9 +125,10 @@ Ini yang perlu ada sebelum Mezan dijual ke toko sungguhan:
 4. **Stok bahan baku/resep** (1 porsi nasi goreng = 200 g beras). Sekarang stok per produk jadi.
 5. **Lupa kata sandi lewat email** untuk pemilik. Sekarang reset dilakukan admin Mezan.
 6. **Uji di Cloudflare** (`worker.ts`) dan pembatas percobaan login berbasis Cloudflare (yang sekarang hanya di memori server).
-7. **Domain/subdomain sendiri untuk toko premium** (mis. menu.namaresto.com) dan font unggahan sendiri. Sekarang font dipilih dari daftar Google Fonts yang dikurasi.
-8. **Logo & ikon final.** Ikon PWA saat ini placeholder huruf "m".
-9. **Mode offline untuk kasir** (antre pesanan saat internet putus lalu kirim ulang).
+7. **Terjemahan otomatis** isi menu ke bahasa Inggris (butuh layanan penerjemah berbayar). Sekarang pemilik mengisi manual.
+8. **Domain/subdomain sendiri untuk toko premium** (mis. menu.namaresto.com) dan font unggahan sendiri. Sekarang font dipilih dari daftar Google Fonts yang dikurasi.
+9. **Logo & ikon final.** Ikon PWA saat ini placeholder huruf "m".
+10. **Mode offline untuk kasir** (antre pesanan saat internet putus lalu kirim ulang).
 
 ## Deploy untuk testing (Vercel)
 

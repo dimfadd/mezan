@@ -31,6 +31,7 @@ export interface Tenant {
   qr_ordering_enabled: number;
   tz_offset_minutes: number;
   welcome_note: string;
+  welcome_note_en: string;
   plan_id: string;
   plan_name: string;
   plan_code: string;

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Expand } from "lucide-react";
 import { Thumb } from "./ui";
+import { DICT, type Lang } from "../../../shared/i18n";
 
 export interface MediaRef {
   kind: "image" | "video";
@@ -18,13 +19,16 @@ export function Gallery({
   start = 0,
   fit = "cover",
   onExpand,
+  lang = "id",
 }: {
   media: MediaRef[];
   name: string;
   start?: number;
   fit?: "cover" | "contain";
   onExpand?: (index: number) => void;
+  lang?: Lang;
 }) {
+  const t = DICT[lang];
   const track = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(start);
   const [near, setNear] = useState<Set<number>>(() => new Set([start, start + 1]));
@@ -84,14 +88,14 @@ export function Gallery({
   const videos = media.length - photos;
 
   return (
-    <div className={`gallery fit-${fit}`} aria-roledescription="galeri" aria-label={`Foto dan video ${name}`}>
-      <div className="gallery-track" ref={track} onScroll={onScroll} tabIndex={0} aria-label="Geser untuk melihat foto lain">
+    <div className={`gallery fit-${fit}`} aria-roledescription="galeri" aria-label={t.gallery(name)}>
+      <div className="gallery-track" ref={track} onScroll={onScroll} tabIndex={0} aria-label={t.swipe}>
         {media.map((m, i) => (
-          <div className="gallery-slide" key={m.url} aria-label={`${i + 1} dari ${media.length}`} role="group">
+          <div className="gallery-slide" key={m.url} aria-label={t.ofN(i + 1, media.length)} role="group">
             {!near.has(i) ? (
               <div className="ph" aria-hidden="true" />
             ) : m.kind === "image" ? (
-              <img src={m.url} alt={`${name}, foto ${i + 1}`} loading={i === start ? "eager" : "lazy"} decoding="async" />
+              <img src={m.url} alt={t.photoN(name, i + 1)} loading={i === start ? "eager" : "lazy"} decoding="async" />
             ) : (
               <video
                 src={m.url}
@@ -100,11 +104,11 @@ export function Gallery({
                 playsInline
                 controls={fit === "contain" || reduce}
                 preload={i === start ? "metadata" : "none"}
-                aria-label={`${name}, video ${i + 1}`}
+                aria-label={t.videoN(name, i + 1)}
               />
             )}
             {onExpand && (
-              <button type="button" className="gallery-expand" onClick={() => onExpand(i)} aria-label="Lihat layar penuh">
+              <button type="button" className="gallery-expand" onClick={() => onExpand(i)} aria-label={t.fullscreen}>
                 <Expand aria-hidden="true" />
               </button>
             )}
@@ -113,10 +117,10 @@ export function Gallery({
       </div>
       {media.length > 1 && (
         <>
-          <button type="button" className="gallery-nav prev" onClick={() => go(index - 1)} disabled={index === 0} aria-label="Sebelumnya">
+          <button type="button" className="gallery-nav prev" onClick={() => go(index - 1)} disabled={index === 0} aria-label={t.prev}>
             <ChevronLeft aria-hidden="true" />
           </button>
-          <button type="button" className="gallery-nav next" onClick={() => go(index + 1)} disabled={index === media.length - 1} aria-label="Berikutnya">
+          <button type="button" className="gallery-nav next" onClick={() => go(index + 1)} disabled={index === media.length - 1} aria-label={t.next}>
             <ChevronRight aria-hidden="true" />
           </button>
           <div className="gallery-dots" aria-hidden="true">
@@ -126,7 +130,7 @@ export function Gallery({
           </div>
           <span className="gallery-count" aria-live="polite">
             {index + 1}/{media.length}
-            {videos > 0 && index === 0 && <> · {photos} foto, {videos} video</>}
+            {videos > 0 && index === 0 && <> · {t.photos(photos)}, {t.videos(videos)}</>}
           </span>
         </>
       )}
@@ -134,8 +138,9 @@ export function Gallery({
   );
 }
 
-export function mediaSummary(media: MediaRef[]) {
+export function mediaSummary(media: MediaRef[], lang: Lang = "id") {
+  const t = DICT[lang];
   const p = media.filter((m) => m.kind === "image").length;
   const v = media.length - p;
-  return [p > 1 ? `${p} foto` : null, v ? `${v} video` : null].filter(Boolean).join(" · ");
+  return [p > 1 ? t.photos(p) : null, v ? t.videos(v) : null].filter(Boolean).join(" · ");
 }

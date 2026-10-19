@@ -29,6 +29,7 @@ export function SettingsPage() {
     address: tenant.address,
     phone: tenant.phone,
     welcome_note: tenant.welcome_note,
+    welcome_note_en: tenant.welcome_note_en ?? "",
     tax_rate: tenant.tax_rate,
     service_rate: tenant.service_rate,
     inventory_enabled: !!tenant.inventory_enabled,
@@ -86,6 +87,9 @@ export function SettingsPage() {
               </div>
               <Field label="Sapaan di menu pelanggan" htmlFor="s-note" hint="Mis. jam buka, cara bayar, atau info Wi-Fi.">
                 <textarea id="s-note" className="textarea" value={f.welcome_note} onChange={(e) => setF({ ...f, welcome_note: e.target.value })} maxLength={240} placeholder="Pesan dari meja, bayar di kasir setelah makan." />
+              </Field>
+              <Field label="Sapaan dalam bahasa Inggris (opsional)" htmlFor="s-note-en" hint="Untuk pembeli yang memilih bahasa EN di menu.">
+                <textarea id="s-note-en" className="textarea" lang="en" value={f.welcome_note_en} onChange={(e) => setF({ ...f, welcome_note_en: e.target.value })} maxLength={240} placeholder="Order from your table, pay at the cashier after your meal." />
               </Field>
             </div>
           </section>

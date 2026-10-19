@@ -198,15 +198,15 @@ export function Empty({ title, children, icon, action }: { title: string; childr
   );
 }
 
-export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+export function ErrorState({ message, onRetry, title = "Data belum bisa dimuat", retryLabel = "Coba lagi" }: { message: string; onRetry?: () => void; title?: string; retryLabel?: string }) {
   return (
     <div className="state error" role="alert">
       <AlertTriangle aria-hidden="true" />
-      <h3>Data belum bisa dimuat</h3>
+      <h3>{title}</h3>
       <p>{message}</p>
       {onRetry && (
         <button className="btn" onClick={onRetry}>
-          <RotateCw /> Coba lagi
+          <RotateCw /> {retryLabel}
         </button>
       )}
     </div>
