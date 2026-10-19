@@ -1,6 +1,7 @@
 {
   "name": "pesanin",
   "private": true,
+  "license": "UNLICENSED",
   "version": "0.1.0",
   "type": "module",
   "description": "Pesan.in: menu digital, pesan dari meja, kasir, stok, dan laporan untuk warung, kafe, dan toko.",

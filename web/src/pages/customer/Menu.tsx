@@ -9,6 +9,7 @@ import { api } from "../../lib/api";
 import { rupiah } from "../../lib/format";
 import { useApi } from "../../lib/hooks";
 import { LangSwitch, useLang } from "../../lib/lang";
+import { LegalFoot } from "../public/Legal";
 import { ThemedRoot } from "../../components/ThemedRoot";
 import { Gallery, mediaSummary, type MediaRef } from "../../components/Gallery";
 import { DishFacts } from "../../components/DishInfo";
@@ -362,6 +363,8 @@ export function CustomerMenuPage() {
           </section>
         ))
       )}
+
+      <LegalFoot compact en={lang === "en"} />
 
       {count > 0 && (
         <button className="cartbar" onClick={() => setCartOpen(true)}>

@@ -999,3 +999,24 @@ s.was { color: var(--ink-3); font-weight: 500; text-decoration-thickness: 1.5px;
 .fb-stars { display: inline-flex; gap: 2px; }
 .fb-stars svg { width: 14px; height: 14px; color: var(--line-strong); }
 .fb-stars svg.on { color: var(--accent); fill: currentColor; }
+
+/* ---------- Halaman hukum & footer hak cipta ---------- */
+.legal { min-height: 100dvh; background: var(--paper); color: var(--ink); }
+.legal-head { position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 16px; background: var(--paper); border-bottom: 1px solid var(--line); }
+.legal-head .wordmark { font-size: 1.35rem; color: var(--ink); text-decoration: none; }
+.legal-main { max-width: 720px; margin: 0 auto; padding: 28px 16px 40px; display: grid; gap: 14px; line-height: 1.65; }
+.legal-main h1 { font-family: var(--font-menu); font-size: clamp(1.8rem, 5vw, 2.4rem); line-height: 1.15; }
+.legal-main h2 { font-family: var(--font-menu); font-size: 1.2rem; margin: 18px 0 6px; scroll-margin-top: 70px; }
+.legal-main h3 { font-size: 0.98rem; margin: 12px 0 4px; }
+.legal-main ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.legal-main p + p { margin-top: 8px; }
+.legal-intro { color: var(--ink-2); }
+.legal-toc { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 12px 16px; }
+.legal-toc ol { margin: 0; padding-left: 20px; columns: 2; column-gap: 24px; font-size: 0.92rem; }
+.legal-toc a, .legal-main a { color: var(--brand-text); }
+@media (max-width: 559px) { .legal-toc ol { columns: 1; } }
+
+.legal-foot { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px 16px; padding: 16px; border-top: 1px solid var(--line); font-size: 0.82rem; color: var(--ink-3); max-width: 1180px; margin: 0 auto; }
+.legal-foot nav { display: flex; gap: 14px; flex-wrap: wrap; }
+.legal-foot a { color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
+.legal-foot.compact { justify-content: center; text-align: center; border-top: 0; padding: 18px 16px 24px; font-size: 0.75rem; }

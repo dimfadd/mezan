@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { ArrowDown, Check } from "lucide-react";
 import { ThemeToggle } from "../../../components/ThemeToggle";
+import { LegalFoot } from "../Legal";
 import { useSession } from "../../../lib/session";
 import { Story } from "./Story";
 import { Features } from "./Features";
@@ -126,6 +127,7 @@ export function LandingPage() {
         <span className="small muted">Pesan.in, menu QR dan kasir untuk warung, kafe, dan resto.</span>
         <div style={{ width: 240 }}><ThemeToggle /></div>
       </footer>
+      <LegalFoot />
     </div>
   );
 }

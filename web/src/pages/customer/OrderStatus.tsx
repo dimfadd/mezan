@@ -9,6 +9,7 @@ import { ThemedRoot } from "../../components/ThemedRoot";
 import { DEFAULT_THEME, type MenuTheme } from "../../../../shared/menuTheme";
 import { LangSwitch, useLang } from "../../lib/lang";
 import { QUICK_NOTES } from "../../../../shared/i18n";
+import { LegalFoot } from "../public/Legal";
 
 // Alasan tolak bawaan dari layar kasir, diterjemahkan untuk pembeli asing.
 const REASON_EN: Record<string, string> = {
@@ -174,6 +175,7 @@ export function OrderStatusPage() {
           </Link>
         )}
       </div>
+      <LegalFoot compact en={en} />
     </div>
     </ThemedRoot>
   );

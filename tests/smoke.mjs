@@ -72,6 +72,12 @@ for (const theme of ["light", "dark"]) {
   await p.goto(`${BASE}/antre/contoh-antre`);
   await p.waitForSelector("#w-name");
   await shot(p, "antre-daftar-hp");
+  // Halaman hukum
+  for (const pg of ["syarat", "privasi"]) {
+    await p.goto(`${BASE}/${pg}`);
+    await p.waitForSelector(".legal-toc");
+    await shot(p, `${pg}-hp`);
+  }
   await c.close();
 }
 

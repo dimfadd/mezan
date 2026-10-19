@@ -7,6 +7,7 @@ import { useApi } from "../../lib/hooks";
 import { LangSwitch, useLang } from "../../lib/lang";
 import { ThemedRoot } from "../../components/ThemedRoot";
 import { DEFAULT_THEME, type MenuTheme } from "../../../../shared/menuTheme";
+import { LegalFoot } from "../public/Legal";
 
 const tokenKey = (code: string) => `pesanin-antre-${code}`;
 
@@ -106,6 +107,7 @@ export function WaitlistJoinPage() {
             <button className="btn btn-primary btn-lg btn-block" disabled={busy || !name.trim()}>{busy ? t.sending : t.waitJoin}</button>
           </form>
         )}
+        <LegalFoot compact en={lang === "en"} />
       </div>
     </ThemedRoot>
   );

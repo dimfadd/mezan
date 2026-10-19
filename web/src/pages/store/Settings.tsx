@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Field, Loading, PageHead, Switch, useToast } from "../../components/ui";
+import { LegalFoot } from "../public/Legal";
 import { api } from "../../lib/api";
 import { date, KIND_LABEL, rupiah } from "../../lib/format";
 import { useApi } from "../../lib/hooks";
@@ -266,6 +267,7 @@ export function AccountPage() {
           <button className="btn btn-primary" disabled={busy || next.length < 8}>Ganti kata sandi</button>
         </div>
       </form>
+      <LegalFoot compact />
     </>
   );
 }

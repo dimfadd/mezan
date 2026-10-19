@@ -132,6 +132,14 @@ Halaman depan (`web/src/pages/public/landing/`) memperagakan aplikasi lewat anim
 - Urutan halaman disusun untuk meyakinkan pemilik: simulasi satu pesanan, lalu sorotan antrean & perkiraan siap ("Tidak ada lagi 'masih lama, Kak?'"), lalu "Yang membuat pembeli betah dan kembali" (mode video, panggil pelayan, pesan bareng, stempel, struk & rating, QR bawa pulang, antrean saat penuh, bagi tagihan), lalu "Untung lebih jelas, kebocoran lebih sedikit" (modal & untung, pasangan, jam & happy hour, best seller, layar dapur, kasir offline, shift, pengaman lokasi, QR berlogo), dan terakhir tab fitur dasar.
 - Dimuat terpisah dari menu QR, jadi pembeli yang memindai QR tidak ikut mengunduhnya.
 
+## Hak cipta dan halaman hukum
+
+- Footer "© Pesan.in. Hak cipta dilindungi undang-undang." dengan tautan **Syarat & Ketentuan** (`/syarat`) dan **Kebijakan Privasi** (`/privasi`) ada di landing, halaman masuk/daftar, Pengaturan toko, dan halaman pembeli (menu, status pesanan, antrean; versi Inggris untuk pembeli berbahasa Inggris). Pendaftaran toko menyebut persetujuan atas keduanya.
+- Isi halaman ditulis mengikuti data yang benar-benar disimpan aplikasi (mis. koordinat lokasi pembeli tidak disimpan, tanpa pelacak pihak ketiga) dan merujuk UU Hak Cipta, UU Merek, dan UU PDP. Kalau fitur yang menyentuh data berubah, perbarui `web/src/pages/public/Legal.tsx` dan tanggal di `web/src/lib/legal.ts`.
+- Identitas pengelola diisi lewat variabel lingkungan saat build: `VITE_LEGAL_OPERATOR` (nama orang/badan usaha), `VITE_LEGAL_EMAIL` (email resmi), `VITE_LEGAL_CITY` (kota domisili hukum). Tanpa itu, halaman memakai "Pengelola Pesan.in" dan belum menampilkan email.
+- `LICENSE` menyatakan kode ini milik pribadi (bukan sumber terbuka); `package.json` memakai `"license": "UNLICENSED"`. Build produksi tidak menyertakan source map.
+- Ini draf yang wajar untuk tahap uji, bukan nasihat hukum. Sebelum dipakai berbayar, minta ahli hukum meninjau dan daftarkan merek "Pesan.in" di DJKI.
+
 ## Siapa bisa apa
 
 | Fitur | Pelanggan | Karyawan | Manajer | Pemilik | Admin Pesan.in |

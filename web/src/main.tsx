@@ -10,6 +10,7 @@ import { SessionProvider, useSession, isManagement } from "./lib/session";
 import { applyTheme, watchSystemTheme } from "./lib/theme";
 import { ConfirmProvider, Loading, ToastProvider } from "./components/ui";
 import { LoginPage, RegisterPage } from "./pages/public/Public";
+import { PrivacyPage, TermsPage } from "./pages/public/Legal";
 import { CustomerMenuPage } from "./pages/customer/Menu";
 import { OrderStatusPage } from "./pages/customer/OrderStatus";
 
@@ -78,6 +79,8 @@ createRoot(document.getElementById("root")!).render(
               <Route path="/" element={<LandingPage />} />
               <Route path="/masuk" element={<LoginPage />} />
               <Route path="/daftar" element={<RegisterPage />} />
+              <Route path="/syarat" element={<TermsPage />} />
+              <Route path="/privasi" element={<PrivacyPage />} />
               <Route path="/m/:code" element={<CustomerMenuPage />} />
               <Route path="/m/:code/pesanan/:token" element={<OrderStatusPage />} />
               <Route path="/struk/:token" element={<OrderStatusPage />} />

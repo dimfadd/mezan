@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate } from "react-router-dom";
 import { Field, Segmented } from "../../components/ui";
 import { api } from "../../lib/api";
 import { useSession } from "../../lib/session";
+import { LegalFoot } from "./Legal";
 
 function homeFor(role?: string) {
   return role === "platform_admin" ? "/admin" : "/toko/pesanan";
@@ -17,7 +18,10 @@ function AuthLayout({ children, quote }: { children: React.ReactNode; quote: str
         <span className="small" style={{ opacity: 0.85 }}>Menu digital, kasir, stok, dan laporan dalam satu tempat.</span>
       </aside>
       <main className="auth-form">
-        <div className="box">{children}</div>
+        <div className="box">
+          {children}
+          <LegalFoot compact />
+        </div>
       </main>
     </div>
   );
@@ -125,6 +129,9 @@ export function RegisterPage() {
           <input id="r-pw" className="input" type="password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} required minLength={8} autoComplete="new-password" />
         </Field>
         {error && <p role="alert" style={{ color: "var(--danger)", fontWeight: 600 }}>{error}</p>}
+        <p className="tiny muted">
+          Dengan membuat akun, kamu menyetujui <Link to="/syarat">Syarat & Ketentuan</Link> dan <Link to="/privasi">Kebijakan Privasi</Link> {"Pesan.in"}.
+        </p>
         <button className="btn btn-primary btn-lg btn-block" disabled={busy}>{busy ? "Menyiapkan toko..." : "Buat akun toko"}</button>
       </form>
       <p className="small muted">Sudah punya akun? <Link to="/masuk">Masuk</Link>.</p>
