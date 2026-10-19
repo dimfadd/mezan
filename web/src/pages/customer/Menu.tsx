@@ -6,6 +6,8 @@ import { api } from "../../lib/api";
 import { rupiah } from "../../lib/format";
 import { useApi } from "../../lib/hooks";
 import { TAG_LABEL } from "../store/types";
+import { ThemedRoot } from "../../components/ThemedRoot";
+import { DEFAULT_THEME, type MenuTheme } from "../../../../shared/menuTheme";
 
 interface Dish {
   id: string;
@@ -20,7 +22,7 @@ interface Dish {
   few_left: number | null;
 }
 interface MenuData {
-  store: { name: string; address: string; welcome_note: string; tax_rate: number; service_rate: number; accepting_orders: boolean };
+  store: { name: string; address: string; welcome_note: string; tax_rate: number; service_rate: number; accepting_orders: boolean; theme?: MenuTheme };
   table: { label: string; area: string };
   categories: { id: string; name: string }[];
   items: Dish[];
@@ -104,9 +106,12 @@ export function CustomerMenuPage() {
     );
   }
 
+  const theme = data.store.theme ?? DEFAULT_THEME;
   return (
+    <ThemedRoot theme={theme}>
     <div className="cust">
       <header className="cust-head">
+        {theme.logo && <img className="cust-logo" src={theme.logo} alt={`Logo ${data.store.name}`} />}
         <span className="table-tag">
           <UtensilsCrossed aria-hidden="true" /> {data.table.label}
           {data.table.area && ` · ${data.table.area}`}
@@ -217,6 +222,7 @@ export function CustomerMenuPage() {
         onClose={() => setCartOpen(false)}
       />
     </div>
+    </ThemedRoot>
   );
 }
 

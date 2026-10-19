@@ -12,7 +12,7 @@
     "start": "NODE_ENV=production tsx server/src/node.ts",
     "db:migrate": "tsx server/src/scripts/migrate.ts",
     "db:seed": "tsx server/src/scripts/seed.ts",
-    "db:reset": "rm -f data/mezan.db && npm run db:migrate && npm run db:seed",
+    "db:reset": "rm -f data/mezan.db data/mezan.db-wal data/mezan.db-shm && npm run db:migrate && npm run db:seed",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test server/test/*.test.ts"
   },

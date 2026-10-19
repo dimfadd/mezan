@@ -8,6 +8,7 @@ import { createOrder, loadOrderItems, restockCancelledOrder } from "../lib/order
 import { hashPassword, newId, randomCode } from "../lib/security";
 import { EXT, MEDIA_LIMITS } from "../lib/storage";
 import { analyticsRoutes } from "./analytics";
+import { checkTheme, normalizeTheme } from "../../../shared/menuTheme";
 
 export const storeRoutes = new Hono<Env>();
 
@@ -47,6 +48,20 @@ storeRoutes.put("/settings", mgmt, async (c) => {
     b.inventory_enabled, b.qr_ordering_enabled, b.logo_url, t.id,
   );
   return c.json({ ok: true });
+});
+
+// ---------- Tampilan menu (paket premium) ----------
+
+storeRoutes.put("/theme", mgmt, async (c) => {
+  const t = storeOf(c);
+  if (!t.allow_branding) fail(403, `Tampilan menu kustom belum termasuk di paket ${t.plan_name}.`);
+  const theme = normalizeTheme(await c.req.json());
+  checkMediaUrl(t.id, theme.bgImage);
+  checkMediaUrl(t.id, theme.logo);
+  const issues = checkTheme(theme);
+  if (issues.length) fail(400, issues[0].message);
+  await run(c.var.db, "UPDATE tenants SET menu_theme = ? WHERE id = ?", JSON.stringify(theme), t.id);
+  return c.json({ ok: true, theme });
 });
 
 // ---------- Kategori ----------
@@ -507,7 +522,7 @@ storeRoutes.put("/staff/:id", mgmt, async (c) => {
 storeRoutes.get("/subscription", mgmt, async (c) => {
   const t = storeOf(c);
   const payments = await all(c.var.db, "SELECT p.amount, p.months, p.method, p.created_at, p.period_end_after, pl.name AS plan_name FROM subscription_payments p JOIN plans pl ON pl.id = p.plan_id WHERE p.tenant_id = ? ORDER BY p.created_at DESC LIMIT 24", t.id);
-  const plans = await all(c.var.db, "SELECT id, name, price_monthly, max_tables, max_staff, allow_video, allow_inventory, allow_analytics FROM plans WHERE active = 1 ORDER BY sort, price_monthly");
+  const plans = await all(c.var.db, "SELECT id, name, price_monthly, max_tables, max_staff, allow_video, allow_inventory, allow_analytics, allow_branding FROM plans WHERE active = 1 ORDER BY sort, price_monthly");
   return c.json({ payments, plans });
 });
 

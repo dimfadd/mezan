@@ -170,6 +170,7 @@ const planSchema = z.object({
   allow_video: bool,
   allow_inventory: bool,
   allow_analytics: bool,
+  allow_branding: bool.default(0),
   active: bool,
   sort: z.number().int().min(0).max(100).default(0),
 });
@@ -178,8 +179,8 @@ platformRoutes.post("/plans", async (c) => {
   const b = planSchema.parse(await c.req.json());
   if (await first(c.var.db, "SELECT 1 FROM plans WHERE code = ?", b.code)) fail(409, "Kode paket sudah dipakai.");
   const id = newId();
-  await run(c.var.db, `INSERT INTO plans (id, code, name, price_monthly, max_tables, max_staff, allow_video, allow_inventory, allow_analytics, active, sort, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, id, b.code, b.name, b.price_monthly, b.max_tables, b.max_staff, b.allow_video, b.allow_inventory, b.allow_analytics, b.active, b.sort, Date.now());
+  await run(c.var.db, `INSERT INTO plans (id, code, name, price_monthly, max_tables, max_staff, allow_video, allow_inventory, allow_analytics, allow_branding, active, sort, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, id, b.code, b.name, b.price_monthly, b.max_tables, b.max_staff, b.allow_video, b.allow_inventory, b.allow_analytics, b.allow_branding, b.active, b.sort, Date.now());
   return c.json({ id }, 201);
 });
 
@@ -187,8 +188,8 @@ platformRoutes.put("/plans/:id", async (c) => {
   const b = planSchema.parse(await c.req.json());
   const dup = await first<{ id: string }>(c.var.db, "SELECT id FROM plans WHERE code = ?", b.code);
   if (dup && dup.id !== c.req.param("id")) fail(409, "Kode paket sudah dipakai.");
-  const n = await run(c.var.db, `UPDATE plans SET code=?, name=?, price_monthly=?, max_tables=?, max_staff=?, allow_video=?, allow_inventory=?, allow_analytics=?, active=?, sort=? WHERE id=?`,
-    b.code, b.name, b.price_monthly, b.max_tables, b.max_staff, b.allow_video, b.allow_inventory, b.allow_analytics, b.active, b.sort, c.req.param("id"));
+  const n = await run(c.var.db, `UPDATE plans SET code=?, name=?, price_monthly=?, max_tables=?, max_staff=?, allow_video=?, allow_inventory=?, allow_analytics=?, allow_branding=?, active=?, sort=? WHERE id=?`,
+    b.code, b.name, b.price_monthly, b.max_tables, b.max_staff, b.allow_video, b.allow_inventory, b.allow_analytics, b.allow_branding, b.active, b.sort, c.req.param("id"));
   if (!n) fail(404, "Paket tidak ditemukan.");
   return c.json({ ok: true });
 });

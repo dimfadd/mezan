@@ -7,3 +7,4 @@ export { StockPage } from "./Stock";
 export { StaffPage } from "./Staff";
 export { AccountPage, SettingsPage } from "./Settings";
 export { ReportsPage } from "./Reports";
+export { MenuDesignPage } from "./MenuDesign";

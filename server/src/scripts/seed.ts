@@ -33,9 +33,9 @@ const ins = (table: string, row: Record<string, unknown>) => {
 const main = async () => {
   // Harga paket di bawah ini contoh, ubah dari panel Admin > Paket.
   const plans = [
-    { code: "warung", name: "Warung", price_monthly: 49000, max_tables: 10, max_staff: 2, allow_video: 0, allow_inventory: 1, allow_analytics: 1, sort: 1 },
-    { code: "kafe", name: "Kafe", price_monthly: 99000, max_tables: 30, max_staff: 8, allow_video: 1, allow_inventory: 1, allow_analytics: 1, sort: 2 },
-    { code: "resto", name: "Resto", price_monthly: 199000, max_tables: 100, max_staff: 30, allow_video: 1, allow_inventory: 1, allow_analytics: 1, sort: 3 },
+    { code: "warung", name: "Warung", price_monthly: 49000, max_tables: 10, max_staff: 2, allow_video: 0, allow_inventory: 1, allow_analytics: 1, allow_branding: 0, sort: 1 },
+    { code: "kafe", name: "Kafe", price_monthly: 99000, max_tables: 30, max_staff: 8, allow_video: 1, allow_inventory: 1, allow_analytics: 1, allow_branding: 0, sort: 2 },
+    { code: "resto", name: "Resto", price_monthly: 199000, max_tables: 100, max_staff: 30, allow_video: 1, allow_inventory: 1, allow_analytics: 1, allow_branding: 1, sort: 3 },
   ];
   const planIds: Record<string, string> = {};
   for (const p of plans) {
@@ -48,7 +48,7 @@ const main = async () => {
 
   const tenantId = newId();
   ins("tenants", {
-    id: tenantId, slug: "warung-contoh", name: "Warung Contoh", kind: "warung", plan_id: planIds.kafe, status: "active",
+    id: tenantId, slug: "warung-contoh", name: "Warung Contoh", kind: "warung", plan_id: planIds.resto, status: "active",
     period_end: now + 20 * DAY, address: "Jl. Contoh No. 1", phone: "", tax_rate: 0, service_rate: 0,
     inventory_enabled: 1, qr_ordering_enabled: 1, tz_offset_minutes: TZ,
     welcome_note: "Pesan dari meja, bayar di kasir setelah makan.", created_at: now - 60 * DAY,
@@ -163,7 +163,7 @@ const main = async () => {
   insertOrder();
 
   ins("subscription_payments", {
-    id: newId(), tenant_id: tenantId, plan_id: planIds.kafe, amount: 99000, months: 1, method: "transfer",
+    id: newId(), tenant_id: tenantId, plan_id: planIds.resto, amount: 199000, months: 1, method: "transfer",
     note: "Contoh pembayaran", period_end_after: now + 20 * DAY, recorded_by: null, created_at: now - 10 * DAY,
   });
 

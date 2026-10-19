@@ -30,6 +30,8 @@ export interface StoreInfo {
   allow_video: number;
   allow_inventory: number;
   allow_analytics: number;
+  allow_branding: number;
+  menu_theme: string;
   locked: boolean;
   grace_days: number;
 }

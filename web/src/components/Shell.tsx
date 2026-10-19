@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
-  BarChart3, Boxes, ClipboardList, LogOut, Menu as MenuIcon, QrCode, Settings, ShoppingBasket, UserRound,
+  BarChart3, Boxes, ClipboardList, LogOut, Menu as MenuIcon, Palette, QrCode, Settings, ShoppingBasket, UserRound,
   Users, UtensilsCrossed, AlertTriangle,
 } from "lucide-react";
 import { isManagement, useSession } from "../lib/session";
@@ -138,6 +138,7 @@ function ShellInner() {
     { to: "/toko/kasir", label: "Kasir", icon: <ShoppingBasket /> },
     ...(mgmt ? [{ to: "/toko/laporan", label: "Laporan", icon: <BarChart3 /> }] : []),
     { to: "/toko/menu", label: mgmt ? "Menu & produk" : "Menu", short: "Menu", icon: <UtensilsCrossed /> },
+    ...(mgmt ? [{ to: "/toko/tampilan", label: "Tampilan menu", short: "Tampilan", icon: <Palette /> }] : []),
     ...(mgmt ? [{ to: "/toko/meja", label: "Meja & QR", short: "Meja", icon: <QrCode /> }] : []),
     ...(stockOn ? [{ to: "/toko/stok", label: "Stok", icon: <Boxes /> }] : []),
     ...(mgmt ? [{ to: "/toko/karyawan", label: "Karyawan", icon: <Users /> }] : []),

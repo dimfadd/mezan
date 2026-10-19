@@ -150,6 +150,7 @@ interface Plan {
   allow_video: number;
   allow_inventory: number;
   allow_analytics: number;
+  allow_branding: number;
   active: number;
   sort: number;
   tenant_count?: number;
@@ -420,7 +421,7 @@ export function AdminPlans() {
         <div className="panel flush">
           <div className="table-wrap">
             <table className="table">
-              <thead><tr><th>Paket</th><th className="r">Harga/bln</th><th className="r">Meja</th><th className="r">Karyawan</th><th>Video</th><th>Stok</th><th>Laporan</th><th className="r">Toko</th><th></th></tr></thead>
+              <thead><tr><th>Paket</th><th className="r">Harga/bln</th><th className="r">Meja</th><th className="r">Karyawan</th><th>Video</th><th>Stok</th><th>Laporan</th><th>Tampilan kustom</th><th className="r">Toko</th><th></th></tr></thead>
               <tbody>
                 {data.plans.map((p) => (
                   <tr key={p.id} style={!p.active ? { opacity: 0.6 } : undefined}>
@@ -431,6 +432,7 @@ export function AdminPlans() {
                     <td>{p.allow_video ? "Ya" : "Tidak"}</td>
                     <td>{p.allow_inventory ? "Ya" : "Tidak"}</td>
                     <td>{p.allow_analytics ? "Ya" : "Tidak"}</td>
+                    <td>{p.allow_branding ? "Ya" : "Template"}</td>
                     <td className="r num">{p.tenant_count}</td>
                     <td className="r"><button className="btn btn-sm" onClick={() => setEdit(p)}>Ubah</button></td>
                   </tr>
@@ -450,7 +452,7 @@ function PlanEditor({ plan, onClose, onDone }: { plan: Partial<Plan>; onClose: (
   const [f, setF] = useState({
     code: plan.code ?? "", name: plan.name ?? "", price_monthly: (plan.price_monthly ?? 0) as number | "",
     max_tables: plan.max_tables ?? 10, max_staff: plan.max_staff ?? 3, allow_video: !!plan.allow_video,
-    allow_inventory: !!plan.allow_inventory, allow_analytics: !!plan.allow_analytics, active: plan.active !== 0, sort: plan.sort ?? 0,
+    allow_inventory: !!plan.allow_inventory, allow_analytics: !!plan.allow_analytics, allow_branding: !!plan.allow_branding, active: plan.active !== 0, sort: plan.sort ?? 0,
   });
   const num = (v: string) => Number(v.replace(/\D/g, "") || 0);
   return (
@@ -479,6 +481,7 @@ function PlanEditor({ plan, onClose, onDone }: { plan: Partial<Plan>; onClose: (
         <Switch checked={f.allow_video} onChange={(v) => setF({ ...f, allow_video: v })} label="Boleh unggah video menu" hint="Video memakan penyimpanan & bandwidth paling besar." />
         <Switch checked={f.allow_inventory} onChange={(v) => setF({ ...f, allow_inventory: v })} label="Fitur stok" />
         <Switch checked={f.allow_analytics} onChange={(v) => setF({ ...f, allow_analytics: v })} label="Laporan analitik" />
+        <Switch checked={f.allow_branding} onChange={(v) => setF({ ...f, allow_branding: v })} label="Tampilan menu kustom" hint="Warna, font, logo, latar, dan tata letak galeri. Tanpa ini toko memakai template." />
         <Switch checked={f.active} onChange={(v) => setF({ ...f, active: v })} label="Tampil untuk pendaftar baru" hint="Paket yang disembunyikan tetap berlaku untuk toko yang sudah memakainya." />
       </div>
     </Modal>

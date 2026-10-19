@@ -15,7 +15,7 @@ npm run db:reset     # buat database lokal + isi data contoh
 npm run dev          # API di :8787, web di http://localhost:5173
 ```
 
-Akun data contoh (semua fiktif):
+Akun data contoh (semua fiktif, toko contoh memakai paket Resto supaya editor tampilan bisa dicoba):
 
 | Peran | Login | Kata sandi |
 |---|---|---|
@@ -38,6 +38,17 @@ npm start            # jalankan API + web hasil build dari satu server (port 878
 node tests/smoke.mjs out/   # screenshot semua halaman di ukuran HP/tablet/PC + cek error console
 ```
 
+## Dua kelas pelanggan
+
+| | UMKM (paket Warung, Kafe) | Bisnis besar (paket Resto) |
+|---|---|---|
+| Tampilan menu QR | Template Mezan | Bisa dipersonalisasi: 5 warna, font judul & isi (dikurasi), sudut kartu, tata letak daftar/galeri foto, logo, gambar latar |
+| Titik awal | | 5 gaya jadi (Kertas warung, Kopi susu, Malam, Laut, Bata) |
+
+Hak tampilan kustom diatur per paket lewat kolom `allow_branding` (Admin > Paket), jadi admin bisa memindahkan fitur ini ke paket mana pun tanpa ubah kode. Kalau toko turun paket, menu otomatis kembali ke template tanpa menghapus pengaturannya.
+
+Pengaman: kombinasi warna yang kontrasnya di bawah WCAG AA (4,5:1) ditolak di editor dan di server, karena menu yang tidak terbaca merugikan toko itu sendiri. Kustomisasi hanya berlaku di halaman pelanggan; layar kasir tetap memakai tampilan Mezan supaya karyawan tidak bingung. Aturan tema ada di `shared/menuTheme.ts` dan dipakai bersama server + web.
+
 ## Siapa bisa apa
 
 | Fitur | Pelanggan | Karyawan | Manajer | Pemilik | Admin Mezan |
@@ -48,6 +59,7 @@ node tests/smoke.mjs out/   # screenshot semua halaman di ukuran HP/tablet/PC + 
 | Tandai menu habis/tersedia | | ya | ya | ya | |
 | Lihat stok | | ya | ya | ya | |
 | Ubah menu, harga, foto, video, kategori | | | ya | ya | |
+| Atur tampilan menu (paket premium) | | | ya | ya | |
 | Meja & QR, catat stok masuk/rusak | | | ya | ya | |
 | Laporan penjualan & ekspor CSV | | | ya | ya | |
 | Kelola akun karyawan | | | karyawan saja | ya | |
@@ -93,8 +105,9 @@ Ini yang perlu ada sebelum Mezan dijual ke toko sungguhan:
 4. **Stok bahan baku/resep** (1 porsi nasi goreng = 200 g beras). Sekarang stok per produk jadi.
 5. **Lupa kata sandi lewat email** untuk pemilik. Sekarang reset dilakukan admin Mezan.
 6. **Uji di Cloudflare** (`worker.ts`) dan pembatas percobaan login berbasis Cloudflare (yang sekarang hanya di memori server).
-7. **Logo & ikon final.** Ikon PWA saat ini placeholder huruf "m".
-8. **Mode offline untuk kasir** (antre pesanan saat internet putus lalu kirim ulang).
+7. **Domain/subdomain sendiri untuk toko premium** (mis. menu.namaresto.com) dan font unggahan sendiri. Sekarang font dipilih dari daftar Google Fonts yang dikurasi.
+8. **Logo & ikon final.** Ikon PWA saat ini placeholder huruf "m".
+9. **Mode offline untuk kasir** (antre pesanan saat internet putus lalu kirim ulang).
 
 ## Pindah ke Cloudflare
 

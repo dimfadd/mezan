@@ -5,6 +5,17 @@ import { all, first } from "../db/types";
 import { TENANT_SELECT, tenantLocked, type Tenant } from "../lib/auth";
 import { fail } from "../lib/http";
 import { createOrder, loadOrderItems } from "../lib/orders";
+import { DEFAULT_THEME, normalizeTheme } from "../../../shared/menuTheme";
+
+// Paket tanpa branding (atau yang turun paket) otomatis kembali ke template bawaan.
+export function publicTheme(t: Tenant) {
+  if (!t.allow_branding) return DEFAULT_THEME;
+  try {
+    return normalizeTheme(JSON.parse(t.menu_theme || "{}"));
+  } catch {
+    return DEFAULT_THEME;
+  }
+}
 
 export const publicRoutes = new Hono<Env>();
 
@@ -43,6 +54,7 @@ publicRoutes.get("/table/:code", async (c) => {
       tax_rate: tenant.tax_rate,
       service_rate: tenant.service_rate,
       accepting_orders: !!tenant.qr_ordering_enabled && !locked,
+      theme: publicTheme(tenant),
     },
     table: { label: table.label, area: table.area },
     categories,
@@ -99,7 +111,7 @@ publicRoutes.post("/orders", async (c) => {
 publicRoutes.get("/orders/:token", async (c) => {
   const o = await first<Record<string, unknown> & { id: string; tenant_id: string }>(
     c.var.db,
-    `SELECT o.id, o.tenant_id, o.number, o.table_label, o.customer_name, o.status, o.payment_status, o.subtotal, o.tax, o.service,
+    `SELECT o.id, o.tenant_id, o.tenant_id AS tid, o.number, o.table_label, o.customer_name, o.status, o.payment_status, o.subtotal, o.tax, o.service,
             o.total, o.note, o.created_at, o.cancel_reason, t.name AS store_name, dt.code AS table_code
      FROM orders o JOIN tenants t ON t.id = o.tenant_id LEFT JOIN dining_tables dt ON dt.id = o.table_id
      WHERE o.public_token = ?`,
@@ -107,6 +119,7 @@ publicRoutes.get("/orders/:token", async (c) => {
   );
   if (!o) fail(404, "Pesanan tidak ditemukan.");
   const items = (await loadOrderItems(c.var.db, [o.id])).get(o.id) ?? [];
-  const { id: _id, tenant_id: _t, ...rest } = o;
-  return c.json({ order: { ...rest, items } });
+  const tenant = await first<Tenant>(c.var.db, `${TENANT_SELECT} WHERE t.id = ?`, o.tenant_id);
+  const { id: _id, tenant_id: _t, tid: _tid, ...rest } = o;
+  return c.json({ order: { ...rest, items }, theme: tenant ? publicTheme(tenant) : DEFAULT_THEME });
 });

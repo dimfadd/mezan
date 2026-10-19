@@ -160,3 +160,26 @@ test("CSRF: form lintas situs dan body non-JSON ditolak", async () => {
   const r2 = await app.request("/api/auth/login", { method: "POST", headers: { "content-type": "application/json", "sec-fetch-site": "cross-site" }, body: "{}" });
   assert.equal(r2.status, 403);
 });
+
+test("tampilan menu: template untuk paket biasa, kustom untuk premium, kontras buruk ditolak", async () => {
+  const { checkTheme, normalizeTheme, PRESETS, DEFAULT_THEME } = await import("../../shared/menuTheme");
+  for (const p of PRESETS) assert.deepEqual(checkTheme(normalizeTheme({ ...DEFAULT_THEME, ...p.theme })), [], `preset ${p.id} harus terbaca`);
+
+  const { call, login, db } = await setup();
+  const owner = await login("owner@t");
+  await call("POST", "/api/store/tables", { label: "M" }, owner);
+  const code = (db.raw.prepare("SELECT code FROM dining_tables").get() as { code: string }).code;
+  const custom = { ...DEFAULT_THEME, brand: "#6b3e26", headingFont: "playfair" };
+  assert.equal((await call("PUT", "/api/store/theme", custom, owner)).status, 403, "paket tanpa branding");
+
+  db.raw.prepare("UPDATE plans SET allow_branding = 1").run();
+  const bad = await call("PUT", "/api/store/theme", { ...custom, ink: "#dddddd" }, owner);
+  assert.equal(bad.status, 400);
+  assert.match(bad.json.error, /kontras/);
+  assert.equal((await call("PUT", "/api/store/theme", custom, owner)).status, 200);
+  assert.equal((await call("GET", `/api/public/table/${code}`)).json.store.theme.headingFont, "playfair");
+
+  // Turun paket: menu otomatis kembali ke template tanpa menghapus pengaturan.
+  db.raw.prepare("UPDATE plans SET allow_branding = 0").run();
+  assert.equal((await call("GET", `/api/public/table/${code}`)).json.store.theme.headingFont, "fraunces");
+});

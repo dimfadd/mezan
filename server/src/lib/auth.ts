@@ -39,6 +39,8 @@ export interface Tenant {
   allow_video: number;
   allow_inventory: number;
   allow_analytics: number;
+  allow_branding: number;
+  menu_theme: string;
 }
 
 export const COOKIE = "mezan_session";
@@ -47,7 +49,7 @@ export const GRACE_DAYS = 3;
 
 export const TENANT_SELECT = `
   SELECT t.*, p.name AS plan_name, p.code AS plan_code, p.max_tables, p.max_staff,
-         p.allow_video, p.allow_inventory, p.allow_analytics
+         p.allow_video, p.allow_inventory, p.allow_analytics, p.allow_branding
   FROM tenants t JOIN plans p ON p.id = t.plan_id`;
 
 // Toko terkunci kalau dinonaktifkan admin, atau langganan lewat lebih dari masa tenggang.

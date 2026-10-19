@@ -27,6 +27,7 @@ const StaffPage = lazyNamed(store, "StaffPage");
 const SettingsPage = lazyNamed(store, "SettingsPage");
 const AccountPage = lazyNamed(store, "AccountPage");
 const ReportsPage = lazyNamed(store, "ReportsPage");
+const MenuDesignPage = lazyNamed(store, "MenuDesignPage");
 const AdminShell = lazyNamed(admin, "AdminShell");
 const AdminOverview = lazyNamed(admin, "AdminOverview");
 const AdminTenants = lazyNamed(admin, "AdminTenants");
@@ -77,6 +78,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="stok" element={<StockPage />} />
                 <Route path="akun" element={<AccountPage />} />
                 <Route path="laporan" element={<Gate need="management"><ReportsPage /></Gate>} />
+                <Route path="tampilan" element={<Gate need="management"><MenuDesignPage /></Gate>} />
                 <Route path="meja" element={<Gate need="management"><TablesPage /></Gate>} />
                 <Route path="karyawan" element={<Gate need="management"><StaffPage /></Gate>} />
                 <Route path="pengaturan" element={<Gate need="management"><SettingsPage /></Gate>} />

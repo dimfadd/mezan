@@ -4,6 +4,8 @@ import { Check, ChefHat, ClipboardCheck, HandPlatter, XCircle } from "lucide-rea
 import { ErrorState, Loading } from "../../components/ui";
 import { rupiah, time } from "../../lib/format";
 import { useApi } from "../../lib/hooks";
+import { ThemedRoot } from "../../components/ThemedRoot";
+import { DEFAULT_THEME, type MenuTheme } from "../../../../shared/menuTheme";
 
 interface PublicOrder {
   number: number;
@@ -32,7 +34,7 @@ const STEPS = [
 
 export function OrderStatusPage() {
   const { code = "", token = "" } = useParams();
-  const { data, error, loading, reload } = useApi<{ order: PublicOrder }>(`/api/public/orders/${token}`, { poll: 5000 });
+  const { data, error, loading, reload } = useApi<{ order: PublicOrder; theme?: MenuTheme }>(`/api/public/orders/${token}`, { poll: 5000 });
   const o = data?.order;
   useEffect(() => {
     if (o) document.title = `Pesanan #${o.number} · ${o.store_name}`;
@@ -45,6 +47,7 @@ export function OrderStatusPage() {
   const cancelled = o.status === "cancelled";
 
   return (
+    <ThemedRoot theme={data?.theme ?? DEFAULT_THEME}>
     <div className="cust" style={{ padding: "20px 16px 40px" }}>
       <div className="stack" style={{ gap: 20 }}>
         <div>
@@ -111,5 +114,6 @@ export function OrderStatusPage() {
         )}
       </div>
     </div>
+    </ThemedRoot>
   );
 }
