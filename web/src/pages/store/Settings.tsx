@@ -36,10 +36,12 @@ export function SettingsPage() {
     qr_ordering_enabled: !!tenant.qr_ordering_enabled,
     logo_url: tenant.logo_url,
     google_review_url: tenant.google_review_url ?? "",
+    kitchen_lanes: tenant.kitchen_lanes ?? 3,
+    eta_enabled: tenant.eta_enabled !== 0,
   });
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    if (!f && tenant) setF({ ...tenant, inventory_enabled: !!tenant.inventory_enabled, qr_ordering_enabled: !!tenant.qr_ordering_enabled, google_review_url: tenant.google_review_url ?? "" });
+    if (!f && tenant) setF({ ...tenant, inventory_enabled: !!tenant.inventory_enabled, qr_ordering_enabled: !!tenant.qr_ordering_enabled, google_review_url: tenant.google_review_url ?? "", kitchen_lanes: tenant.kitchen_lanes ?? 3, eta_enabled: tenant.eta_enabled !== 0 });
   }, [tenant, f]);
   if (!tenant || !f) return <Loading />;
 
@@ -132,6 +134,22 @@ export function SettingsPage() {
                 label="Catat stok barang"
                 hint={tenant.allow_inventory ? "Opsional. Nyalakan kalau kamu ingin stok berkurang otomatis tiap terjual dan diingatkan saat menipis." : `Belum termasuk di paket ${tenant.plan_name}.`}
               />
+            </div>
+          </section>
+
+          <section className="panel">
+            <div className="panel-head">
+              <div>
+                <h2>Perkiraan siap untuk pembeli</h2>
+                <p>Halaman pesanan pembeli menampilkan antrean ke-berapa dan perkiraan siap dalam menit. Hitungannya dari waktu saji tiap menu (atau rata-rata lama masak tokomu kalau belum diisi) dan jumlah pesanan di depannya.</p>
+              </div>
+            </div>
+            <div className="stack">
+              <Switch checked={f.eta_enabled} onChange={(v) => setF({ ...f, eta_enabled: v })} label="Tampilkan antrean & perkiraan siap" />
+              <Field label="Pesanan yang bisa dimasak bersamaan" htmlFor="s-lanes" hint="Misalnya 1 untuk gerobak dengan satu wajan, 3 sampai 5 untuk dapur resto. Makin kecil, perkiraan makin panjang saat ramai.">
+                <input id="s-lanes" className="input num" inputMode="numeric" style={{ maxWidth: 120 }} disabled={!f.eta_enabled} value={f.kitchen_lanes}
+                  onChange={(e) => setF({ ...f, kitchen_lanes: Math.min(20, Math.max(1, Number(e.target.value.replace(/\D/g, "")) || 1)) })} />
+              </Field>
             </div>
           </section>
 

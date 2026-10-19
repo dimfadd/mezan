@@ -98,6 +98,15 @@ Pengaman: kombinasi warna yang kontrasnya di bawah WCAG AA (4,5:1) ditolak di ed
 - **Kas & shift**: buka shift dengan modal awal, catat uang keluar/masuk laci, tutup dengan menghitung uang. Isi laci seharusnya = modal + penjualan tunai (dari waktu bayar) + masuk - keluar; selisih tersimpan saat tutup. Satu shift terbuka per toko. Riwayat hanya untuk pemilik/manajer. Kasir diingatkan (tidak dipaksa) kalau shift belum dibuka.
 - **Layar dapur per bagian**: kategori diarahkan ke Dapur atau Bar (kategori bernama minuman/kopi/teh otomatis ke Bar). Tiket menampilkan waktu sejak diterima, berubah kuning saat lewat waktu saji menu dan merah di 1,5x. Item dicentang satu per satu; kalau semua bagian selesai, pesanan otomatis jadi "Siap diantar". Bisa layar penuh untuk tablet di dapur.
 
+## Antrean dapur dan perkiraan siap untuk pembeli
+
+Halaman pesanan pembeli (`/m/<kode>/pesanan/<token>` dan `/struk/<token>`) menampilkan antrean ke-berapa, jumlah pesanan di depan, dan perkiraan siap sebagai rentang menit plus jam. Hitungannya ada di `server/src/lib/eta.ts`:
+
+- Lama masak satu pesanan = waktu saji terlama dari item yang belum selesai (item dimasak berbarengan). Menu tanpa waktu saji memakai median lama masak toko itu 30 hari terakhir (`orders.ready_at - accepted_at`, minimal 8 data), atau 10 menit.
+- Dapur mengerjakan beberapa pesanan sekaligus (Pengaturan, "Pesanan yang bisa dimasak bersamaan", bawaan 3). Pesanan diurutkan seperti layar dapur: yang sudah diterima dulu, lalu yang menunggu kasir. Tiap pesanan menempati slot yang paling cepat kosong.
+- Hasilnya rentang (85% sampai 120%), bukan janji. Kalau sudah lewat perkiraan, pembeli melihat "Sedikit lebih lama dari perkiraan", bukan angka nol atau minus. Pesanan aktif yang lebih tua dari 12 jam tidak ikut dihitung.
+- Pemilik bisa mematikannya di Pengaturan. Akurasinya bergantung pada kasir yang menandai pesanan "Siap" tepat waktu: pesanan yang lupa ditutup membuat antrean terlihat lebih panjang.
+
 ## Pelanggan: stempel, ulasan, antrean
 
 - **Kartu stempel lewat nomor HP**: kasir mengetik nomor saat menerima bayar (kartu langsung tampil, hadiah bisa ditukar di situ). Pembeli QR bisa mengambil stempel sendiri dari halaman pesanan setelah dibayar (sampai 24 jam). Satu pesanan = maksimal satu stempel (indeks unik), ada minimal belanja. Nomor HP tidak dikirim balik ke halaman publik.
@@ -118,9 +127,9 @@ Pengaman: kombinasi warna yang kontrasnya di bawah WCAG AA (4,5:1) ditolak di ed
 Halaman depan (`web/src/pages/public/landing/`) memperagakan aplikasi lewat animasi, bukan klaim:
 
 - **Simulasi satu pesanan** dari Meja 4: pindai QR, lihat galeri, tambah catatan, kirim, tiket masuk ke kasir, dibuat, dibayar, omzet bertambah. HP pembeli dan layar kasir bergerak bersamaan. Di HP hanya satu layar yang tampil bergantian.
-- **Tab fitur** yang berpindah sendiri (kasir, stok, laporan, tampilan brand, dua bahasa, hak akses), masing-masing dengan peraga kecil. Tampilan brand memakai preset asli dari `shared/menuTheme.ts`, dua bahasa memakai kamus asli dari `shared/i18n.ts`.
+- **Tab fitur dasar** yang berpindah sendiri (kasir, stok, laporan, tampilan brand, dua bahasa, hak akses), masing-masing dengan peraga kecil. Tampilan brand memakai preset asli dari `shared/menuTheme.ts`, dua bahasa memakai kamus asli dari `shared/i18n.ts`.
 - Animasi berhenti saat tidak terlihat atau tab browser disembunyikan, bisa dijeda, dan langsung diam (bisa diklik per langkah) kalau perangkat meminta gerak dikurangi.
-- Bagian "Hal kecil yang terasa di meja" dan "Yang menjaga dapur dan laci tetap rapi" memperagakan fitur meja (panggil pelayan, pesan bareng, stempel, antrean, mode video, pasangan, jam & happy hour, struk & rating) dan fitur operasional (layar dapur, kasir offline, shift, modal & untung).
+- Urutan halaman disusun untuk meyakinkan pemilik: simulasi satu pesanan, lalu sorotan antrean & perkiraan siap ("Tidak ada lagi 'masih lama, Kak?'"), lalu "Yang membuat pembeli betah dan kembali" (mode video, panggil pelayan, pesan bareng, stempel, struk & rating, QR bawa pulang, antrean saat penuh, bagi tagihan), lalu "Untung lebih jelas, kebocoran lebih sedikit" (modal & untung, pasangan, jam & happy hour, best seller, layar dapur, kasir offline, shift, pengaman lokasi, QR berlogo), dan terakhir tab fitur dasar.
 - Dimuat terpisah dari menu QR, jadi pembeli yang memindai QR tidak ikut mengunduhnya.
 
 ## Siapa bisa apa

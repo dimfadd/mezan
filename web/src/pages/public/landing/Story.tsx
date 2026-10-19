@@ -14,7 +14,7 @@ const STEPS: { key: Key; who: string; title: string; body: string; dur: number; 
   { key: "add", who: "Pembeli", title: "Tambah dengan catatan", body: "Pilih jumlah dan catatan cepat seperti \"Pedas sedikit\".", dur: 3300, focus: "phone" },
   { key: "send", who: "Pembeli", title: "Kirim pesanan", body: "Cukup isi nama. Bayarnya tetap di kasir.", dur: 2900, focus: "phone" },
   { key: "in", who: "Kasir", title: "Pesanan masuk dan berbunyi", body: "Tiket muncul lengkap dengan nomor antrean, meja, dan catatan.", dur: 3300, focus: "board" },
-  { key: "cook", who: "Dapur", title: "Terima, lalu buat", body: "Status di HP pembeli ikut berubah. Pelayan tidak perlu ditanya berulang kali.", dur: 3300, focus: "board" },
+  { key: "cook", who: "Dapur", title: "Terima, lalu buat", body: "Status di HP pembeli ikut berubah, lengkap dengan antrean dan perkiraan siapnya.", dur: 3300, focus: "board" },
   { key: "pay", who: "Kasir", title: "Antar dan terima bayar", body: "Tunai, QRIS, atau transfer. Omzet hari ini langsung bertambah di laporan.", dur: 4400, focus: "board" },
 ];
 const at = (k: Key) => STEPS.findIndex((s) => s.key === k);
@@ -299,6 +299,12 @@ function StatusScreen({ k, running }: { k: Key; running: boolean }) {
         <span className="lp-st-sub">Meja 4 · Sari · 12:41</span>
         <span className={`lp-badge ${paid ? "ok" : "warn"}`}>{paid ? "Sudah dibayar" : "Bayar di kasir"}</span>
       </div>
+      {idx < 2 && (
+        <div className="lp-st-eta" key={idx}>
+          <span className="pill">Antrean ke-2</span>
+          <span>Perkiraan siap <b>{idx === 0 ? "10–14" : "7–10"} menit</b></span>
+        </div>
+      )}
       <ol className="lp-st-steps">
         {STATUS.map(([t, b], i) => (
           <li key={t} className={i < idx ? "done" : i === idx ? "on" : ""}>

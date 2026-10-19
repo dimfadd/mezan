@@ -217,6 +217,8 @@ export async function seedDemo(db: DB): Promise<boolean> {
           created_by: source === "pos" ? staff1 : null, paid_by: paid ? pick([staff1, staff1, manager]) : null,
           created_at: ts, updated_at: ts, paid_at: paid ? ts + 30 * 60_000 : null,
           accepted_at: status === "new" ? null : ts + 60_000,
+          // Lama masak 8–16 menit (tanpa rand supaya urutan data contoh lain tidak bergeser).
+          ready_at: status === "done" || status === "ready" ? ts + 60_000 + (8 + (number % 9)) * 60_000 : null,
         });
         for (const [itemId, qty] of lines) {
           const it = items.find((i) => i.id === itemId)!;

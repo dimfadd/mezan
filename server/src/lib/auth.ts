@@ -57,6 +57,8 @@ export interface Tenant {
   loyalty_reward: string;
   waitlist_enabled: number;
   waitlist_code: string | null;
+  kitchen_lanes: number;
+  eta_enabled: number;
 }
 
 export const COOKIE = "mezan_session";

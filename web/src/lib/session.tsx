@@ -60,6 +60,8 @@ export interface StoreInfo {
   loyalty_reward: string;
   waitlist_enabled: number;
   waitlist_code: string | null;
+  kitchen_lanes: number;
+  eta_enabled: number;
   tz_offset_minutes: number;
   locked: boolean;
   grace_days: number;

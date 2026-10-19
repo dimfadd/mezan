@@ -210,10 +210,18 @@ const api = async (p, method, path, body) =>
   await p.locator("dialog[open] .modal-foot .btn-primary").click();
   await p.waitForURL(/pesanan/);
   const token = p.url().split("/").pop();
+  await p.waitForSelector(".eta-box");
+  const eta = await p.locator(".eta-box").innerText();
+  check(/(Antrean ke-|Queue #)\d+/.test(eta) && /\d+–\d+ (menit|min)|Sebentar lagi|Any moment/.test(eta), `perkiraan siap: antrean & menit tampil (${eta.replace(/\n/g, " · ").slice(0, 70)})`);
+  await p.screenshot({ path: `${OUT}/10b-perkiraan-siap-hp.png` });
   const { c: ck, p: pk } = await ctx();
   await login(pk, "kasir@contoh.id");
   const o = (await api(pk, "GET", "/api/store/orders?scope=active")).json.orders.find((x) => x.customer_name === "Uji Nilai");
-  for (const s of ["preparing", "ready", "done"]) await api(pk, "PATCH", `/api/store/orders/${o.id}/status`, { status: s });
+  await api(pk, "PATCH", `/api/store/orders/${o.id}/status`, { status: "preparing" });
+  await p.reload();
+  await p.waitForSelector(".eta-box");
+  check(/Sedang dimasak|pesanan di depanmu|Cooking now|ahead of you/.test(await p.locator(".eta-box").innerText()), "perkiraan siap: berubah setelah kasir menerima");
+  for (const s of ["ready", "done"]) await api(pk, "PATCH", `/api/store/orders/${o.id}/status`, { status: s });
   await api(pk, "PATCH", `/api/store/orders/${o.id}/pay`, { method: "qris", amountReceived: null });
   await p.reload();
   await p.waitForSelector(".stars");
@@ -250,7 +258,7 @@ const api = async (p, method, path, body) =>
   await pg.waitForSelector(".wait-no");
   const no = await pg.locator(".wait-no").innerText();
   check(/^A\d+$/.test(no.trim()), `antrean: tamu dapat nomor ${no.trim()}`);
-  check(/rombongan di depanmu|parties ahead|party ahead/.test(await pg.locator(".wait-card").innerText()), "antrean: posisi tampil");
+  check(/rombongan di depanmu|Kamu berikutnya|parties ahead|party ahead|You.re next/.test(await pg.locator(".wait-card").innerText()), "antrean: posisi tampil");
   await pg.screenshot({ path: `${OUT}/13-antre-tunggu-hp.png` });
 
   const { c, p } = await ctx();

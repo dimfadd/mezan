@@ -46,6 +46,8 @@ const settingsSchema = z.object({
     .default("")
     .refine((v) => v === "" || /^https:\/\/([a-z0-9-]+\.)*(google\.[a-z.]+|goo\.gl|g\.page)\//i.test(v), "Tautan ulasan harus tautan Google Maps (diawali https://g.page/, https://maps.app.goo.gl/, atau https://www.google.com/).")
     .optional(),
+  kitchen_lanes: z.number().int().min(1).max(20).optional(),
+  eta_enabled: bool.optional(),
 });
 
 storeRoutes.put("/settings", mgmt, async (c) => {
@@ -56,9 +58,10 @@ storeRoutes.put("/settings", mgmt, async (c) => {
   await run(
     c.var.db,
     `UPDATE tenants SET name=?, kind=?, address=?, phone=?, welcome_note=?, welcome_note_en=?, tax_rate=?, service_rate=?,
-       inventory_enabled=?, qr_ordering_enabled=?, logo_url=?, google_review_url=? WHERE id=?`,
+       inventory_enabled=?, qr_ordering_enabled=?, logo_url=?, google_review_url=?, kitchen_lanes=?, eta_enabled=? WHERE id=?`,
     b.name, b.kind, b.address, b.phone, b.welcome_note, b.welcome_note_en, b.tax_rate, b.service_rate,
-    b.inventory_enabled, b.qr_ordering_enabled, b.logo_url, b.google_review_url ?? t.google_review_url, t.id,
+    b.inventory_enabled, b.qr_ordering_enabled, b.logo_url, b.google_review_url ?? t.google_review_url,
+    b.kitchen_lanes ?? t.kitchen_lanes, b.eta_enabled ?? t.eta_enabled, t.id,
   );
   return c.json({ ok: true });
 });
@@ -538,9 +541,11 @@ storeRoutes.patch("/orders/:id/status", async (c) => {
   }
   const now = Date.now();
   const s: Stmt[] = [
-    stmt(c.var.db, `UPDATE orders SET status = ?, cancel_reason = ?, updated_at = ?, accepted_at = COALESCE(accepted_at, CASE WHEN ? = 'preparing' THEN ? END)
+    // ready_at dicatat sekali saat pesanan pertama kali siap, dipakai untuk belajar lama masak toko ini.
+    stmt(c.var.db, `UPDATE orders SET status = ?, cancel_reason = ?, updated_at = ?, accepted_at = COALESCE(accepted_at, CASE WHEN ? = 'preparing' THEN ? END),
+                      ready_at = CASE WHEN ? = 'preparing' THEN NULL WHEN ? IN ('ready','done') AND ? = 'preparing' THEN COALESCE(ready_at, ?) ELSE ready_at END
                     WHERE id = ? AND status = ?${b.status === "cancelled" && !MANAGEMENT.includes(c.var.user!.role) ? " AND payment_status = 'unpaid'" : ""}`,
-      b.status, b.status === "cancelled" ? b.reason ?? "" : null, now, b.status, now, o.id, o.status),
+      b.status, b.status === "cancelled" ? b.reason ?? "" : null, now, b.status, now, b.status, b.status, o.status, now, o.id, o.status),
   ];
   if (b.status === "cancelled") s.push(...(await restockCancelledOrder(c.var.db, t.id, o.id, c.var.user!.id)));
   await c.var.db.batch(s);

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Check, ChefHat, ClipboardCheck, HandPlatter, XCircle, Star, ThumbsUp, ThumbsDown, Stamp, ExternalLink } from "lucide-react";
+import { Check, ChefHat, ClipboardCheck, HandPlatter, XCircle, Star, ThumbsUp, ThumbsDown, Stamp, ExternalLink, Timer } from "lucide-react";
 import { ErrorState, Field, Loading, useToast } from "../../components/ui";
 import { api } from "../../lib/api";
 import { rupiah, time } from "../../lib/format";
@@ -42,6 +42,16 @@ interface PublicOrder {
   source?: string;
   items: { id: string; menu_item_id: string | null; name: string; name_en: string; qty: number; price: number; note: string; list_price?: number | null }[];
 }
+interface Eta {
+  position: number;
+  ahead: number;
+  ready_at: number;
+  low_min: number;
+  high_min: number;
+  late: boolean;
+  accepted: boolean;
+  now: number;
+}
 interface Feedback {
   sent: boolean;
   rating: number | null;
@@ -64,7 +74,7 @@ const STEPS = [
 export function OrderStatusPage() {
   const { code = "", token = "" } = useParams();
   const { lang, setLang, t } = useLang();
-  const { data, error, loading, reload } = useApi<{ order: PublicOrder; theme?: MenuTheme; feedback?: Feedback; loyalty?: Loyalty | null }>(`/api/public/orders/${token}?lang=${lang}`, { poll: 5000 });
+  const { data, error, loading, reload } = useApi<{ order: PublicOrder; theme?: MenuTheme; feedback?: Feedback; loyalty?: Loyalty | null; eta?: Eta | null }>(`/api/public/orders/${token}?lang=${lang}`, { poll: 5000 });
   const o = data?.order;
   useEffect(() => {
     if (o) document.title = `${t.orderNo(o.number)} · ${o.store_name}`;
@@ -91,6 +101,8 @@ export function OrderStatusPage() {
           <h1 style={{ fontFamily: "var(--font-menu)", fontSize: "2rem", marginTop: 4 }}>{t.orderNo(o.number)}</h1>
           <p className="muted small">{t.forName(o.customer_name || "-", time(o.created_at))}</p>
         </div>
+
+        {!cancelled && data?.eta && <EtaBox eta={data.eta} createdAt={o.created_at} />}
 
         {cancelled ? (
           <div className="banner danger" role="status">
@@ -164,6 +176,30 @@ export function OrderStatusPage() {
       </div>
     </div>
     </ThemedRoot>
+  );
+}
+
+/** Antrean ke-berapa dan perkiraan siap. Angkanya dari server, diperbarui setiap polling. */
+function EtaBox({ eta, createdAt }: { eta: Eta; createdAt: number }) {
+  const { lang, t } = useLang();
+  const at = lang === "en" ? time(eta.ready_at).replace(".", ":") : time(eta.ready_at);
+  const span = Math.max(1, eta.ready_at - createdAt);
+  const pct = Math.min(96, Math.max(4, ((eta.now - createdAt) / span) * 100));
+  const soon = eta.high_min <= 3;
+  return (
+    <section className={`eta-box${eta.late ? " late" : ""}`} aria-labelledby="eta-h" aria-live="polite">
+      <div className="eta-top">
+        <span className="eta-pill num">{t.etaQueue(eta.position)}</span>
+        <span className="eta-ahead small">{eta.accepted && eta.ahead === 0 ? t.etaCooking : t.etaAhead(eta.ahead)}</span>
+      </div>
+      <h2 id="eta-h" className="eta-label small">
+        <Timer aria-hidden="true" /> {t.etaTitle}
+      </h2>
+      <p className="eta-big num">{eta.late || soon ? t.etaSoon : t.etaRange(eta.low_min, eta.high_min)}</p>
+      {!eta.late && !soon && <p className="small muted">{t.etaAt(at)}</p>}
+      <div className="eta-bar" role="presentation"><span style={{ width: `${pct}%` }} /></div>
+      <p className="tiny muted">{eta.late ? t.etaLate : !eta.accepted ? t.etaWaitAccept : t.etaNote}</p>
+    </section>
   );
 }
 

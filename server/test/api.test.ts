@@ -634,3 +634,50 @@ test("saran pasangan & margin: pasangan pilihan pemilik tampil di menu, modal te
   assert.equal(m.cost, 18000);
   assert.equal(rep.json.costCoverage.costed, 2);
 });
+
+import { simulate } from "../src/lib/eta";
+
+test("perkiraan siap: slot dapur dibagi, antrean ke-berapa, waktu siap tercatat, bisa dimatikan", async () => {
+  // Simulasi murni: 2 slot, tiga pesanan 10 menit yang belum dimasak.
+  const now = 1_000_000_000;
+  const q = ["a", "b", "c"].map((id) => ({ id, status: "new", created_at: now, accepted_at: null, prepMin: 10 }));
+  assert.equal(simulate(q, "a", 2, now)!.finish, now + 11 * 60_000);
+  assert.equal(simulate(q, "b", 2, now)!.finish, now + 11 * 60_000, "dua pesanan dimasak bersamaan");
+  assert.equal(simulate(q, "c", 2, now)!.finish, now + 22 * 60_000, "pesanan ketiga menunggu slot kosong");
+  assert.equal(simulate(q, "c", 1, now)!.position, 3);
+
+  const { call, login, db, tenantId } = await setup();
+  const owner = await login("owner@t");
+  const kasir = await login("kasir@t");
+  db.raw.prepare("UPDATE tenants SET kitchen_lanes = 1 WHERE id = ?").run(tenantId);
+  const mie = await call("POST", "/api/store/items", { category_id: null, name: "Mie", price: 15000, prep_minutes: 8 }, owner);
+  const teh = await call("POST", "/api/store/items", { category_id: null, name: "Teh", price: 5000 }, owner);
+  const o1 = await call("POST", "/api/store/orders", { orderType: "takeaway", items: [{ id: mie.json.id, qty: 1 }] }, kasir);
+  const o2 = await call("POST", "/api/store/orders", { orderType: "takeaway", items: [{ id: mie.json.id, qty: 1 }, { id: teh.json.id, qty: 1 }] }, kasir);
+  const tok = (id: string) => (db.raw.prepare("SELECT public_token FROM orders WHERE id = ?").get(id) as { public_token: string }).public_token;
+
+  const s1 = (await call("GET", `/api/public/orders/${tok(o1.json.id)}`)).json.eta;
+  const s2 = (await call("GET", `/api/public/orders/${tok(o2.json.id)}`)).json.eta;
+  assert.equal(s1.position, 1);
+  assert.equal(s1.accepted, true, "pesanan kasir langsung dimasak");
+  assert.equal(s2.position, 2);
+  assert.equal(s2.ahead, 1);
+  assert.ok(s2.ready_at - s2.now >= 15 * 60_000, "satu slot: menunggu pesanan pertama 8 menit, lalu 8 menit lagi");
+  assert.ok(s2.low_min < s2.high_min);
+
+  // Siap: tidak ada perkiraan lagi, waktu siap tercatat, antrean di belakangnya maju.
+  assert.equal((await call("PATCH", `/api/store/orders/${o1.json.id}/status`, { status: "ready" }, kasir)).status, 200);
+  const r = db.raw.prepare("SELECT ready_at FROM orders WHERE id = ?").get(o1.json.id) as { ready_at: number | null };
+  assert.ok(r.ready_at, "ready_at tercatat");
+  assert.equal((await call("GET", `/api/public/orders/${tok(o1.json.id)}`)).json.eta, null);
+  assert.equal((await call("GET", `/api/public/orders/${tok(o2.json.id)}`)).json.eta.position, 1);
+
+  // Kembali ke dimasak menghapus ready_at; pemilik bisa mematikan perkiraan.
+  await call("PATCH", `/api/store/orders/${o1.json.id}/status`, { status: "preparing" }, kasir);
+  assert.equal((db.raw.prepare("SELECT ready_at FROM orders WHERE id = ?").get(o1.json.id) as { ready_at: number | null }).ready_at, null);
+  const set = (await call("GET", "/api/store/settings", undefined, owner)).json.tenant;
+  const put = await call("PUT", "/api/store/settings", { ...set, google_review_url: "", eta_enabled: false, kitchen_lanes: 4 }, owner);
+  assert.equal(put.status, 200);
+  assert.equal((await call("GET", `/api/public/orders/${tok(o2.json.id)}`)).json.eta, null);
+  assert.equal((db.raw.prepare("SELECT kitchen_lanes FROM tenants WHERE id = ?").get(tenantId) as { kitchen_lanes: number }).kitchen_lanes, 4);
+});

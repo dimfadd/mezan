@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Calculator, Check, ChefHat, Wallet, Wifi, WifiOff } from "lucide-react";
+import { Calculator, Check, ChefHat, Clock3, MapPin, Sparkles, ThumbsUp, Wallet, Wifi, WifiOff } from "lucide-react";
+import { AppIcon } from "./art";
+import { HappyDemo, PairDemo } from "./MoreDemos";
 import { rupiah } from "../../../lib/format";
-import { Card } from "./Extras";
+import { BestDemo, Card, GeoDemo, QrDemo } from "./Extras";
 import { useCountUp, useReducedMotion, useStepper, useVisible } from "./motion";
 
-// Bagian operasional: kasir offline, shift & laci, layar dapur, modal & untung per menu.
+// Sisi pemilik: yang menambah untung dulu, lalu yang menjaga dapur, laci, dan pesanan tetap rapi.
 export function Ops() {
   const root = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
@@ -12,6 +14,18 @@ export function Ops() {
   const on = visible && !reduce;
   return (
     <div ref={root} className={`lp-bento${on ? "" : " is-still"}`}>
+      <Card className="span2" icon={<Calculator />} title="Modal & untung per menu" body="Isi modal per porsi. Laporan memilah menu jadi Andalan, Laris tapi tipis, Untung tapi jarang, dan Perlu dievaluasi, lengkap dengan persentase untungnya.">
+        <MarginDemo on={on} />
+      </Card>
+      <Card icon={<Sparkles />} title="Saran pasangan menu" body="Pesan ayam geprek, muncul es teh. Pasangannya bisa diatur pemilik, atau diambil dari menu yang sering dipesan bareng.">
+        <PairDemo on={on} />
+      </Card>
+      <Card className="span2" icon={<Clock3 />} title="Menu & harga ikut jam" body="Menu sarapan hanya bisa dipesan pagi. Happy hour memotong harga sendiri pada jamnya, di menu QR dan di kasir.">
+        <HappyDemo on={on} />
+      </Card>
+      <Card icon={<ThumbsUp />} title="Best seller & tampilan kotak" body="Stempel jempol untuk menu terlaris. Pembeli bebas pilih tampilan daftar atau kotak.">
+        <BestDemo on={on} />
+      </Card>
       <Card className="span2" icon={<ChefHat />} title="Layar dapur per bagian" body="Makanan masuk ke layar dapur, minuman ke bar. Waktu tunggu berubah warna kalau lewat perkiraan saji. Begitu semua item dicentang, pesanan otomatis jadi Siap diantar.">
         <KdsDemo on={on} />
       </Card>
@@ -21,8 +35,11 @@ export function Ops() {
       <Card icon={<Wallet />} title="Shift kasir & rekap laci" body="Buka dengan modal awal, catat kas masuk dan keluar, hitung uang saat tutup. Selisihnya langsung terlihat, lengkap dengan siapa yang bertugas.">
         <ShiftDemo on={on} />
       </Card>
-      <Card className="span2" icon={<Calculator />} title="Modal & untung per menu" body="Isi modal per porsi. Laporan memilah menu jadi Andalan, Laris tapi tipis, Untung tapi jarang, dan Perlu dievaluasi, lengkap dengan persentase untungnya.">
-        <MarginDemo on={on} />
+      <Card icon={<MapPin />} title="Pengaman lokasi" body="Pesanan dari luar radius toko ditandai atau ditolak. QR yang difoto lalu dipakai dari rumah tidak lolos diam-diam.">
+        <GeoDemo />
+      </Card>
+      <Card icon={<AppIcon size={18} />} title="QR berlogo pesan.in" body="Kode acak per meja yang tidak bisa ditebak, dengan logo di tengah dan tetap terbaca kamera HP biasa.">
+        <QrDemo />
       </Card>
     </div>
   );

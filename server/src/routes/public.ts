@@ -7,6 +7,7 @@ import { fail } from "../lib/http";
 import { createOrder, loadOrderItems, loadPriceRules } from "../lib/orders";
 import { attachPairs } from "../lib/pairs";
 import { awardStamp, memberCard, normalizePhone } from "../lib/loyalty";
+import { orderEta } from "../lib/eta";
 import { businessDay } from "../lib/http";
 import { randomToken } from "../lib/security";
 import { loadGalleries } from "../lib/gallery";
@@ -205,9 +206,11 @@ publicRoutes.get("/orders/:token", async (c) => {
     const m = await first<{ phone: string }>(c.var.db, "SELECT phone FROM loyalty_members WHERE id = ?", o.member_id);
     if (m) card = await memberCard(c.var.db, tenant, m.phone);
   }
+  const eta = tenant ? await orderEta(c.var.db, tenant, o.id, String(o.status)) : null;
   const { id: _id, tenant_id: _t, tid: _tid, member_id: _m, ...rest } = o;
   return c.json({
     order: { ...rest, items: itemsOut },
+    eta,
     theme: tenant ? publicTheme(tenant) : DEFAULT_THEME,
     feedback: { sent: !!fb, rating: fb?.rating ?? null, review_url: tenant?.google_review_url || null },
     loyalty: tenant?.loyalty_enabled

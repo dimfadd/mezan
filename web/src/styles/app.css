@@ -636,6 +636,20 @@ dialog.modal[open] { display: flex; flex-direction: column; animation: pop 0.16s
 .status-steps .label { font-weight: 700; padding-top: 3px; }
 .status-steps .todo .label { color: var(--ink-3); }
 
+/* ---------- Perkiraan siap (halaman status pembeli) ---------- */
+.eta-box { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 16px; display: grid; gap: 6px; }
+.eta-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+.eta-pill { background: var(--brand); color: var(--brand-ink); font-weight: 750; padding: 4px 12px; border-radius: 999px; font-size: 0.9rem; }
+.eta-ahead { color: var(--ink-2); font-weight: 600; }
+.eta-label { display: flex; gap: 6px; align-items: center; color: var(--ink-2); font-weight: 650; font-size: 0.85rem; }
+.eta-label svg { width: 16px; height: 16px; }
+.eta-big { font-family: var(--font-menu); font-size: 2.1rem; font-weight: 700; line-height: 1.1; }
+.eta-bar { height: 8px; border-radius: 999px; background: var(--paper); border: 1px solid var(--line); overflow: hidden; margin: 6px 0 2px; }
+.eta-bar span { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width 600ms ease; }
+.eta-box.late { border-color: var(--warn-text); }
+.eta-box.late .eta-bar span { background: var(--warn-text); }
+@media (prefers-reduced-motion: reduce) { .eta-bar span { transition: none; } }
+
 /* ---------- Blok isian bahasa Inggris (editor menu) ---------- */
 .en-block { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; background: var(--paper); }
 .en-block summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }

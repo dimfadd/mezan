@@ -6,6 +6,7 @@ import { Story } from "./Story";
 import { Features } from "./Features";
 import { Extras } from "./Extras";
 import { Ops } from "./Ops";
+import { EtaSpotlight } from "./Eta";
 import "../../../styles/landing.css";
 
 function homeFor(role?: string) {
@@ -35,7 +36,7 @@ export function LandingPage() {
           Pelanggan lihat dulu wujudnya, <span className="hl">baru pesan.</span>
         </h1>
         <p className="lead">
-          Pesan.in memberi warung, kafe, dan resto kamu menu QR dengan foto dan video di setiap meja. Pesanan langsung masuk ke kasir dan dapur, stok berkurang sendiri, dan laporan penjualan siap dibaca.
+          Pesan.in memberi warung, kafe, dan resto kamu menu QR dengan foto dan video di setiap meja. Pesanan langsung masuk ke kasir dan dapur, pembeli tahu kapan pesanannya siap, dan laporan penjualan siap dibaca.
         </p>
         <div className="row wrap lp-cta">
           <Link className="btn btn-primary btn-lg" to="/daftar">Coba gratis 14 hari</Link>
@@ -52,28 +53,36 @@ export function LandingPage() {
         <Story />
       </section>
 
-      <section className="lp-sec" aria-labelledby="feat-h">
+      <section id="antrean" className="lp-sec" aria-labelledby="eta-h">
         <div className="lp-sec-head">
-          <h2 id="feat-h">Yang terjadi di belakang meja</h2>
-          <p>Kasir, stok, laporan, sampai tampilan menu. Semuanya dari akun toko yang sama, di HP, tablet, atau komputer.</p>
+          <h2 id="eta-h">Tidak ada lagi "masih lama, Kak?"</h2>
+          <p>Pembeli melihat sendiri antrean dan perkiraan siapnya dari HP. Hitungannya memakai waktu saji tiap menu dan pesanan yang sedang dimasak, lalu diperbarui sendiri tanpa perlu dimuat ulang.</p>
         </div>
-        <Features />
+        <EtaSpotlight />
       </section>
 
       <section className="lp-sec" aria-labelledby="extra-h">
         <div className="lp-sec-head">
-          <h2 id="extra-h">Hal kecil yang terasa di meja</h2>
-          <p>Yang membuat pembeli betah dan kasir tidak kewalahan saat ramai.</p>
+          <h2 id="extra-h">Yang membuat pembeli betah dan kembali</h2>
+          <p>Menu yang hidup di layar, pelayan yang bisa dipanggil dari HP, dan stempel yang terkumpul setiap belanja.</p>
         </div>
         <Extras />
       </section>
 
       <section className="lp-sec" aria-labelledby="ops-h">
         <div className="lp-sec-head">
-          <h2 id="ops-h">Yang menjaga dapur dan laci tetap rapi</h2>
-          <p>Kasir yang tetap mencatat saat sinyal hilang, uang laci yang bisa dicocokkan, dapur yang tahu urutan, dan untung yang terlihat per menu.</p>
+          <h2 id="ops-h">Untung lebih jelas, kebocoran lebih sedikit</h2>
+          <p>Tahu menu mana yang benar-benar menghasilkan, tawarkan pasangan yang pas, lalu jaga dapur, laci, dan pesanan tetap rapi, bahkan saat internet putus.</p>
         </div>
         <Ops />
+      </section>
+
+      <section className="lp-sec" aria-labelledby="feat-h">
+        <div className="lp-sec-head">
+          <h2 id="feat-h">Dasar yang dipakai setiap hari</h2>
+          <p>Kasir, stok, laporan, sampai tampilan menu. Semuanya dari akun toko yang sama, di HP, tablet, atau komputer.</p>
+        </div>
+        <Features />
       </section>
 
       <section className="lp-sec" aria-labelledby="class-h">

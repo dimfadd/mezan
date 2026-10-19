@@ -387,7 +387,7 @@ function ItemEditor({
             <Field label="Porsi" htmlFor="it-portion" hint="Mis. 1 orang, cukup berdua, 250 gram, gelas 400 ml">
               <input id="it-portion" className="input" value={f.portion} onChange={(e) => setF({ ...f, portion: e.target.value })} maxLength={40} />
             </Field>
-            <Field label="Perkiraan waktu saji (menit)" htmlFor="it-prep" hint="Dihitung dari pesanan diterima dapur">
+            <Field label="Perkiraan waktu saji (menit)" htmlFor="it-prep" hint="Sejak diterima dapur. Dipakai untuk perkiraan siap yang dilihat pembeli.">
               <input id="it-prep" className="input num" inputMode="numeric" value={f.prep_minutes} onChange={(e) => { const d = e.target.value.replace(/\D/g, "").slice(0, 3); setF({ ...f, prep_minutes: d === "" ? "" : Number(d) }); }} />
             </Field>
           </div>

@@ -169,7 +169,7 @@ opsRoutes.get("/kitchen", async (c) => {
 async function advanceIfDone(db: Env["Variables"]["db"], orderId: string) {
   const left = await first<{ n: number }>(db, "SELECT COUNT(*) AS n FROM order_items WHERE order_id = ? AND ready_at IS NULL", orderId);
   if ((left?.n ?? 1) > 0) return false;
-  const n = await run(db, "UPDATE orders SET status = 'ready', updated_at = ? WHERE id = ? AND status = 'preparing'", Date.now(), orderId);
+  const n = await run(db, "UPDATE orders SET status = 'ready', updated_at = ?, ready_at = COALESCE(ready_at, ?) WHERE id = ? AND status = 'preparing'", Date.now(), Date.now(), orderId);
   return n > 0;
 }
 

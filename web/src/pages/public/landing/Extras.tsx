@@ -1,11 +1,11 @@
 import { useRef, type ReactNode } from "react";
-import { BellRing, Check, Clapperboard, Clock3, DoorOpen, LayoutGrid, List, MapPin, ReceiptText, ShoppingBag, Sparkles, Stamp, Star, ThumbsUp, Users } from "lucide-react";
+import { BellRing, Check, Clapperboard, DoorOpen, LayoutGrid, List, MapPin, ReceiptText, ShoppingBag, Stamp, Star, ThumbsUp, Users } from "lucide-react";
 import { rupiah } from "../../../lib/format";
 import { AppIcon, FakeQR, Food, type FoodKind } from "./art";
 import { useReducedMotion, useStepper, useVisible } from "./motion";
-import { HappyDemo, PairDemo, RatingDemo, StampDemo, VideoDemo, WaitlistDemo } from "./MoreDemos";
+import { RatingDemo, StampDemo, VideoDemo, WaitlistDemo } from "./MoreDemos";
 
-// Fitur-fitur kecil yang terasa langsung di meja. Setiap kartu memperagakan perilaku aplikasi yang sebenarnya.
+// Yang dirasakan pembeli di meja, diurutkan dari yang paling memikat. Setiap kartu memperagakan perilaku aplikasi yang sebenarnya.
 export function Extras() {
   const root = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
@@ -13,44 +13,29 @@ export function Extras() {
   const on = visible && !reduce;
   return (
     <div ref={root} className={`lp-bento${on ? "" : " is-still"}`}>
+      <Card className="tall" icon={<Clapperboard />} title="Mode video ala TikTok" body="Pembeli menggeser menu satu per satu dalam layar penuh, videonya jalan sendiri. Tambah ke pesanan tanpa keluar dari video.">
+        <VideoDemo on={on} />
+      </Card>
       <Card className="span2" icon={<BellRing />} title="Panggil pelayan dari HP" body="Tidak perlu melambai atau berteriak. Panggilan muncul di layar kasir lengkap dengan nomor meja, dan pembeli tahu kapan sudah ditanggapi.">
         <CallDemo on={on} />
       </Card>
-      <Card className="tall" icon={<Users />} title="Pesan bareng satu meja" body="Semua orang di meja memindai QR yang sama dan memilih dari HP masing-masing. Satu daftar, dikirim sekali.">
+      <Card icon={<Users />} title="Pesan bareng satu meja" body="Semua orang di meja memindai QR yang sama dan memilih dari HP masing-masing. Satu daftar, dikirim sekali.">
         <GroupDemo on={on} />
-      </Card>
-      <Card icon={<ReceiptText />} title="Bagi tagihan per orang" body="Kasir langsung melihat bagian masing-masing, sudah termasuk service dan pajak.">
-        <SplitDemo />
-      </Card>
-      <Card icon={<MapPin />} title="Pengaman lokasi" body="Pesanan dari luar radius toko ditandai atau ditolak. QR yang difoto lalu dipakai dari rumah tidak lolos diam-diam.">
-        <GeoDemo />
-      </Card>
-      <Card icon={<ShoppingBag />} title="QR khusus bawa pulang" body="Satu QR di dekat kasir. Pesan tanpa antre, ambil saat nomornya dipanggil.">
-        <PickupDemo on={on} />
-      </Card>
-      <Card icon={<ThumbsUp />} title="Best seller & tampilan kotak" body="Stempel jempol untuk menu terlaris. Pembeli bebas pilih tampilan daftar atau kotak.">
-        <BestDemo on={on} />
-      </Card>
-      <Card icon={<AppIcon size={18} />} title="QR berlogo pesan.in" body="Kode acak per meja yang tidak bisa ditebak, dengan logo di tengah dan tetap terbaca kamera HP biasa.">
-        <QrDemo />
-      </Card>
-      <Card className="span2" icon={<Star />} title="Struk digital & rating per menu" body="Kasir mengirim struk ke WhatsApp pembeli. Setelah makan, pembeli memberi bintang dan jempol per menu, lalu bisa lanjut menulis ulasan di Google Maps. Pemilik melihat menu mana yang disukai.">
-        <RatingDemo on={on} />
-      </Card>
-      <Card className="tall" icon={<Clapperboard />} title="Mode video ala TikTok" body="Pembeli menggeser menu satu per satu dalam layar penuh, videonya jalan sendiri. Tambah ke pesanan tanpa keluar dari video.">
-        <VideoDemo on={on} />
       </Card>
       <Card icon={<Stamp />} title="Kartu stempel lewat nomor HP" body="Kasir mengetik nomor HP saat bayar. Tiap belanja di atas batas minimal dapat satu stempel. Pembeli tidak perlu pasang aplikasi.">
         <StampDemo on={on} />
       </Card>
-      <Card icon={<Clock3 />} title="Menu & harga ikut jam" body="Menu sarapan hanya bisa dipesan pagi. Happy hour memotong harga sendiri pada jamnya, di menu QR dan di kasir.">
-        <HappyDemo on={on} />
+      <Card className="span2" icon={<Star />} title="Struk digital & rating per menu" body="Kasir mengirim struk ke WhatsApp pembeli. Setelah makan, pembeli memberi bintang dan jempol per menu, lalu bisa lanjut menulis ulasan di Google Maps. Pemilik melihat menu mana yang disukai.">
+        <RatingDemo on={on} />
+      </Card>
+      <Card icon={<ShoppingBag />} title="QR khusus bawa pulang" body="Satu QR di dekat kasir. Pesan tanpa antre, ambil saat nomornya dipanggil.">
+        <PickupDemo on={on} />
       </Card>
       <Card className="span2" icon={<DoorOpen />} title="Antrean saat penuh" body="Pembeli memindai QR di pintu, mengisi nama dan jumlah orang, lalu bebas menunggu di mana saja. Halamannya diperbarui sendiri dan berubah saat mejanya siap.">
         <WaitlistDemo on={on} />
       </Card>
-      <Card icon={<Sparkles />} title="Saran pasangan menu" body="Pesan ayam geprek, muncul es teh. Pasangannya bisa diatur pemilik, atau diambil dari menu yang sering dipesan bareng.">
-        <PairDemo on={on} />
+      <Card icon={<ReceiptText />} title="Bagi tagihan per orang" body="Kasir langsung melihat bagian masing-masing, sudah termasuk service dan pajak.">
+        <SplitDemo />
       </Card>
     </div>
   );
@@ -162,7 +147,7 @@ function SplitDemo() {
   );
 }
 
-function GeoDemo() {
+export function GeoDemo() {
   return (
     <div className="lp-geo">
       <div className="lp-radar">
@@ -197,7 +182,7 @@ function PickupDemo({ on }: { on: boolean }) {
   );
 }
 
-function BestDemo({ on }: { on: boolean }) {
+export function BestDemo({ on }: { on: boolean }) {
   const [s] = useStepper(2, () => 2600, on);
   const grid = (on ? s : 1) === 1;
   const items: [string, number, FoodKind, boolean][] = [["Ayam Geprek", 18000, "geprek", true], ["Kopi Susu Aren", 15000, "kopi", true], ["Soto Ayam", 17000, "soto", false], ["Es Jeruk", 8000, "jeruk", false]];
@@ -222,7 +207,7 @@ function BestDemo({ on }: { on: boolean }) {
   );
 }
 
-function QrDemo() {
+export function QrDemo() {
   return (
     <div className="lp-qrdemo">
       <div className="lp-qrbox">
