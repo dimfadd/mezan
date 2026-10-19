@@ -47,6 +47,12 @@ export interface MenuItem {
   low_stock_at: number;
   unit: string;
   sort: number;
+  media: { kind: "image" | "video"; url: string }[];
+  portion: string;
+  components: string;
+  spice_level: number | null;
+  prep_minutes: number | null;
+  allergens: string;
 }
 
 export interface Category {

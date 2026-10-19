@@ -8,6 +8,7 @@ import { authRoutes } from "./routes/auth";
 import { publicRoutes } from "./routes/public";
 import { storeRoutes } from "./routes/store";
 import { platformRoutes } from "./routes/platform";
+import { blobUploadRoutes } from "./routes/blobUpload";
 
 export type Env = {
   Variables: {
@@ -17,6 +18,7 @@ export type Env = {
     tenant: Tenant | null;
     secureCookies: boolean;
     runtime: RuntimeInfo;
+    blobToken: string | null;
   };
 };
 
@@ -26,11 +28,14 @@ export interface AppDeps {
   secureCookies?: boolean;
   /** Info lingkungan yang ditampilkan ke pengguna (mis. mode uji dengan database sementara). */
   runtime?: RuntimeInfo;
+  /** Token Vercel Blob untuk izin unggah langsung dari browser. */
+  blobToken?: string;
 }
 
 export interface RuntimeInfo {
   ephemeral: boolean; // true = data bisa hilang (database sementara)
-  uploadLimitMb: number; // batas unggah per file (Vercel membatasi body ~4,5 MB)
+  uploadLimitMb: number; // batas unggah lewat server (Vercel membatasi body ~4,5 MB)
+  directUpload: boolean; // true = browser unggah langsung ke Vercel Blob (batas server tidak berlaku)
 }
 
 export function createApp(deps: AppDeps) {
@@ -40,7 +45,8 @@ export function createApp(deps: AppDeps) {
     c.set("db", deps.db);
     c.set("storage", deps.storage);
     c.set("secureCookies", deps.secureCookies ?? false);
-    c.set("runtime", deps.runtime ?? { ephemeral: false, uploadLimitMb: 15 });
+    c.set("runtime", deps.runtime ?? { ephemeral: false, uploadLimitMb: 15, directUpload: false });
+    c.set("blobToken", deps.blobToken ?? null);
     await next();
   });
 
@@ -69,6 +75,7 @@ export function createApp(deps: AppDeps) {
   app.route("/api/public", publicRoutes);
   app.route("/api/store", storeRoutes);
   app.route("/api/platform", platformRoutes);
+  app.route("/api/media-upload", blobUploadRoutes);
 
   // File media (gambar/video menu). Mendukung Range supaya video bisa diputar di Safari/iOS.
   app.get("/media/*", async (c) => {

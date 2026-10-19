@@ -31,6 +31,8 @@ export interface StoreInfo {
   allow_inventory: number;
   allow_analytics: number;
   allow_branding: number;
+  max_photos: number;
+  max_videos: number;
   menu_theme: string;
   locked: boolean;
   grace_days: number;
@@ -39,10 +41,11 @@ export interface StoreInfo {
 export interface RuntimeInfo {
   ephemeral: boolean;
   uploadLimitMb: number;
+  directUpload: boolean;
 }
 
 // Disimpan di modul supaya util unggah (lib/media.ts) bisa membacanya tanpa hook.
-export let runtimeInfo: RuntimeInfo = { ephemeral: false, uploadLimitMb: 15 };
+export let runtimeInfo: RuntimeInfo = { ephemeral: false, uploadLimitMb: 15, directUpload: false };
 
 interface SessionCtx {
   runtime: RuntimeInfo;

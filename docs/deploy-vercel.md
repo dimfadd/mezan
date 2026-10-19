@@ -28,7 +28,9 @@ Turso memakai SQL yang sama dengan SQLite dan Cloudflare D1, jadi tidak ada kode
 
 Tanpa Blob, unggahan disimpan sementara dan bisa hilang.
 
-**Batas Vercel:** satu unggahan maksimal sekitar 4,5 MB (batas body fungsi Vercel). Aplikasi membatasi 4 MB dan menolaknya dengan pesan jelas. Foto aman (diperkecil otomatis ke WebP), tapi video harus pendek dan 720p. Untuk video sampai 15 MB perlu unggah langsung dari browser ke Blob, belum dibuat.
+Dengan Blob tersambung, foto dan video **diunggah langsung dari browser ke Blob** (video sampai 15 MB, 20 detik). Server hanya memberi izin setelah memeriksa login manajemen, folder toko, jenis file, dan batas paket, jadi isi file tidak lewat fungsi Vercel yang dibatasi ~4,5 MB.
+
+Tanpa Blob, unggahan lewat server dibatasi 4 MB per file dan disimpan sementara.
 
 ## Variabel lain
 

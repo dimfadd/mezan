@@ -1,10 +1,13 @@
 import { useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Film, ImagePlus, Pencil, Plus, Trash2, UtensilsCrossed } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Film, ImagePlus, Pencil, Plus, Star, Trash2, UtensilsCrossed } from "lucide-react";
 import { Empty, ErrorState, Field, Loading, Modal, MoneyInput, PageHead, Switch, Thumb, useConfirm, useToast } from "../../components/ui";
 import { api } from "../../lib/api";
 import { rupiah } from "../../lib/format";
 import { useApi } from "../../lib/hooks";
-import { checkVideo, prepareImage, VIDEO_MAX_SECONDS } from "../../lib/media";
+import { VIDEO_MAX_SECONDS } from "../../lib/media";
+import { uploadMedia } from "../../lib/upload";
+import { mediaSummary, type MediaRef } from "../../components/Gallery";
+import { Chilis } from "../../components/DishInfo";
 import { isManagement, useSession } from "../../lib/session";
 import { TAG_LABEL, type Category, type MenuItem } from "./types";
 
@@ -104,9 +107,10 @@ export function MenuManagePage() {
                         <div className="menu-row" key={it.id}>
                           <div className="thumb">
                             <Thumb image={it.image_url} name={it.name} />
-                            {it.video_url && (
-                              <span className="video-flag" title="Ada video">
-                                <Film aria-label="Ada video" />
+                            {it.media.length > 1 && (
+                              <span className="video-flag" title={mediaSummary(it.media)}>
+                                {it.media.some((m) => m.kind === "video") ? <Film aria-hidden="true" /> : null}
+                                <span className="tiny" style={{ fontSize: 10 }}>{it.media.length}</span>
                               </span>
                             )}
                           </div>
@@ -144,7 +148,8 @@ export function MenuManagePage() {
         <ItemEditor
           item={editing}
           categories={cats.data?.categories ?? []}
-          allowVideo={!!tenant?.allow_video}
+          limits={{ photos: tenant?.max_photos ?? 3, videos: tenant?.allow_video ? tenant.max_videos : 0 }}
+          tenantId={tenant?.id ?? ""}
           planName={tenant?.plan_name ?? ""}
           stockOn={!!tenant?.inventory_enabled}
           onClose={() => setEditing(null)}
@@ -175,7 +180,8 @@ const TAGS = ["favorit", "pedas", "vegetarian", "baru"];
 function ItemEditor({
   item,
   categories,
-  allowVideo,
+  limits,
+  tenantId,
   planName,
   stockOn,
   onClose,
@@ -183,7 +189,8 @@ function ItemEditor({
 }: {
   item: Partial<MenuItem>;
   categories: Category[];
-  allowVideo: boolean;
+  limits: { photos: number; videos: number };
+  tenantId: string;
   planName: string;
   stockOn: boolean;
   onClose: () => void;
@@ -196,8 +203,12 @@ function ItemEditor({
     description: item.description ?? "",
     price: (item.price ?? "") as number | "",
     category_id: item.category_id ?? categories[0]?.id ?? "",
-    image_url: item.image_url ?? null,
-    video_url: item.video_url ?? null,
+    media: item.media ?? [],
+    portion: item.portion ?? "",
+    components: item.components ?? "",
+    spice_level: item.spice_level ?? null,
+    prep_minutes: (item.prep_minutes ?? "") as number | "",
+    allergens: item.allergens ?? "",
     tags: (item.tags ?? "").split(",").filter(Boolean),
     available: item.available ?? 1,
     track_stock: item.track_stock ?? 0,
@@ -205,27 +216,9 @@ function ItemEditor({
     unit: item.unit ?? "porsi",
   });
   const [busy, setBusy] = useState(false);
-  const [uploading, setUploading] = useState<"image" | "video" | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const imgInput = useRef<HTMLInputElement>(null);
-  const vidInput = useRef<HTMLInputElement>(null);
   const isNew = !item.id;
-
-  const upload = async (kind: "image" | "video", file: File | undefined) => {
-    if (!file) return;
-    setUploading(kind);
-    try {
-      const ready = kind === "image" ? await prepareImage(file) : await checkVideo(file);
-      const r = await api.upload<{ url: string }>("/api/store/media", ready);
-      setF((s) => ({ ...s, [kind === "image" ? "image_url" : "video_url"]: r.url }));
-    } catch (e) {
-      toast((e as Error).message, "error");
-    } finally {
-      setUploading(null);
-      if (imgInput.current) imgInput.current.value = "";
-      if (vidInput.current) vidInput.current.value = "";
-    }
-  };
 
   const save = async () => {
     const errs: Record<string, string> = {};
@@ -234,7 +227,7 @@ function ItemEditor({
     setErrors(errs);
     if (Object.keys(errs).length) return;
     setBusy(true);
-    const body = { ...f, category_id: f.category_id || null, tags: f.tags.join(","), price: Number(f.price) };
+    const body = { ...f, category_id: f.category_id || null, tags: f.tags.join(","), price: Number(f.price), prep_minutes: f.prep_minutes === "" ? null : f.prep_minutes };
     try {
       if (isNew) await api.post("/api/store/items", body);
       else await api.put(`/api/store/items/${item.id}`, body);
@@ -325,62 +318,49 @@ function ItemEditor({
           </div>
         </div>
 
-        <div className="grid-2">
+        <GalleryEditor
+          media={f.media}
+          onChange={(media) => setF((s) => ({ ...s, media }))}
+          onBusy={setUploading}
+          tenantId={tenantId}
+          limits={limits}
+          planName={planName}
+          name={f.name}
+        />
+
+        <section className="stack" aria-labelledby="it-detail-h" style={{ borderTop: "1px solid var(--line)", paddingTop: 16 }}>
+          <div>
+            <h3 id="it-detail-h">Biar pembeli terbayang</h3>
+            <p className="small muted" style={{ marginTop: 4 }}>Semua boleh dikosongkan. Yang diisi akan tampil saat pembeli membuka detail menu.</p>
+          </div>
+          <div className="form-row">
+            <Field label="Porsi" htmlFor="it-portion" hint="Mis. 1 orang, cukup berdua, 250 gram, gelas 400 ml">
+              <input id="it-portion" className="input" value={f.portion} onChange={(e) => setF({ ...f, portion: e.target.value })} maxLength={40} />
+            </Field>
+            <Field label="Perkiraan waktu saji (menit)" htmlFor="it-prep" hint="Dihitung dari pesanan diterima dapur">
+              <input id="it-prep" className="input num" inputMode="numeric" value={f.prep_minutes} onChange={(e) => { const d = e.target.value.replace(/\D/g, "").slice(0, 3); setF({ ...f, prep_minutes: d === "" ? "" : Number(d) }); }} />
+            </Field>
+          </div>
+          <Field label="Isi / komponen" htmlFor="it-comp" hint="Satu per baris. Tampil sebagai daftar centang.">
+            <textarea id="it-comp" className="textarea" value={f.components} onChange={(e) => setF({ ...f, components: e.target.value })} maxLength={400} placeholder={"Nasi goreng terasi\nTelur ceplok\nKerupuk udang"} />
+          </Field>
           <div className="field">
-            <span className="field-label">Foto</span>
-            <div className="media-drop">
-              {f.image_url ? (
-                <div className="media-preview">
-                  <img src={f.image_url} alt={`Foto ${f.name}`} />
-                </div>
-              ) : (
-                <p className="small muted">Foto dari HP sudah cukup. Akan diperkecil otomatis supaya cepat dibuka.</p>
-              )}
-              <div className="row wrap">
-                <button type="button" className="btn btn-sm" onClick={() => imgInput.current?.click()} disabled={!!uploading}>
-                  <ImagePlus /> {uploading === "image" ? "Mengunggah..." : f.image_url ? "Ganti foto" : "Pilih foto"}
+            <span className="field-label">Level pedas</span>
+            <div className="row wrap" role="group" aria-label="Level pedas">
+              <button type="button" className="chip" aria-pressed={f.spice_level === null} onClick={() => setF({ ...f, spice_level: null })}>Tidak diisi</button>
+              <button type="button" className="chip" aria-pressed={f.spice_level === 0} onClick={() => setF({ ...f, spice_level: 0 })}>Tidak pedas</button>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button key={n} type="button" className="chip" aria-pressed={f.spice_level === n} onClick={() => setF({ ...f, spice_level: n })} aria-label={`Pedas level ${n}`}>
+                  <Chilis level={n} />
                 </button>
-                {f.image_url && (
-                  <button type="button" className="btn btn-sm btn-ghost" onClick={() => setF({ ...f, image_url: null })}>
-                    Lepas foto
-                  </button>
-                )}
-              </div>
-              <input ref={imgInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(e) => upload("image", e.target.files?.[0])} />
+              ))}
             </div>
           </div>
-          <div className="field">
-            <span className="field-label">Video pendek</span>
-            <div className="media-drop">
-              {!allowVideo ? (
-                <p className="small muted">Video menu tersedia mulai paket Kafe. Paket kamu sekarang: {planName}.</p>
-              ) : (
-                <>
-                  {f.video_url ? (
-                    <div className="media-preview">
-                      <video src={f.video_url} muted loop playsInline autoPlay controls aria-label={`Video ${f.name}`} />
-                    </div>
-                  ) : (
-                    <p className="small muted">
-                      MP4 maksimal {VIDEO_MAX_SECONDS} detik. Video pendek tanpa suara (mis. kuah dituang, keju meleleh) lebih menjual daripada foto, dan jauh lebih ringan dari GIF.
-                    </p>
-                  )}
-                  <div className="row wrap">
-                    <button type="button" className="btn btn-sm" onClick={() => vidInput.current?.click()} disabled={!!uploading}>
-                      <Film /> {uploading === "video" ? "Mengunggah..." : f.video_url ? "Ganti video" : "Pilih video"}
-                    </button>
-                    {f.video_url && (
-                      <button type="button" className="btn btn-sm btn-ghost" onClick={() => setF({ ...f, video_url: null })}>
-                        Lepas video
-                      </button>
-                    )}
-                  </div>
-                  <input ref={vidInput} type="file" accept="video/mp4,video/webm" hidden onChange={(e) => upload("video", e.target.files?.[0])} />
-                </>
-              )}
-            </div>
-          </div>
-        </div>
+          <Field label="Alergen / pantangan" htmlFor="it-allergen" hint="Mis. mengandung kacang, udang, susu">
+            <input id="it-allergen" className="input" value={f.allergens} onChange={(e) => setF({ ...f, allergens: e.target.value })} maxLength={120} />
+          </Field>
+        </section>
+
 
         <Switch checked={!!f.available} onChange={(v) => setF({ ...f, available: v ? 1 : 0 })} label="Tersedia untuk dipesan" hint="Matikan kalau sedang habis. Menu tetap terlihat dengan tanda Habis." />
         {stockOn && (
@@ -481,5 +461,128 @@ function CategoryManager({ open, categories, onClose, onChanged }: { open: boole
         </form>
       </div>
     </Modal>
+  );
+}
+
+/** Kelola galeri satu menu: urutkan, jadikan sampul, hapus, tambah foto/video sesuai batas paket. */
+function GalleryEditor({
+  media,
+  onChange,
+  onBusy,
+  tenantId,
+  limits,
+  planName,
+  name,
+}: {
+  media: MediaRef[];
+  onChange: (m: MediaRef[]) => void;
+  onBusy: (b: boolean) => void;
+  tenantId: string;
+  limits: { photos: number; videos: number };
+  planName: string;
+  name: string;
+}) {
+  const toast = useToast();
+  const photoInput = useRef<HTMLInputElement>(null);
+  const videoInput = useRef<HTMLInputElement>(null);
+  const [pending, setPending] = useState(0);
+  const latest = useRef(media);
+  latest.current = media;
+  const photos = media.filter((m) => m.kind === "image").length;
+  const videos = media.length - photos;
+
+  const add = async (files: FileList | null, kind: "image" | "video") => {
+    if (!files?.length) return;
+    const room = kind === "image" ? limits.photos - photos : limits.videos - videos;
+    const list = [...files].slice(0, Math.max(0, room));
+    if (files.length > list.length) toast(`Paket ${planName} maksimal ${kind === "image" ? `${limits.photos} foto` : `${limits.videos} video`} per menu. ${files.length - list.length} file dilewati.`, "error");
+    if (!list.length) return;
+    setPending((n) => n + list.length);
+    onBusy(true);
+    // Unggah berurutan supaya urutan galeri sama dengan urutan file yang dipilih.
+    for (const file of list) {
+      try {
+        const m = await uploadMedia(file, tenantId);
+        onChange([...latest.current, m]);
+      } catch (e) {
+        toast(`${file.name}: ${(e as Error).message}`, "error");
+      } finally {
+        setPending((n) => n - 1);
+      }
+    }
+    onBusy(false);
+    if (photoInput.current) photoInput.current.value = "";
+    if (videoInput.current) videoInput.current.value = "";
+  };
+
+  const move = (i: number, to: number) => {
+    if (to < 0 || to >= media.length) return;
+    const next = [...media];
+    const [x] = next.splice(i, 1);
+    next.splice(to, 0, x);
+    onChange(next);
+  };
+  const coverIdx = media.findIndex((m) => m.kind === "image");
+
+  return (
+    <div className="field">
+      <div className="row between wrap">
+        <span className="field-label">Foto & video</span>
+        <span className="small muted">
+          {photos}/{limits.photos} foto{limits.videos > 0 ? ` · ${videos}/${limits.videos} video` : ""}
+        </span>
+      </div>
+      <div className="media-drop">
+        {media.length === 0 && pending === 0 && (
+          <p className="small muted">
+            Tambahkan beberapa sudut: tampak atas, potongan isi, porsi di piring, sampai suasana saat disajikan. Foto pertama jadi sampul di daftar menu. Foto dari HP sudah cukup, akan diperkecil otomatis.
+          </p>
+        )}
+        {(media.length > 0 || pending > 0) && (
+          <div className="gal-grid">
+            {media.map((m, i) => (
+              <div className="gal-tile" key={m.url}>
+                <div className="pic">
+                  {m.kind === "image" ? <img src={m.url} alt={`${name} foto ${i + 1}`} /> : <video src={`${m.url}#t=0.5`} muted playsInline preload="metadata" aria-label={`${name} video ${i + 1}`} />}
+                </div>
+                <span className="tag">
+                  {i === coverIdx ? <span className="badge badge-new">Sampul</span> : m.kind === "video" ? <span className="badge"><Film aria-hidden="true" /> Video</span> : null}
+                </span>
+                <div className="acts">
+                  <button type="button" onClick={() => move(i, i - 1)} disabled={i === 0} aria-label={`Geser ${m.kind === "image" ? "foto" : "video"} ${i + 1} ke kiri`}><ArrowLeft /></button>
+                  {m.kind === "image" && i !== coverIdx ? (
+                    <button type="button" onClick={() => move(i, 0)} aria-label={`Jadikan foto ${i + 1} sampul`} title="Jadikan sampul"><Star /></button>
+                  ) : <span style={{ width: 30 }} />}
+                  <button type="button" onClick={() => onChange(media.filter((_, k) => k !== i))} aria-label={`Hapus ${m.kind === "image" ? "foto" : "video"} ${i + 1}`}><Trash2 /></button>
+                  <button type="button" onClick={() => move(i, i + 1)} disabled={i === media.length - 1} aria-label={`Geser ${m.kind === "image" ? "foto" : "video"} ${i + 1} ke kanan`}><ArrowRight /></button>
+                </div>
+              </div>
+            ))}
+            {Array.from({ length: pending }, (_, k) => (
+              <div className="gal-tile busy" key={`p${k}`} aria-live="polite">Mengunggah...</div>
+            ))}
+          </div>
+        )}
+        <div className="row wrap">
+          <button type="button" className="btn btn-sm" onClick={() => photoInput.current?.click()} disabled={photos >= limits.photos}>
+            <ImagePlus /> Tambah foto
+          </button>
+          {limits.videos > 0 ? (
+            <button type="button" className="btn btn-sm" onClick={() => videoInput.current?.click()} disabled={videos >= limits.videos}>
+              <Film /> Tambah video
+            </button>
+          ) : (
+            <span className="small muted">Video menu tersedia mulai paket Kafe.</span>
+          )}
+        </div>
+        {limits.videos > 0 && (
+          <p className="tiny muted">
+            Video: MP4, maksimal {VIDEO_MAX_SECONDS} detik. Gerakan pendek tanpa suara (kuah dituang, keju meleleh) lebih menjual dari foto dan jauh lebih ringan dari GIF.
+          </p>
+        )}
+        <input ref={photoInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden onChange={(e) => add(e.target.files, "image")} />
+        <input ref={videoInput} type="file" accept="video/mp4,video/webm" hidden onChange={(e) => add(e.target.files, "video")} />
+      </div>
+    </div>
   );
 }

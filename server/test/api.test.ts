@@ -15,10 +15,10 @@ const storage: MediaStorage = {
   async delete(k) { mem.delete(k); },
 };
 
-async function setup() {
+async function setup(blobToken?: string) {
   const db = openNodeDb(":memory:");
   migrate(db.raw, resolve("server/migrations"), false);
-  const app = createApp({ db, storage });
+  const app = createApp({ db, storage, blobToken });
   const now = Date.now();
   const planId = newId();
   db.raw.prepare("INSERT INTO plans (id, code, name, price_monthly, max_tables, max_staff, allow_video, created_at) VALUES (?, 'basic', 'Dasar', 50000, 2, 1, 0, ?)").run(planId, now);
@@ -131,7 +131,8 @@ test("isolasi antar toko: tidak bisa mengubah menu toko lain", async () => {
   db.raw.prepare("INSERT INTO menu_items (id, tenant_id, name, price, created_at) VALUES (?, ?, 'Rahasia', 1, ?)").run(foreign, otherTenant, Date.now());
   assert.equal((await call("PATCH", `/api/store/items/${foreign}/availability`, { available: false }, owner)).status, 404);
   assert.equal((await call("PUT", `/api/store/items/${foreign}`, { category_id: null, name: "x", price: 1 }, owner)).status, 404);
-  const mine = await call("POST", "/api/store/items", { category_id: null, name: "Pasang media asing", price: 1, image_url: `/media/${otherTenant}/a.png` }, owner);
+  const foreignUrl = `/media/${otherTenant}/${newId()}.png`;
+  const mine = await call("POST", "/api/store/items", { category_id: null, name: "Pasang media asing", price: 1, media: [{ kind: "image", url: foreignUrl }] }, owner);
   assert.equal(mine.status, 400);
 });
 
@@ -190,4 +191,67 @@ test("migrations.gen.ts sinkron dengan server/migrations/*.sql", async () => {
   const files = readdirSync("server/migrations").filter((f) => f.endsWith(".sql")).sort();
   assert.deepEqual(MIGRATIONS.map((m) => m.name), files, "jalankan npm run gen");
   for (const m of MIGRATIONS) assert.equal(m.sql, readFileSync(`server/migrations/${m.name}`, "utf8"), `${m.name} berubah, jalankan npm run gen`);
+});
+
+test("galeri: batas foto/video per paket, sampul otomatis, detail sampai ke pembeli", async () => {
+  const { call, login, db, tenantId } = await setup();
+  const owner = await login("owner@t");
+  const img = () => ({ kind: "image" as const, url: `/media/${tenantId}/${newId()}.webp` });
+  const vid = () => ({ kind: "video" as const, url: `/media/${tenantId}/${newId()}.mp4` });
+  // Paket uji: default migrasi 3 foto, tanpa video.
+  assert.equal((await call("POST", "/api/store/items", { category_id: null, name: "A", price: 1, media: [img(), img(), img(), img()] }, owner)).status, 403);
+  assert.equal((await call("POST", "/api/store/items", { category_id: null, name: "A", price: 1, media: [vid()] }, owner)).status, 403);
+  const a = img(), b = img();
+  const item = await call("POST", "/api/store/items", {
+    category_id: null, name: "Soto", price: 17000, media: [a, b],
+    portion: "1 mangkuk", components: "Kuah kuning\nSuwiran ayam", spice_level: 0, prep_minutes: 7, allergens: "Mengandung telur",
+  }, owner);
+  assert.equal(item.status, 201);
+  const row = db.raw.prepare("SELECT image_url FROM menu_items WHERE id = ?").get(item.json.id) as { image_url: string };
+  assert.equal(row.image_url, a.url, "foto pertama jadi sampul");
+
+  // Ubah urutan: b jadi sampul. Paket dinaikkan supaya boleh video.
+  db.raw.prepare("UPDATE plans SET allow_video = 1, max_videos = 2, max_photos = 6").run();
+  const v = vid();
+  assert.equal((await call("PUT", `/api/store/items/${item.json.id}`, { category_id: null, name: "Soto", price: 17000, media: [v, b, a] }, owner)).status, 200);
+  const row2 = db.raw.prepare("SELECT image_url, video_url FROM menu_items WHERE id = ?").get(item.json.id) as { image_url: string; video_url: string };
+  assert.equal(row2.image_url, b.url);
+  assert.equal(row2.video_url, v.url);
+
+  await call("POST", "/api/store/tables", { label: "M" }, owner);
+  const code = (db.raw.prepare("SELECT code FROM dining_tables").get() as { code: string }).code;
+  const pub = (await call("GET", `/api/public/table/${code}`)).json.items[0];
+  assert.deepEqual(pub.media.map((m: { url: string }) => m.url), [v.url, b.url, a.url]);
+  assert.equal(pub.portion, "", "PUT tanpa field detail mengosongkannya");
+
+  // Duplikat file ditolak.
+  assert.equal((await call("PUT", `/api/store/items/${item.json.id}`, { category_id: null, name: "Soto", price: 1, media: [a, a] }, owner)).status, 400);
+});
+
+test("detail menu tersimpan dan tampil di menu pelanggan", async () => {
+  const { call, login, db } = await setup();
+  const owner = await login("owner@t");
+  await call("POST", "/api/store/items", { category_id: null, name: "Geprek", price: 18000, portion: "1 orang", components: "Nasi\nAyam", spice_level: 4, prep_minutes: 12, allergens: "Gluten" }, owner);
+  await call("POST", "/api/store/tables", { label: "M" }, owner);
+  const code = (db.raw.prepare("SELECT code FROM dining_tables").get() as { code: string }).code;
+  const it = (await call("GET", `/api/public/table/${code}`)).json.items[0];
+  assert.equal(it.spice_level, 4);
+  assert.equal(it.prep_minutes, 12);
+  assert.equal(it.components, "Nasi\nAyam");
+  assert.equal(it.allergens, "Gluten");
+});
+
+test("unggah langsung ke Blob: izin hanya untuk manajemen, folder toko sendiri, dan jenis file sesuai paket", async () => {
+  const { call, login, tenantId } = await setup("vercel_blob_rw_teststore_secretsecretsecret");
+  const ev = (pathname: string) => ({ type: "blob.generate-client-token", payload: { pathname, callbackUrl: "http://x", clientPayload: null, multipart: false } });
+  const owner = await login("owner@t");
+  const ok = await call("POST", "/api/media-upload", ev(`media/${tenantId}/${newId()}.webp`), owner);
+  assert.equal(ok.status, 200);
+  assert.equal(ok.json.type, "blob.generate-client-token");
+  assert.ok(ok.json.clientToken);
+  assert.equal((await call("POST", "/api/media-upload", ev(`media/toko-lain/${newId()}.webp`), owner)).status, 400, "folder toko lain");
+  assert.equal((await call("POST", "/api/media-upload", ev(`media/${tenantId}/${newId()}.mp4`), owner)).status, 400, "paket tanpa video");
+  const kasir = await login("kasir@t");
+  assert.equal((await call("POST", "/api/media-upload", ev(`media/${tenantId}/${newId()}.webp`), kasir)).status, 403);
+  assert.equal((await call("POST", "/api/media-upload", ev(`media/${tenantId}/${newId()}.webp`))).status, 401);
 });

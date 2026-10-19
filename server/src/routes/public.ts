@@ -5,6 +5,7 @@ import { all, first } from "../db/types";
 import { TENANT_SELECT, tenantLocked, type Tenant } from "../lib/auth";
 import { fail } from "../lib/http";
 import { createOrder, loadOrderItems } from "../lib/orders";
+import { loadGalleries } from "../lib/gallery";
 import { DEFAULT_THEME, normalizeTheme } from "../../../shared/menuTheme";
 
 // Paket tanpa branding (atau yang turun paket) otomatis kembali ke template bawaan.
@@ -35,12 +36,14 @@ async function tenantByTable(c: { var: Env["Variables"] }, code: string) {
 publicRoutes.get("/table/:code", async (c) => {
   const { table, tenant } = await tenantByTable(c, c.req.param("code"));
   const categories = await all(c.var.db, "SELECT id, name FROM categories WHERE tenant_id = ? ORDER BY sort, name", tenant.id);
-  const items = await all<Record<string, unknown> & { track_stock: number; stock_qty: number }>(
+  const items = await all<Record<string, unknown> & { id: string; track_stock: number; stock_qty: number }>(
     c.var.db,
-    `SELECT id, category_id, name, description, price, image_url, video_url, tags, available, track_stock, stock_qty
+    `SELECT id, category_id, name, description, price, image_url, video_url, tags, available, track_stock, stock_qty,
+            portion, components, spice_level, prep_minutes, allergens
      FROM menu_items WHERE tenant_id = ? AND archived = 0 ORDER BY sort, name`,
     tenant.id,
   );
+  const galleries = await loadGalleries(c.var.db, tenant.id);
   const useStock = !!tenant.inventory_enabled;
   const locked = tenantLocked(tenant);
   return c.json({
@@ -60,6 +63,7 @@ publicRoutes.get("/table/:code", async (c) => {
     categories,
     items: items.map(({ track_stock, stock_qty, ...it }) => ({
       ...it,
+      media: galleries.get(it.id) ?? [],
       // Pelanggan hanya perlu tahu "habis" atau "tinggal sedikit", bukan angka stok gudang.
       sold_out: !it.available || (useStock && !!track_stock && stock_qty <= 0),
       few_left: useStock && !!track_stock && stock_qty > 0 && stock_qty <= 3 ? stock_qty : null,

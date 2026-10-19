@@ -530,7 +530,7 @@ dialog.modal[open] { display: flex; flex-direction: column; animation: pop 0.16s
 .menu-row .acts { display: flex; gap: 6px; align-items: center; }
 .video-flag {
   position: absolute; right: 3px; bottom: 3px; background: rgb(0 0 0 / 0.65); color: #fff; border-radius: 4px; padding: 1px 4px;
-  display: grid; place-items: center;
+  display: flex; align-items: center; gap: 2px; font-weight: 700;
 }
 .video-flag svg { width: 12px; height: 12px; }
 @media (max-width: 699px) {
@@ -592,6 +592,7 @@ dialog.modal[open] { display: flex; flex-direction: column; animation: pop 0.16s
 .dish .media { width: 108px; height: 108px; border-radius: var(--radius); overflow: hidden; position: relative; background: var(--surface-2); }
 .dish .media .ph { font-size: 1.8rem; }
 .dish .play {
+  white-space: nowrap;
   position: absolute; left: 6px; bottom: 6px; display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; border-radius: 6px;
   background: rgb(20 17 12 / 0.72); color: #fff; font-size: 0.72rem; font-weight: 700;
 }
@@ -631,6 +632,73 @@ dialog.modal[open] { display: flex; flex-direction: column; animation: pop 0.16s
 .status-steps .current .dot { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
 .status-steps .label { font-weight: 700; padding-top: 3px; }
 .status-steps .todo .label { color: var(--ink-3); }
+
+/* ---------- Galeri foto/video menu ---------- */
+.gallery { position: relative; background: var(--surface-2); }
+.gallery-track {
+  display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain;
+  aspect-ratio: 4 / 3;
+}
+.gallery-track::-webkit-scrollbar { display: none; }
+.gallery-track:focus-visible { outline-offset: -3px; }
+.gallery-slide { flex: 0 0 100%; scroll-snap-align: start; position: relative; display: grid; place-items: center; overflow: hidden; }
+.gallery-slide img, .gallery-slide video { width: 100%; height: 100%; object-fit: cover; background: var(--surface-2); }
+.gallery.fit-contain { background: #000; }
+.gallery.fit-contain .gallery-track { aspect-ratio: auto; height: 100%; }
+.gallery.fit-contain .gallery-slide img, .gallery.fit-contain .gallery-slide video { object-fit: contain; background: #000; }
+.gallery-slide .ph { font-size: 3rem; }
+.gallery-nav {
+  position: absolute; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border-radius: 50%; border: 0;
+  background: rgb(20 17 12 / 0.55); color: #fff; display: grid; place-items: center; cursor: pointer;
+}
+.gallery-nav:disabled { opacity: 0; pointer-events: none; }
+.gallery-nav.prev { left: 8px; } .gallery-nav.next { right: 8px; }
+.gallery-nav svg { width: 22px; height: 22px; }
+.gallery-dots { position: absolute; left: 0; right: 0; bottom: 10px; display: flex; justify-content: center; gap: 6px; pointer-events: none; }
+.gallery-dots span { width: 7px; height: 7px; border-radius: 50%; background: rgb(255 255 255 / 0.55); box-shadow: 0 0 0 1px rgb(0 0 0 / 0.2); }
+.gallery-dots span.vid { border-radius: 2px; }
+.gallery-dots span.on { background: #fff; width: 18px; border-radius: 4px; }
+.gallery-count {
+  position: absolute; left: 10px; top: 10px; padding: 3px 8px; border-radius: 6px; background: rgb(20 17 12 / 0.65); color: #fff;
+  font-size: 0.75rem; font-weight: 700;
+}
+.gallery-expand {
+  position: absolute; right: 10px; bottom: 26px; width: 36px; height: 36px; border-radius: 8px; border: 0; cursor: pointer;
+  background: rgb(20 17 12 / 0.55); color: #fff; display: grid; place-items: center;
+}
+.gallery-expand svg { width: 18px; height: 18px; }
+@media (hover: none) { .gallery-nav { display: none; } }
+.dish-media.has-gallery { aspect-ratio: auto; }
+dialog.modal.viewer { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; background: #000; }
+dialog.modal.viewer .modal-body { padding: 0; height: 100%; overflow: hidden; }
+dialog.modal.viewer .gallery { height: 100%; }
+.viewer-close { position: absolute; top: 12px; right: 12px; z-index: 3; background: rgb(255 255 255 / 0.15) !important; color: #fff; }
+
+/* ---------- Info detail menu ---------- */
+.dish-facts { display: flex; flex-wrap: wrap; gap: 8px; }
+.fact { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: var(--radius); background: var(--surface-2); font-size: 0.86rem; font-weight: 600; }
+.fact svg { width: 16px; height: 16px; flex: none; }
+.chilis { display: inline-flex; gap: 1px; }
+.chilis svg { width: 14px; height: 14px; color: #c2410c; }
+.chilis svg.off { color: var(--line-strong); }
+.components { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.components li { display: grid; grid-template-columns: 18px 1fr; gap: 6px; align-items: start; }
+.components li svg { width: 16px; height: 16px; margin-top: 3px; color: var(--brand-text); }
+.allergen { display: flex; gap: 8px; align-items: flex-start; font-size: 0.86rem; color: var(--warn-text); font-weight: 600; }
+.allergen svg { width: 16px; height: 16px; flex: none; margin-top: 2px; }
+
+/* ---------- Editor galeri (kelola menu) ---------- */
+.gal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; }
+.gal-tile { position: relative; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--surface); display: grid; }
+.gal-tile .pic { aspect-ratio: 1 / 1; background: var(--surface-2); }
+.gal-tile .pic img, .gal-tile .pic video { width: 100%; height: 100%; object-fit: cover; }
+.gal-tile .tag { position: absolute; left: 6px; top: 6px; }
+.gal-tile .acts { display: flex; justify-content: space-between; padding: 2px; }
+.gal-tile .acts button { width: 30px; height: 36px; border: 0; background: none; border-radius: 6px; cursor: pointer; display: grid; place-items: center; color: var(--ink-2); }
+.gal-tile .acts button:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+.gal-tile .acts button:disabled { opacity: 0.3; }
+.gal-tile .acts svg { width: 16px; height: 16px; }
+.gal-tile.busy { display: grid; place-items: center; aspect-ratio: 1 / 1.25; color: var(--ink-2); font-size: 0.8rem; text-align: center; padding: 8px; }
 
 /* ---------- Editor tampilan menu ---------- */
 .design-layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 24px; align-items: start; }

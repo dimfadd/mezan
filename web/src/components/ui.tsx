@@ -12,6 +12,7 @@ export function Modal({
   footer,
   wide,
   label,
+  className = "",
 }: {
   open: boolean;
   onClose: () => void;
@@ -20,6 +21,7 @@ export function Modal({
   footer?: ReactNode;
   wide?: boolean;
   label?: string;
+  className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -42,7 +44,7 @@ export function Modal({
   return (
     <dialog
       ref={ref}
-      className={`modal${wide ? " wide" : ""}`}
+      className={`modal${wide ? " wide" : ""} ${className}`}
       aria-labelledby={title ? titleId : undefined}
       aria-label={title ? undefined : label}
       onClick={(e) => {

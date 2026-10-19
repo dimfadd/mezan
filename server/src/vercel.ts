@@ -19,7 +19,8 @@ async function boot() {
     db,
     storage: blob ? blobStorage(blob) : diskStorage("/tmp/mezan-uploads"),
     secureCookies: true,
-    runtime: { ephemeral: !turso, uploadLimitMb: Number(process.env.MAX_UPLOAD_MB ?? 4) },
+    runtime: { ephemeral: !turso, uploadLimitMb: Number(process.env.MAX_UPLOAD_MB ?? 4), directUpload: !!blob },
+    blobToken: blob,
   });
 }
 

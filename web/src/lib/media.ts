@@ -1,7 +1,8 @@
 // Persiapan file sebelum diunggah, supaya hemat kuota pelanggan dan penyimpanan.
 import { runtimeInfo } from "./session";
 
-const capMb = () => runtimeInfo.uploadLimitMb;
+// Unggah langsung ke Blob tidak terkena batas body fungsi server.
+const capMb = () => (runtimeInfo.directUpload ? 15 : runtimeInfo.uploadLimitMb);
 
 export const VIDEO_MAX_MB = 15;
 export const VIDEO_MAX_SECONDS = 20;

@@ -8,6 +8,7 @@ import { createOrder, loadOrderItems, restockCancelledOrder } from "../lib/order
 import { hashPassword, newId, randomCode } from "../lib/security";
 import { EXT, MEDIA_LIMITS } from "../lib/storage";
 import { analyticsRoutes } from "./analytics";
+import { checkGallery, coverOf, loadGalleries, replaceGallery } from "../lib/gallery";
 import { checkTheme, normalizeTheme } from "../../../shared/menuTheme";
 
 export const storeRoutes = new Hono<Env>();
@@ -115,15 +116,17 @@ storeRoutes.delete("/categories/:id", mgmt, async (c) => {
 
 storeRoutes.get("/items", async (c) => {
   const t = storeOf(c);
-  return c.json({
-    items: await all(
+  const [items, galleries] = await Promise.all([
+    all<{ id: string } & Record<string, unknown>>(
       c.var.db,
       `SELECT id, category_id, name, description, price, image_url, video_url, tags, available, track_stock, stock_qty,
-              low_stock_at, unit, sort
+              low_stock_at, unit, sort, portion, components, spice_level, prep_minutes, allergens
        FROM menu_items WHERE tenant_id = ? AND archived = 0 ORDER BY sort, name`,
       t.id,
     ),
-  });
+    loadGalleries(c.var.db, t.id),
+  ]);
+  return c.json({ items: items.map((i) => ({ ...i, media: galleries.get(i.id) ?? [] })) });
 });
 
 const itemSchema = z.object({
@@ -131,9 +134,13 @@ const itemSchema = z.object({
   name: z.string().trim().min(1, "Nama menu wajib diisi.").max(80),
   description: z.string().trim().max(500).default(""),
   price: money,
-  image_url: z.string().max(300).nullable().default(null),
-  video_url: z.string().max(300).nullable().default(null),
+  media: z.array(z.object({ kind: z.enum(["image", "video"]), url: z.string().max(300) })).max(20).default([]),
   tags: z.string().trim().max(120).default(""),
+  portion: z.string().trim().max(40).default(""),
+  components: z.string().trim().max(400).default(""),
+  spice_level: z.number().int().min(0).max(5).nullable().default(null),
+  prep_minutes: z.number().int().min(1).max(240).nullable().default(null),
+  allergens: z.string().trim().max(120).default(""),
   available: bool.default(1),
   track_stock: bool.default(0),
   low_stock_at: z.number().int().min(0).max(100000).default(5),
@@ -158,18 +165,22 @@ storeRoutes.post("/items", mgmt, async (c) => {
   const t = storeOf(c);
   const b = itemSchema.parse(await c.req.json());
   await checkCategory(c, t.id, b.category_id);
-  checkMediaUrl(t.id, b.image_url);
-  checkMediaUrl(t.id, b.video_url);
-  if (b.video_url && !t.allow_video) fail(403, `Video menu belum termasuk di paket ${t.plan_name}.`);
+  for (const m of b.media) checkMediaUrl(t.id, m.url);
+  checkGallery(t, b.media);
+  const cover = coverOf(b.media);
   const max = await first<{ s: number | null }>(c.var.db, "SELECT MAX(sort) AS s FROM menu_items WHERE tenant_id = ?", t.id);
   const id = newId();
-  await run(
-    c.var.db,
-    `INSERT INTO menu_items (id, tenant_id, category_id, name, description, price, image_url, video_url, tags, available,
-       track_stock, low_stock_at, unit, sort, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    id, t.id, b.category_id, b.name, b.description, b.price, b.image_url, b.video_url, b.tags, b.available,
-    b.track_stock, b.low_stock_at, b.unit, (max?.s ?? 0) + 1, Date.now(),
-  );
+  await c.var.db.batch([
+    stmt(
+      c.var.db,
+      `INSERT INTO menu_items (id, tenant_id, category_id, name, description, price, image_url, video_url, tags, available,
+         track_stock, low_stock_at, unit, sort, created_at, portion, components, spice_level, prep_minutes, allergens)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      id, t.id, b.category_id, b.name, b.description, b.price, cover.image_url, cover.video_url, b.tags, b.available,
+      b.track_stock, b.low_stock_at, b.unit, (max?.s ?? 0) + 1, Date.now(), b.portion, b.components, b.spice_level, b.prep_minutes, b.allergens,
+    ),
+    ...replaceGallery(c.var.db, t.id, id, b.media),
+  ]);
   return c.json({ id }, 201);
 });
 
@@ -177,17 +188,22 @@ storeRoutes.put("/items/:id", mgmt, async (c) => {
   const t = storeOf(c);
   const b = itemSchema.parse(await c.req.json());
   await checkCategory(c, t.id, b.category_id);
-  checkMediaUrl(t.id, b.image_url);
-  checkMediaUrl(t.id, b.video_url);
-  if (b.video_url && !t.allow_video) fail(403, `Video menu belum termasuk di paket ${t.plan_name}.`);
-  const n = await run(
-    c.var.db,
-    `UPDATE menu_items SET category_id=?, name=?, description=?, price=?, image_url=?, video_url=?, tags=?, available=?,
-       track_stock=?, low_stock_at=?, unit=? WHERE id=? AND tenant_id=? AND archived = 0`,
-    b.category_id, b.name, b.description, b.price, b.image_url, b.video_url, b.tags, b.available,
-    b.track_stock, b.low_stock_at, b.unit, c.req.param("id"), t.id,
-  );
-  if (!n) fail(404, "Menu tidak ditemukan.");
+  for (const m of b.media) checkMediaUrl(t.id, m.url);
+  checkGallery(t, b.media);
+  const id = c.req.param("id");
+  if (!(await first(c.var.db, "SELECT 1 FROM menu_items WHERE id = ? AND tenant_id = ? AND archived = 0", id, t.id))) fail(404, "Menu tidak ditemukan.");
+  const cover = coverOf(b.media);
+  await c.var.db.batch([
+    stmt(
+      c.var.db,
+      `UPDATE menu_items SET category_id=?, name=?, description=?, price=?, image_url=?, video_url=?, tags=?, available=?,
+         track_stock=?, low_stock_at=?, unit=?, portion=?, components=?, spice_level=?, prep_minutes=?, allergens=?
+       WHERE id=? AND tenant_id=?`,
+      b.category_id, b.name, b.description, b.price, cover.image_url, cover.video_url, b.tags, b.available,
+      b.track_stock, b.low_stock_at, b.unit, b.portion, b.components, b.spice_level, b.prep_minutes, b.allergens, id, t.id,
+    ),
+    ...replaceGallery(c.var.db, t.id, id, b.media),
+  ]);
   return c.json({ ok: true });
 });
 
@@ -526,7 +542,7 @@ storeRoutes.put("/staff/:id", mgmt, async (c) => {
 storeRoutes.get("/subscription", mgmt, async (c) => {
   const t = storeOf(c);
   const payments = await all(c.var.db, "SELECT p.amount, p.months, p.method, p.created_at, p.period_end_after, pl.name AS plan_name FROM subscription_payments p JOIN plans pl ON pl.id = p.plan_id WHERE p.tenant_id = ? ORDER BY p.created_at DESC LIMIT 24", t.id);
-  const plans = await all(c.var.db, "SELECT id, name, price_monthly, max_tables, max_staff, allow_video, allow_inventory, allow_analytics, allow_branding FROM plans WHERE active = 1 ORDER BY sort, price_monthly");
+  const plans = await all(c.var.db, "SELECT id, name, price_monthly, max_tables, max_staff, allow_video, allow_inventory, allow_analytics, allow_branding, max_photos, max_videos FROM plans WHERE active = 1 ORDER BY sort, price_monthly");
   return c.json({ payments, plans });
 });
 

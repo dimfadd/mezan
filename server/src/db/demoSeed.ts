@@ -29,9 +29,9 @@ export async function seedDemo(db: DB): Promise<boolean> {
 
   // Harga paket di bawah ini contoh, ubah dari panel Admin > Paket.
   const plans = [
-    { code: "warung", name: "Warung", price_monthly: 49000, max_tables: 10, max_staff: 2, allow_video: 0, allow_inventory: 1, allow_analytics: 1, allow_branding: 0, sort: 1 },
-    { code: "kafe", name: "Kafe", price_monthly: 99000, max_tables: 30, max_staff: 8, allow_video: 1, allow_inventory: 1, allow_analytics: 1, allow_branding: 0, sort: 2 },
-    { code: "resto", name: "Resto", price_monthly: 199000, max_tables: 100, max_staff: 30, allow_video: 1, allow_inventory: 1, allow_analytics: 1, allow_branding: 1, sort: 3 },
+    { code: "warung", name: "Warung", price_monthly: 49000, max_tables: 10, max_staff: 2, allow_video: 0, allow_inventory: 1, allow_analytics: 1, allow_branding: 0, max_photos: 3, max_videos: 0, sort: 1 },
+    { code: "kafe", name: "Kafe", price_monthly: 99000, max_tables: 30, max_staff: 8, allow_video: 1, allow_inventory: 1, allow_analytics: 1, allow_branding: 0, max_photos: 5, max_videos: 1, sort: 2 },
+    { code: "resto", name: "Resto", price_monthly: 199000, max_tables: 100, max_staff: 30, allow_video: 1, allow_inventory: 1, allow_analytics: 1, allow_branding: 1, max_photos: 6, max_videos: 2, sort: 3 },
   ];
   const planIds: Record<string, string> = {};
   for (const p of plans) {
@@ -79,6 +79,21 @@ export async function seedDemo(db: DB): Promise<boolean> {
     ["Titipan", "Air Mineral 600 ml", 4000, "Botol dingin dari kulkas.", "", 36],
     ["Titipan", "Kerupuk Udang", 2000, "Per bungkus, titipan tetangga.", "", 4],
   ];
+  // Info detail contoh: porsi, isi, level pedas, waktu saji, alergen.
+  const details: Record<string, { portion?: string; components?: string; spice?: number; prep?: number; allergens?: string }> = {
+    "Nasi Goreng Kampung": { portion: "1 orang", components: "Nasi goreng terasi\nTelur ceplok\nKerupuk udang\nAcar timun", spice: 2, prep: 10, allergens: "Mengandung udang (terasi, kerupuk)" },
+    "Mie Ayam Bakso": { portion: "1 orang", components: "Mie telur\nAyam kecap\n2 bakso urat\nSawi rebus\nKuah kaldu terpisah", spice: 0, prep: 8, allergens: "Mengandung gluten dan telur" },
+    "Ayam Geprek Sambal Bawang": { portion: "1 orang (paha atau dada)", components: "Nasi putih\nAyam goreng tepung\nSambal bawang\nLalapan", spice: 4, prep: 12, allergens: "Mengandung gluten" },
+    "Soto Ayam Lamongan": { portion: "1 mangkuk", components: "Kuah kuning\nSuwiran ayam\nSetengah telur rebus\nKoya\nNasi terpisah", spice: 0, prep: 7 },
+    "Nasi Uduk Komplit": { portion: "1 orang", components: "Nasi uduk\nAyam goreng\nOrek tempe\nBihun\nSambal kacang", spice: 1, prep: 6, allergens: "Mengandung kacang" },
+    "Tahu Tempe Penyet": { portion: "1 orang", components: "Nasi putih\n2 tahu goreng\n2 tempe goreng\nSambal terasi\nLalapan", spice: 3, prep: 8, allergens: "Mengandung kedelai dan udang (terasi)" },
+    "Pisang Goreng Keju": { portion: "5 potong, cukup berdua", components: "Pisang kepok\nKeju parut\nSusu kental manis", prep: 8, allergens: "Mengandung susu" },
+    "Tahu Crispy": { portion: "8 potong", components: "Tahu goreng tepung\nSambal kecap", spice: 1, prep: 6 },
+    "Es Teh Manis": { portion: "1 gelas 400 ml", prep: 2 },
+    "Es Jeruk Peras": { portion: "1 gelas 400 ml", prep: 3 },
+    "Kopi Susu Gula Aren": { portion: "1 gelas 300 ml", components: "Espresso robusta\nSusu segar\nGula aren cair\nEs batu", prep: 5, allergens: "Mengandung susu" },
+    "Teh Tarik": { portion: "1 gelas 300 ml", prep: 4, allergens: "Mengandung susu" },
+  };
   const items: { id: string; name: string; price: number; cat: string; weight: number; stock: boolean }[] = [];
   menu.forEach(([cat, name, price, description, tags, stock], i) => {
     const id = newId();
@@ -87,6 +102,8 @@ export async function seedDemo(db: DB): Promise<boolean> {
       track_stock: stock != null ? 1 : 0, stock_qty: stock ?? 0, low_stock_at: stock != null ? 6 : 5,
       unit: cat === "Titipan" ? (name.startsWith("Air") ? "botol" : "bungkus") : cat === "Minuman" ? "gelas" : "porsi",
       sort: i + 1, created_at: now - 60 * DAY,
+      portion: details[name]?.portion ?? "", components: details[name]?.components ?? "",
+      spice_level: details[name]?.spice ?? null, prep_minutes: details[name]?.prep ?? null, allergens: details[name]?.allergens ?? "",
     });
     // bobot popularitas supaya laporan punya pola yang masuk akal
     const weight = name.includes("Es Teh") ? 9 : tags.includes("favorit") ? 6 : name.includes("Teh Tarik") ? 1 : 3;

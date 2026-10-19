@@ -38,6 +38,15 @@ npm start            # jalankan API + web hasil build dari satu server (port 878
 node tests/smoke.mjs out/   # screenshot semua halaman di ukuran HP/tablet/PC + cek error console
 ```
 
+## Detail menu untuk pembeli
+
+Ide inti Mezan: pembeli bisa membayangkan pesanannya sebelum memesan. Saat menu diketuk, pembeli melihat:
+
+- **Galeri foto & video** yang bisa digeser, dengan mode layar penuh. Video diputar otomatis tanpa suara hanya saat terlihat. Foto berikutnya baru dimuat saat mendekat supaya hemat kuota.
+- **Porsi** (mis. "1 orang", "gelas 400 ml"), **perkiraan waktu saji**, **level pedas 0-5** (ikon cabai), **isi/komponen** sebagai daftar centang, dan **alergen**.
+
+Jumlah foto & video per menu diatur per paket (Admin > Paket). Bawaan: Warung 3 foto, Kafe 5 foto + 1 video, Resto 6 foto + 2 video. Pemilik mengatur urutan dan sampul di halaman Menu & produk.
+
 ## Dua kelas pelanggan
 
 | | UMKM (paket Warung, Kafe) | Bisnis besar (paket Resto) |

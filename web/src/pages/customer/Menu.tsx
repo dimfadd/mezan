@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ChevronRight, Clock3, Minus, Play, Plus, Search, Trash2, UtensilsCrossed, X } from "lucide-react";
+import { ChevronRight, Clock3, Images, Minus, Play, Plus, Search, Trash2, UtensilsCrossed, X } from "lucide-react";
 import { Empty, ErrorState, Field, Loading, Modal, Thumb, useToast } from "../../components/ui";
 import { api } from "../../lib/api";
 import { rupiah } from "../../lib/format";
 import { useApi } from "../../lib/hooks";
 import { TAG_LABEL } from "../store/types";
 import { ThemedRoot } from "../../components/ThemedRoot";
+import { Gallery, mediaSummary, type MediaRef } from "../../components/Gallery";
+import { DishFacts } from "../../components/DishInfo";
 import { DEFAULT_THEME, type MenuTheme } from "../../../../shared/menuTheme";
 
 interface Dish {
@@ -20,6 +22,12 @@ interface Dish {
   tags: string;
   sold_out: boolean;
   few_left: number | null;
+  media: MediaRef[];
+  portion: string;
+  components: string;
+  spice_level: number | null;
+  prep_minutes: number | null;
+  allergens: string;
 }
 interface MenuData {
   store: { name: string; address: string; welcome_note: string; tax_rate: number; service_rate: number; accepting_orders: boolean; theme?: MenuTheme };
@@ -187,9 +195,9 @@ export function CustomerMenuPage() {
                       ) : (
                         <Thumb name={d.name} />
                       )}
-                      {d.video_url && (
+                      {(d.media.length > 1 || d.video_url) && (
                         <span className="play">
-                          <Play aria-hidden="true" /> Video
+                          {d.video_url ? <Play aria-hidden="true" /> : <Images aria-hidden="true" />} {mediaSummary(d.media) || "Video"}
                         </span>
                       )}
                     </div>
@@ -229,41 +237,22 @@ export function CustomerMenuPage() {
 function DishModal({ dish, canOrder, onClose, onAdd }: { dish: Dish; canOrder: boolean; onClose: () => void; onAdd: (qty: number, note: string) => void }) {
   const [qty, setQty] = useState(1);
   const [note, setNote] = useState("");
-  const [view, setView] = useState<"video" | "image">(dish.video_url ? "video" : "image");
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const [full, setFull] = useState<number | null>(null);
 
   return (
     <Modal open onClose={onClose} label={dish.name}>
-      <div className="dish-media">
-        {view === "video" && dish.video_url ? (
-          <video
-            ref={videoRef}
-            src={dish.video_url}
-            poster={dish.image_url ?? undefined}
-            muted
-            loop
-            playsInline
-            autoPlay={!reduce}
-            controls
-            preload="auto"
-            aria-label={`Video ${dish.name}`}
-          />
-        ) : dish.image_url ? (
-          <img src={dish.image_url} alt={dish.name} />
-        ) : (
-          <Thumb name={dish.name} />
-        )}
-        {dish.video_url && dish.image_url && (
-          <div className="media-switch" role="group" aria-label="Pilih tampilan">
-            <button type="button" aria-pressed={view === "video"} onClick={() => setView("video")}>Video</button>
-            <button type="button" aria-pressed={view === "image"} onClick={() => setView("image")}>Foto</button>
-          </div>
-        )}
-        <button type="button" className="icon-btn" onClick={onClose} aria-label="Tutup" style={{ position: "absolute", top: 8, right: 8, background: "rgb(20 17 12 / 0.65)", color: "#fff" }}>
+      <div className="dish-media has-gallery">
+        <Gallery media={dish.media} name={dish.name} onExpand={dish.media.length ? setFull : undefined} />
+        <button type="button" className="icon-btn" onClick={onClose} aria-label="Tutup" style={{ position: "absolute", top: 8, right: 8, background: "rgb(20 17 12 / 0.65)", color: "#fff", zIndex: 2 }}>
           <X />
         </button>
       </div>
+      <Modal open={full !== null} onClose={() => setFull(null)} label={`Foto ${dish.name} layar penuh`} className="viewer">
+        <button type="button" className="icon-btn viewer-close" onClick={() => setFull(null)} aria-label="Tutup layar penuh">
+          <X />
+        </button>
+        {full !== null && <Gallery media={dish.media} name={dish.name} start={full} fit="contain" />}
+      </Modal>
       <div className="stack">
         <div>
           <h2 className="dish-title">{dish.name}</h2>
@@ -275,6 +264,7 @@ function DishModal({ dish, canOrder, onClose, onAdd }: { dish: Dish; canOrder: b
           </div>
         </div>
         {dish.description && <p style={{ color: "var(--ink-2)" }}>{dish.description}</p>}
+        <DishFacts d={dish} />
         {dish.sold_out ? (
           <div className="banner danger" style={{ margin: 0 }}>Menu ini sedang habis.</div>
         ) : canOrder ? (

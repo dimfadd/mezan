@@ -153,6 +153,8 @@ interface Plan {
   allow_inventory: number;
   allow_analytics: number;
   allow_branding: number;
+  max_photos: number;
+  max_videos: number;
   active: number;
   sort: number;
   tenant_count?: number;
@@ -423,7 +425,7 @@ export function AdminPlans() {
         <div className="panel flush">
           <div className="table-wrap">
             <table className="table">
-              <thead><tr><th>Paket</th><th className="r">Harga/bln</th><th className="r">Meja</th><th className="r">Karyawan</th><th>Video</th><th>Stok</th><th>Laporan</th><th>Tampilan kustom</th><th className="r">Toko</th><th></th></tr></thead>
+              <thead><tr><th>Paket</th><th className="r">Harga/bln</th><th className="r">Meja</th><th className="r">Karyawan</th><th>Galeri per menu</th><th>Stok</th><th>Laporan</th><th>Tampilan kustom</th><th className="r">Toko</th><th></th></tr></thead>
               <tbody>
                 {data.plans.map((p) => (
                   <tr key={p.id} style={!p.active ? { opacity: 0.6 } : undefined}>
@@ -431,7 +433,7 @@ export function AdminPlans() {
                     <td className="r money">{rupiah(p.price_monthly)}</td>
                     <td className="r num">{p.max_tables}</td>
                     <td className="r num">{p.max_staff}</td>
-                    <td>{p.allow_video ? "Ya" : "Tidak"}</td>
+                    <td className="nowrap">{p.max_photos} foto{p.allow_video && p.max_videos ? ` · ${p.max_videos} video` : ""}</td>
                     <td>{p.allow_inventory ? "Ya" : "Tidak"}</td>
                     <td>{p.allow_analytics ? "Ya" : "Tidak"}</td>
                     <td>{p.allow_branding ? "Ya" : "Template"}</td>
@@ -454,7 +456,7 @@ function PlanEditor({ plan, onClose, onDone }: { plan: Partial<Plan>; onClose: (
   const [f, setF] = useState({
     code: plan.code ?? "", name: plan.name ?? "", price_monthly: (plan.price_monthly ?? 0) as number | "",
     max_tables: plan.max_tables ?? 10, max_staff: plan.max_staff ?? 3, allow_video: !!plan.allow_video,
-    allow_inventory: !!plan.allow_inventory, allow_analytics: !!plan.allow_analytics, allow_branding: !!plan.allow_branding, active: plan.active !== 0, sort: plan.sort ?? 0,
+    allow_inventory: !!plan.allow_inventory, allow_analytics: !!plan.allow_analytics, allow_branding: !!plan.allow_branding, max_photos: plan.max_photos ?? 3, max_videos: plan.max_videos ?? 0, active: plan.active !== 0, sort: plan.sort ?? 0,
   });
   const num = (v: string) => Number(v.replace(/\D/g, "") || 0);
   return (
@@ -479,6 +481,10 @@ function PlanEditor({ plan, onClose, onDone }: { plan: Partial<Plan>; onClose: (
         <div className="form-row">
           <Field label="Maks. meja" htmlFor="pl-tables"><input id="pl-tables" className="input num" value={f.max_tables} onChange={(e) => setF({ ...f, max_tables: num(e.target.value) })} /></Field>
           <Field label="Maks. akun karyawan" htmlFor="pl-staff"><input id="pl-staff" className="input num" value={f.max_staff} onChange={(e) => setF({ ...f, max_staff: num(e.target.value) })} /></Field>
+        </div>
+        <div className="form-row">
+          <Field label="Maks. foto per menu" htmlFor="pl-photos" hint="1 sampai 10"><input id="pl-photos" className="input num" value={f.max_photos} onChange={(e) => setF({ ...f, max_photos: Math.min(10, Math.max(1, num(e.target.value))) })} /></Field>
+          <Field label="Maks. video per menu" htmlFor="pl-videos" hint="0 sampai 4"><input id="pl-videos" className="input num" value={f.max_videos} onChange={(e) => setF({ ...f, max_videos: Math.min(4, num(e.target.value)) })} /></Field>
         </div>
         <Switch checked={f.allow_video} onChange={(v) => setF({ ...f, allow_video: v })} label="Boleh unggah video menu" hint="Video memakan penyimpanan & bandwidth paling besar." />
         <Switch checked={f.allow_inventory} onChange={(v) => setF({ ...f, allow_inventory: v })} label="Fitur stok" />

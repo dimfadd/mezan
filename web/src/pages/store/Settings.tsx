@@ -15,6 +15,8 @@ interface Plan {
   allow_inventory: number;
   allow_analytics: number;
   allow_branding: number;
+  max_photos: number;
+  max_videos: number;
 }
 
 export function SettingsPage() {
@@ -153,7 +155,7 @@ export function SettingsPage() {
               <div className="table-wrap">
                 <table className="table">
                   <thead>
-                    <tr><th>Paket</th><th className="r">Per bulan</th><th className="r">Meja</th><th className="r">Akun karyawan</th><th>Video menu</th><th>Tampilan kustom</th></tr>
+                    <tr><th>Paket</th><th className="r">Per bulan</th><th className="r">Meja</th><th className="r">Akun karyawan</th><th>Galeri per menu</th><th>Tampilan kustom</th></tr>
                   </thead>
                   <tbody>
                     {sub.data?.plans.map((p) => (
@@ -162,7 +164,7 @@ export function SettingsPage() {
                         <td className="r money">{rupiah(p.price_monthly)}</td>
                         <td className="r num">{p.max_tables}</td>
                         <td className="r num">{p.max_staff}</td>
-                        <td>{p.allow_video ? "Ya" : "Tidak"}</td>
+                        <td className="nowrap">{p.max_photos} foto{p.allow_video && p.max_videos ? ` + ${p.max_videos} video` : ""}</td>
                         <td>{p.allow_branding ? "Ya" : "Template"}</td>
                       </tr>
                     ))}
