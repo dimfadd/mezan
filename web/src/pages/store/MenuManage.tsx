@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Film, ImagePlus, Pencil, Plus, Star, Trash2, UtensilsCrossed } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Film, ImagePlus, Pencil, Plus, Star, ThumbsUp, Trash2, UtensilsCrossed } from "lucide-react";
 import { Empty, ErrorState, Field, Loading, Modal, MoneyInput, PageHead, Switch, Thumb, useConfirm, useToast } from "../../components/ui";
 import { api } from "../../lib/api";
 import { rupiah } from "../../lib/format";
@@ -157,6 +157,7 @@ export function MenuManagePage() {
           tenantId={tenant?.id ?? ""}
           planName={tenant?.plan_name ?? ""}
           stockOn={!!tenant?.inventory_enabled}
+          salesNote={salesNote(editing, items.data?.items ?? [])}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
@@ -180,7 +181,16 @@ export function MenuManagePage() {
   );
 }
 
-const TAGS = ["favorit", "pedas", "vegetarian", "baru"];
+const TAGS = ["bestseller", "favorit", "pedas", "vegetarian", "baru"];
+
+/** Bantu pemilik memutuskan label Best seller dari data penjualan, bukan perasaan. */
+function salesNote(item: Partial<MenuItem>, all: MenuItem[]) {
+  if (!item.id) return null;
+  const sold = item.sold_30d ?? 0;
+  if (sold === 0) return "Belum terjual dalam 30 hari terakhir.";
+  const rank = all.filter((i) => (i.sold_30d ?? 0) > sold).length + 1;
+  return `Terjual ${sold} dalam 30 hari terakhir, urutan ${rank} dari ${all.length} menu.${rank <= 3 ? " Cocok diberi label Best seller." : ""}`;
+}
 
 function ItemEditor({
   item,
@@ -189,6 +199,7 @@ function ItemEditor({
   tenantId,
   planName,
   stockOn,
+  salesNote,
   onClose,
   onSaved,
 }: {
@@ -198,6 +209,7 @@ function ItemEditor({
   tenantId: string;
   planName: string;
   stockOn: boolean;
+  salesNote?: string | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -322,10 +334,14 @@ function ItemEditor({
                 aria-pressed={f.tags.includes(t)}
                 onClick={() => setF({ ...f, tags: f.tags.includes(t) ? f.tags.filter((x) => x !== t) : [...f.tags, t] })}
               >
+                {t === "bestseller" && <ThumbsUp aria-hidden="true" />}
                 {TAG_LABEL[t]}
               </button>
             ))}
           </div>
+          <span className="hint">
+            Best seller tampil sebagai stempel di foto menu pembeli.{salesNote ? ` ${salesNote}` : ""}
+          </span>
         </div>
 
         <GalleryEditor

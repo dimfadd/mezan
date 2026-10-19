@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
-import { ExternalLink, Pencil, Plus, Printer, QrCode } from "lucide-react";
+import { ExternalLink, LocateFixed, MapPin, Pencil, Plus, Printer, QrCode, ShoppingBag } from "lucide-react";
 import { Empty, ErrorState, Field, Loading, Modal, PageHead, Segmented, Switch, useConfirm, useToast } from "../../components/ui";
 import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
@@ -18,7 +18,7 @@ function QrImage({ code, label }: { code: string; label: string }) {
 }
 
 export function TablesPage() {
-  const { tenant } = useSession();
+  const { tenant, refresh } = useSession();
   const { data, error, loading, reload } = useApi<{ tables: DiningTable[] }>("/api/store/tables");
   const toast = useToast();
   const confirm = useConfirm();
@@ -50,6 +50,25 @@ export function TablesPage() {
           <div>Pesan lewat QR sedang dimatikan. Pelanggan tetap bisa melihat menu, tapi tidak bisa mengirim pesanan. Nyalakan di Pengaturan.</div>
         </div>
       )}
+      <div className="guard-grid no-print">
+        <TakeawayPanel onChange={refresh} />
+        <GeoPanel onChange={refresh} />
+      </div>
+      {tenant?.takeaway_qr_enabled && tenant.takeaway_code ? (
+        <div className="qr-grid" style={{ marginBottom: 16 }}>
+          <div className="qr-card">
+            <div className="tiny muted">{tenant.name}</div>
+            <QrImage code={tenant.takeaway_code} label="Bawa pulang" />
+            <div className="label">Bawa pulang</div>
+            <div className="small muted">Pindai untuk pesan, bayar di kasir</div>
+            <div className="acts no-print">
+              <a className="btn btn-sm" href={`/m/${tenant.takeaway_code}`} target="_blank" rel="noreferrer">
+                <ExternalLink /> Buka
+              </a>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {error ? (
         <ErrorState message={error.message} onRetry={() => reload()} />
       ) : loading ? (
@@ -232,5 +251,139 @@ function EditTable({ table, onSaved, onRegenerate, onDelete }: { table: DiningTa
         <button type="submit" className="btn btn-primary">Simpan</button>
       </div>
     </form>
+  );
+}
+
+function TakeawayPanel({ onChange }: { onChange: () => Promise<unknown> | void }) {
+  const { tenant } = useSession();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const [busy, setBusy] = useState(false);
+  const on = !!tenant?.takeaway_qr_enabled;
+  const set = async (enabled: boolean) => {
+    setBusy(true);
+    try {
+      await api.put("/api/store/takeaway", { enabled });
+      await onChange();
+      toast(enabled ? "QR bawa pulang aktif. Cetak dan pasang di dekat kasir atau pintu masuk." : "QR bawa pulang dimatikan.");
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="panel stack" aria-labelledby="tw-h">
+      <h2 id="tw-h" className="row" style={{ gap: 8 }}><ShoppingBag aria-hidden="true" className="h-icon" /> QR bawa pulang</h2>
+      <p className="small muted">
+        Satu QR untuk seluruh toko, dipasang di dekat kasir atau pintu. Pembeli memesan tanpa antre, pesanan masuk sebagai bawa pulang, lalu dibayar di kasir dan diambil saat nomornya dipanggil.
+      </p>
+      <Switch checked={on} disabled={busy} onChange={set} label="Terima pesanan bawa pulang lewat QR" hint="Maksimal 15 pesanan bawa pulang menunggu diterima dalam satu jam, supaya tidak dibanjiri pesanan iseng." />
+      {on && (
+        <button
+          type="button"
+          className="btn btn-sm"
+          style={{ justifySelf: "start" }}
+          disabled={busy}
+          onClick={async () => {
+            if (!(await confirm({ title: "Ganti kode QR bawa pulang?", body: "QR lama yang sudah dicetak tidak berfungsi lagi.", confirm: "Ganti kode", danger: true }))) return;
+            try {
+              await api.post("/api/store/takeaway/regenerate");
+              await onChange();
+              toast("Kode QR bawa pulang diganti. Cetak ulang QR-nya.");
+            } catch (e) {
+              toast((e as Error).message, "error");
+            }
+          }}
+        >
+          Ganti kode QR
+        </button>
+      )}
+    </section>
+  );
+}
+
+type GeoMode = "off" | "flag" | "block";
+
+function GeoPanel({ onChange }: { onChange: () => Promise<unknown> | void }) {
+  const { tenant } = useSession();
+  const toast = useToast();
+  const [mode, setMode] = useState<GeoMode>(tenant?.geo_mode ?? "off");
+  const [radius, setRadius] = useState<number>(tenant?.geo_radius_m ?? 100);
+  const [point, setPoint] = useState<{ lat: number; lng: number } | null>(tenant?.geo_lat != null && tenant.geo_lng != null ? { lat: tenant.geo_lat, lng: tenant.geo_lng } : null);
+  const [acc, setAcc] = useState<number | null>(null);
+  const [finding, setFinding] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const dirty = mode !== (tenant?.geo_mode ?? "off") || radius !== (tenant?.geo_radius_m ?? 100) || point?.lat !== (tenant?.geo_lat ?? undefined) || point?.lng !== (tenant?.geo_lng ?? undefined);
+
+  const locate = () => {
+    if (!("geolocation" in navigator)) {
+      toast("Browser ini tidak bisa membaca lokasi.", "error");
+      return;
+    }
+    setFinding(true);
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        setPoint({ lat: Number(p.coords.latitude.toFixed(6)), lng: Number(p.coords.longitude.toFixed(6)) });
+        setAcc(Math.round(p.coords.accuracy));
+        setFinding(false);
+      },
+      (e) => {
+        setFinding(false);
+        toast(e.code === 1 ? "Izin lokasi ditolak. Izinkan lokasi untuk situs ini di pengaturan browser." : "Lokasi belum terbaca. Coba lagi di dekat jendela atau pintu.", "error");
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    );
+  };
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      await api.put("/api/store/qr-guard", { mode, radius, lat: point?.lat ?? null, lng: point?.lng ?? null });
+      await onChange();
+      toast("Pengaman lokasi disimpan.");
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="panel stack" aria-labelledby="geo-h">
+      <h2 id="geo-h" className="row" style={{ gap: 8 }}><MapPin aria-hidden="true" className="h-icon" /> Pengaman lokasi</h2>
+      <p className="small muted">
+        Mencegah pesanan iseng dari QR yang difoto lalu dipakai dari rumah. Saat mengirim pesanan, HP pembeli diminta izin lokasi dan jaraknya ke toko dihitung. Koordinat pembeli tidak disimpan.
+      </p>
+      <Segmented<GeoMode>
+        label="Mode pengaman lokasi"
+        value={mode}
+        onChange={setMode}
+        options={[{ value: "off", label: "Mati" }, { value: "flag", label: "Tandai" }, { value: "block", label: "Tolak" }]}
+      />
+      <p className="small">
+        {mode === "off" && "Lokasi tidak dicek. Semua pesanan QR tetap harus diterima kasir dulu sebelum dibuat."}
+        {mode === "flag" && "Disarankan. Pesanan tetap masuk, tapi yang dikirim dari luar radius atau tanpa izin lokasi diberi tanda merah di tiket kasir."}
+        {mode === "block" && "Pesanan dari luar radius ditolak, begitu juga pembeli yang tidak mengizinkan lokasi. Paling ketat, tapi pembeli yang GPS-nya meleset di dalam gedung bisa ikut tertolak."}
+      </p>
+      <div className="form-row">
+        <Field label="Radius (meter)" htmlFor="geo-r" hint="GPS di dalam gedung bisa meleset 20-50 m. 100-150 m biasanya aman.">
+          <input id="geo-r" className="input num" inputMode="numeric" value={radius} onChange={(e) => setRadius(Math.min(2000, Number(e.target.value.replace(/\D/g, "") || 0)))} />
+        </Field>
+        <div className="field">
+          <span className="field-label">Titik toko</span>
+          <button type="button" className="btn" onClick={locate} disabled={finding}>
+            <LocateFixed /> {finding ? "Membaca lokasi..." : point ? "Perbarui dari perangkat ini" : "Pakai lokasi perangkat ini"}
+          </button>
+          <span className="hint">
+            {point ? `${point.lat}, ${point.lng}${acc != null ? ` (akurasi ±${acc} m)` : ""}` : "Lakukan dari dalam toko, misalnya dari HP atau tablet kasir."}
+          </span>
+        </div>
+      </div>
+      {acc != null && acc > 100 && <p className="small" style={{ color: "var(--warn-text)" }}>Akurasi lokasi masih rendah. Coba lagi dekat jendela, atau nyalakan GPS di HP.</p>}
+      <button type="button" className="btn btn-primary" style={{ justifySelf: "start" }} disabled={busy || !dirty || radius < 30 || (mode !== "off" && !point)} onClick={save}>
+        Simpan pengaman lokasi
+      </button>
+    </section>
   );
 }

@@ -29,6 +29,8 @@ export interface Order {
   updated_at: number;
   paid_at: number | null;
   created_by_name: string | null;
+  geo_check?: "" | "ok" | "far" | "unknown";
+  geo_distance_m?: number | null;
   items: OrderItem[];
 }
 
@@ -41,6 +43,7 @@ export interface MenuItem {
   image_url: string | null;
   video_url: string | null;
   tags: string;
+  sold_30d?: number;
   available: number;
   track_stock: number;
   stock_qty: number;
@@ -85,4 +88,4 @@ export const STATUS_LABEL: Record<Order["status"], string> = {
   cancelled: "Dibatalkan",
 };
 
-export const TAG_LABEL: Record<string, string> = { pedas: "Pedas", favorit: "Favorit", vegetarian: "Vegetarian", baru: "Menu baru" };
+export const TAG_LABEL: Record<string, string> = { bestseller: "Best seller", favorit: "Rekomendasi", pedas: "Pedas", vegetarian: "Vegetarian", baru: "Menu baru" };

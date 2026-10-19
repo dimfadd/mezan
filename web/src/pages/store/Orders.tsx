@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bell, BellOff, Printer, QrCode, Search, ShoppingBasket } from "lucide-react";
+import { Bell, BellOff, Printer, QrCode, Search, ShoppingBasket, MapPinOff } from "lucide-react";
 import { useOrderFeed, soundEnabled } from "../../components/Shell";
 import { Empty, ErrorState, Loading, Modal, PageHead, Segmented, useConfirm, useToast } from "../../components/ui";
 import { PaymentModal } from "../../components/PaymentModal";
@@ -23,6 +23,8 @@ const COLS: { key: Col; title: string; empty: string }[] = [
   { key: "preparing", title: "Sedang dibuat", empty: "Belum ada yang sedang dibuat." },
   { key: "ready", title: "Siap / belum bayar", empty: "Tidak ada yang menunggu diantar atau dibayar." },
 ];
+
+const distText = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(1).replace(".", ",")} km` : `${m} m`);
 
 export function OrdersPage() {
   const [tab, setTab] = useState<"active" | "history">("active");
@@ -164,13 +166,21 @@ function Ticket({ order: o, onChanged }: { order: Order; onChanged: () => Promis
           <div style={{ textAlign: "right" }} className="stack-sm">
             <span className={`badge ${o.source === "qr" ? "badge-info" : ""}`}>
               {o.source === "qr" ? <QrCode aria-hidden="true" /> : <ShoppingBasket aria-hidden="true" />}
-              {o.source === "qr" ? "QR meja" : "Kasir"}
+              {o.source === "qr" ? (o.order_type === "takeaway" ? "QR bawa pulang" : "QR meja") : "Kasir"}
             </span>
             <span className={`tiny ${waitMin >= 15 && o.status !== "done" ? "strong" : "muted"}`} style={waitMin >= 15 && o.status !== "done" ? { color: "var(--danger)" } : undefined}>
               {time(o.created_at)} · {ago(o.created_at)}
             </span>
           </div>
         </div>
+        {(o.geo_check === "far" || o.geo_check === "unknown") && o.status === "new" && (
+          <p className="geo-warn" role="note">
+            <MapPinOff aria-hidden="true" />
+            {o.geo_check === "far"
+              ? `Dikirim dari sekitar ${distText(o.geo_distance_m ?? 0)} dari toko. Pastikan pemesannya ada sebelum dibuat.`
+              : "Lokasi pemesan tidak diketahui (izin lokasi tidak diberikan). Cek dulu ke meja sebelum dibuat."}
+          </p>
+        )}
         <ul className="ticket-items">
           {o.items.map((i) => (
             <li key={i.id}>

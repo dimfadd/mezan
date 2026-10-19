@@ -758,3 +758,34 @@ dialog.modal.viewer .gallery { height: 100%; }
   .qr-card { break-inside: avoid; border: 1px solid #999; }
   .qr-card .acts { display: none; }
 }
+
+/* ---------- Pengaman lokasi, best seller, tampilan menu ---------- */
+.geo-warn { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--danger-soft); color: var(--danger); font-size: 0.86rem; font-weight: 600; }
+.geo-warn svg { width: 16px; height: 16px; flex: none; margin-top: 2px; }
+
+/* Stempel best seller: seperti cap tinta di pojok foto, supaya terbaca sekilas tanpa menutupi makanan. */
+.stamp-best {
+  position: absolute; left: 6px; top: 6px; z-index: 1; display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px 3px 6px; border-radius: 6px; transform: rotate(-4deg);
+  background: var(--accent); color: var(--accent-ink); font-size: 0.72rem; font-weight: 700; line-height: 1.2; white-space: nowrap;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-ink) 18%, transparent) inset, 0 2px 6px rgb(0 0 0 / 0.18);
+}
+.stamp-best svg { width: 13px; height: 13px; }
+.badge-best { background: var(--accent); color: var(--accent-ink); }
+.badge-best svg { width: 13px; height: 13px; }
+.layout-grid .stamp-best { left: 8px; top: 8px; font-size: 0.78rem; }
+.layout-grid .dish .added { left: auto; right: 6px; }
+
+.cust-tools { display: flex; gap: 8px; align-items: center; }
+.cust-tools .cust-search { flex: 1; min-width: 0; }
+.view-toggle { display: inline-flex; flex: none; padding: 3px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); }
+.view-toggle button { display: grid; place-items: center; width: 38px; height: 36px; border: 0; border-radius: calc(var(--radius) - 3px); background: none; color: var(--ink-2); cursor: pointer; }
+.view-toggle button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.view-toggle svg { width: 18px; height: 18px; }
+.loc-note { display: flex; gap: 8px; align-items: flex-start; }
+.loc-note svg { width: 16px; height: 16px; flex: none; margin-top: 2px; color: var(--ink-3); }
+.guard-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; align-items: start; }
+.guard-grid h2 { font-size: 1.1rem; }
+.guard-grid .h-icon { width: 20px; height: 20px; color: var(--brand-text); }
+@media (max-width: 899px) { .guard-grid { grid-template-columns: minmax(0, 1fr); } }
+.chip > svg { width: 15px; height: 15px; margin-right: 5px; vertical-align: -2px; }

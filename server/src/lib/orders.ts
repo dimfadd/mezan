@@ -23,6 +23,7 @@ export interface CreateOrderInput {
   userId: string | null;
   payment?: { method: string; amountReceived: number | null } | null;
   lang?: Lang;
+  geo?: { check: string; distance: number | null };
 }
 
 interface ItemRow {
@@ -115,13 +116,13 @@ export async function createOrder(db: DB, input: CreateOrderInput) {
         db,
         `INSERT INTO orders (id, tenant_id, number, business_day, table_id, table_label, source, order_type, customer_name,
            status, payment_status, payment_method, amount_received, subtotal, tax, service, total, note, public_token,
-           created_by, paid_by, created_at, updated_at, paid_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           created_by, paid_by, created_at, updated_at, paid_at, geo_check, geo_distance_m)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         orderId, t.id, number, day, input.tableId, input.tableLabel, input.source, input.orderType, input.customerName,
         input.source === "pos" ? "preparing" : "new",
         pay ? "paid" : "unpaid", pay?.method ?? null, pay?.amountReceived ?? null,
         totals.subtotal, totals.tax, totals.service, totals.total, input.note, token,
-        input.userId, pay ? input.userId : null, now, now, pay ? now : null,
+        input.userId, pay ? input.userId : null, now, now, pay ? now : null, input.geo?.check ?? "", input.geo?.distance ?? null,
       ),
     ];
     for (const l of merged.values()) {

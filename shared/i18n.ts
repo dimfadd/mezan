@@ -69,7 +69,7 @@ const id = {
   prev: "Sebelumnya",
   next: "Berikutnya",
   ofN: (i: number, n: number) => `${i} dari ${n}`,
-  tags: { pedas: "Pedas", favorit: "Favorit", vegetarian: "Vegetarian", baru: "Menu baru" } as Record<string, string>,
+  tags: { pedas: "Pedas", favorit: "Rekomendasi", vegetarian: "Vegetarian", baru: "Menu baru", bestseller: "Best seller" } as Record<string, string>,
   // status pesanan
   orderNo: (n: number) => `Pesanan #${n}`,
   takeaway: "Bawa pulang",
@@ -88,6 +88,24 @@ const id = {
   loadFail: "Data belum bisa dimuat",
   retry: "Coba lagi",
   language: "Bahasa",
+  // tampilan daftar
+  viewAs: "Tampilan menu",
+  listView: "Daftar",
+  gridView: "Kotak",
+  bestSeller: "Best seller",
+  // bawa pulang
+  takeawayTag: "Bawa pulang",
+  orderTakeaway: "Pesanan bawa pulang",
+  payTakeaway: "Bayar di kasir, lalu ambil pesananmu saat nomornya dipanggil.",
+  stepsTakeaway: [
+    ["Pesanan terkirim", "Menunggu kasir menerima."],
+    ["Sedang dibuat", "Dapur sedang menyiapkan pesananmu."],
+    ["Siap diambil", "Ambil di kasir, sebut nomor pesananmu."],
+    ["Sudah diambil", "Selamat menikmati."],
+  ] as [string, string][],
+  // lokasi
+  locWhy: "Toko ini memastikan pesanan datang dari pengunjung. Lokasi HP dipakai sekali saat kirim dan tidak disimpan.",
+  locChecking: "Memeriksa lokasi...",
 };
 
 type Dict = typeof id;
@@ -150,7 +168,7 @@ const en: Dict = {
   prev: "Previous",
   next: "Next",
   ofN: (i: number, n: number) => `${i} of ${n}`,
-  tags: { pedas: "Spicy", favorit: "Popular", vegetarian: "Vegetarian", baru: "New" },
+  tags: { pedas: "Spicy", favorit: "Recommended", vegetarian: "Vegetarian", baru: "New", bestseller: "Best seller" },
   orderNo: (n: number) => `Order #${n}`,
   takeaway: "Takeaway",
   forName: (name: string, time: string) => `For ${name} · ${time}. This page updates by itself.`,
@@ -168,6 +186,21 @@ const en: Dict = {
   loadFail: "Couldn't load this page",
   retry: "Try again",
   language: "Language",
+  viewAs: "Menu view",
+  listView: "List",
+  gridView: "Grid",
+  bestSeller: "Best seller",
+  takeawayTag: "Takeaway",
+  orderTakeaway: "Takeaway order",
+  payTakeaway: "Pay at the cashier, then pick up your order when your number is called.",
+  stepsTakeaway: [
+    ["Order sent", "Waiting for the cashier to accept it."],
+    ["Being prepared", "The kitchen is making your order."],
+    ["Ready for pickup", "Collect it at the cashier with your order number."],
+    ["Picked up", "Enjoy your meal."],
+  ],
+  locWhy: "This place checks that orders come from guests inside. Your location is used once when sending and is not stored.",
+  locChecking: "Checking location...",
 };
 
 export const DICT: Record<Lang, Dict> = { id, en };
@@ -201,6 +234,9 @@ const SERVER = {
     busy: "Kasir sedang ramai. Coba kirim pesanan lagi.",
     nameNeeded: "Isi nama supaya pelayan tahu pesanan ini milik siapa.",
     orderMissing: "Pesanan tidak ditemukan.",
+    locationNeeded: "Toko ini hanya menerima pesanan QR dari dalam toko. Izinkan akses lokasi di browser, lalu kirim lagi. Atau pesan langsung ke kasir.",
+    tooFar: (d: string) => `Lokasimu terbaca sekitar ${d} dari toko. Pesanan lewat QR hanya bisa dikirim dari dalam toko.`,
+    takeawayBusy: "Antrean bawa pulang lewat QR sedang penuh. Silakan pesan langsung ke kasir.",
   },
   en: {
     tableUnknown: "We don't recognise this table code. Please scan the QR on the table again.",
@@ -216,6 +252,9 @@ const SERVER = {
     busy: "The cashier is busy. Please send your order again.",
     nameNeeded: "Add your name so the waiter knows whose order this is.",
     orderMissing: "Order not found.",
+    locationNeeded: "This place only accepts QR orders from inside. Allow location access in your browser and send again, or order at the cashier.",
+    tooFar: (d: string) => `Your location reads about ${d} from the store. QR orders can only be sent from inside.`,
+    takeawayBusy: "The takeaway queue is full right now. Please order at the cashier.",
   },
 };
 

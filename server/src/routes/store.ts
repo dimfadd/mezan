@@ -122,8 +122,11 @@ storeRoutes.get("/items", async (c) => {
       c.var.db,
       `SELECT id, category_id, name, description, price, image_url, video_url, tags, available, track_stock, stock_qty,
               low_stock_at, unit, sort, portion, components, spice_level, prep_minutes, allergens,
-              name_en, description_en, portion_en, components_en, allergens_en
-       FROM menu_items WHERE tenant_id = ? AND archived = 0 ORDER BY sort, name`,
+              name_en, description_en, portion_en, components_en, allergens_en,
+              (SELECT COALESCE(SUM(oi.qty), 0) FROM order_items oi JOIN orders o ON o.id = oi.order_id
+                WHERE oi.menu_item_id = m.id AND o.tenant_id = m.tenant_id AND o.status != 'cancelled' AND o.created_at > ?) AS sold_30d
+       FROM menu_items m WHERE tenant_id = ? AND archived = 0 ORDER BY sort, name`,
+      Date.now() - 30 * 86400_000,
       t.id,
     ),
     loadGalleries(c.var.db, t.id),
@@ -321,6 +324,42 @@ storeRoutes.put("/tables/:id", mgmt, async (c) => {
   return c.json({ ok: true });
 });
 
+// ---------- QR bawa pulang (satu per toko) ----------
+
+storeRoutes.put("/takeaway", mgmt, async (c) => {
+  const t = storeOf(c);
+  const b = z.object({ enabled: bool }).parse(await c.req.json());
+  // Kode dibuat sekali saat pertama dinyalakan, supaya QR yang sudah dicetak tetap berlaku saat dimatikan-nyalakan.
+  const code = t.takeaway_code ?? randomCode(12);
+  await run(c.var.db, "UPDATE tenants SET takeaway_qr_enabled = ?, takeaway_code = ? WHERE id = ?", b.enabled, code, t.id);
+  return c.json({ ok: true, code });
+});
+
+storeRoutes.post("/takeaway/regenerate", mgmt, async (c) => {
+  const t = storeOf(c);
+  const code = randomCode(12);
+  await run(c.var.db, "UPDATE tenants SET takeaway_code = ? WHERE id = ?", code, t.id);
+  return c.json({ ok: true, code });
+});
+
+// ---------- Pengaman lokasi untuk pesanan QR ----------
+
+const geoSchema = z
+  .object({
+    mode: z.enum(["off", "flag", "block"]),
+    lat: z.number().min(-90).max(90).nullable(),
+    lng: z.number().min(-180).max(180).nullable(),
+    radius: z.number().int().min(30, "Radius minimal 30 meter.").max(2000, "Radius maksimal 2 km."),
+  })
+  .refine((v) => v.mode === "off" || (v.lat != null && v.lng != null), "Simpan dulu lokasi toko sebelum menyalakan pengaman lokasi.");
+
+storeRoutes.put("/qr-guard", mgmt, async (c) => {
+  const t = storeOf(c);
+  const b = geoSchema.parse(await c.req.json());
+  await run(c.var.db, "UPDATE tenants SET geo_mode = ?, geo_lat = ?, geo_lng = ?, geo_radius_m = ? WHERE id = ?", b.mode, b.lat, b.lng, b.radius, t.id);
+  return c.json({ ok: true });
+});
+
 // Ganti kode QR kalau QR lama tersebar/difoto orang dan disalahgunakan.
 storeRoutes.post("/tables/:id/regenerate", mgmt, async (c) => {
   const t = storeOf(c);
@@ -364,7 +403,7 @@ storeRoutes.get("/orders", async (c) => {
     c.var.db,
     `SELECT o.id, o.number, o.business_day, o.table_label, o.source, o.order_type, o.customer_name, o.status, o.payment_status,
             o.payment_method, o.amount_received, o.subtotal, o.tax, o.service, o.total, o.note, o.cancel_reason, o.created_at,
-            o.updated_at, o.paid_at, u.name AS created_by_name
+            o.updated_at, o.paid_at, o.geo_check, o.geo_distance_m, u.name AS created_by_name
      FROM orders o LEFT JOIN users u ON u.id = o.created_by
      WHERE ${where.join(" AND ")} ORDER BY o.created_at DESC LIMIT ${limit}`,
     ...args,

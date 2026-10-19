@@ -68,6 +68,21 @@ Hak tampilan kustom diatur per paket lewat kolom `allow_branding` (Admin > Paket
 
 Pengaman: kombinasi warna yang kontrasnya di bawah WCAG AA (4,5:1) ditolak di editor dan di server, karena menu yang tidak terbaca merugikan toko itu sendiri. Kustomisasi hanya berlaku di halaman pelanggan; layar kasir tetap memakai tampilan Pesan.in supaya karyawan tidak bingung. Aturan tema ada di `shared/menuTheme.ts` dan dipakai bersama server + web.
 
+## QR meja, QR bawa pulang, dan pengaman lokasi
+
+- **Setiap meja punya kode QR acak sendiri** (10 karakter, bukan nomor urut), jadi tidak bisa ditebak dengan mengganti angka di alamat. Kode bisa diganti per meja kalau QR lama disalahgunakan.
+- **QR bawa pulang**: satu QR per toko, dinyalakan dari Meja & QR. Pesanan masuk sebagai bawa pulang tanpa meja; status di HP pembeli berbunyi "Siap diambil". Maksimal 15 pesanan bawa pulang menunggu diterima per jam.
+- **Pengaman lokasi** (Meja & QR): titik toko diambil dari perangkat kasir, radius bawaan 100 m.
+  - *Tandai* (disarankan): pesanan tetap masuk, tiket kasir diberi peringatan merah kalau dikirim dari luar radius atau tanpa izin lokasi.
+  - *Tolak*: pesanan dari luar radius atau tanpa izin lokasi ditolak.
+  - Yang disimpan hanya hasil cek dan jaraknya, bukan koordinat pembeli. Koordinat toko tidak dikirim ke pembeli.
+  - Batasan: GPS di dalam gedung bisa meleset puluhan meter dan lokasi bisa dipalsukan aplikasi fake GPS. Ini penghalang untuk iseng, bukan jaminan. Lapisan utama tetap: pesanan QR harus diterima kasir dulu sebelum dibuat.
+
+## Tampilan daftar / kotak dan Best seller
+
+- Pembeli bisa memilih tampilan daftar atau kotak (grid) di menu QR. Pilihannya disimpan di HP; kalau belum memilih, ikut tata letak pilihan toko.
+- Label **Best seller** tampil sebagai stempel jempol di foto menu. Di editor menu, pemilik melihat jumlah terjual 30 hari terakhir dan urutannya, supaya label ini sesuai data.
+
 ## Landing page dengan simulasi
 
 Halaman depan (`web/src/pages/public/landing/`) memperagakan aplikasi lewat animasi, bukan klaim:

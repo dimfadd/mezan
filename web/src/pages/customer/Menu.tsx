@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ChevronRight, Clock3, Images, Minus, Play, Plus, Search, Trash2, UtensilsCrossed, X } from "lucide-react";
+import { ChevronRight, Clock3, Images, LayoutGrid, List, MapPin, Minus, Play, Plus, Search, ShoppingBag, ThumbsUp, Trash2, UtensilsCrossed, X } from "lucide-react";
 import { Empty, ErrorState, Field, Loading, Modal, Thumb, useToast } from "../../components/ui";
 import { api } from "../../lib/api";
 import { rupiah } from "../../lib/format";
@@ -37,7 +37,9 @@ interface Dish {
 }
 interface MenuData {
   store: { name: string; address: string; welcome_note: string; welcome_note_en: string; tax_rate: number; service_rate: number; accepting_orders: boolean; theme?: MenuTheme };
-  table: { label: string; area: string };
+  mode: "dine_in" | "takeaway";
+  table: { label: string; area: string } | null;
+  geo: { check: boolean; strict: boolean };
   categories: { id: string; name: string; name_en: string }[];
   items: Dish[];
 }
@@ -66,6 +68,21 @@ function saveJSON(key: string, v: unknown) {
   }
 }
 
+const VIEW_KEY = "pesanin-view";
+const isBest = (d: Dish) => d.tags.split(",").includes("bestseller");
+
+/** Lokasi HP sekali ambil. Gagal / ditolak = null; server yang memutuskan boleh atau tidak. */
+function getLocation(): Promise<{ lat: number; lng: number; acc: number } | null> {
+  if (!("geolocation" in navigator)) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+    );
+  });
+}
+
 /** Keterangan Inggris di bawah nama asli. Nama asli tetap utama supaya pelayan paham saat disebut. */
 const subtitle = (lang: Lang, d: Dish) => (lang === "en" && d.name_en && d.name_en !== d.name ? d.name_en : null);
 
@@ -78,6 +95,23 @@ export function CustomerMenuPage() {
   const [open, setOpen] = useState<Dish | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [activeCat, setActiveCat] = useState<string | null>(null);
+  // Pilihan tampilan pembeli disimpan di HP-nya; kalau belum pernah memilih, ikut pilihan toko.
+  const [view, setView] = useState<"list" | "grid" | null>(() => {
+    try {
+      const v = localStorage.getItem(VIEW_KEY);
+      return v === "list" || v === "grid" ? v : null;
+    } catch {
+      return null;
+    }
+  });
+  const pickView = (v: "list" | "grid") => {
+    setView(v);
+    try {
+      localStorage.setItem(VIEW_KEY, v);
+    } catch {
+      /* mode privat */
+    }
+  };
   const myOrders = loadJSON<{ token: string; number: number; at: number }[]>(ordersKey(code), []).filter((o) => Date.now() - o.at < 12 * 3600_000);
 
   useEffect(() => saveJSON(cartKey(code), cart), [cart, code]);
@@ -128,27 +162,29 @@ export function CustomerMenuPage() {
     );
   }
 
-  const theme = data.store.theme ?? DEFAULT_THEME;
+  const baseTheme = data.store.theme ?? DEFAULT_THEME;
+  const layout = view ?? baseTheme.layout;
+  const theme = { ...baseTheme, layout };
   const welcome = loc(lang, data.store.welcome_note, data.store.welcome_note_en);
+  const placeTag = data.table ? (
+    <span className="table-tag">
+      <UtensilsCrossed aria-hidden="true" /> {data.table.label}
+      {data.table.area && ` · ${data.table.area}`}
+    </span>
+  ) : (
+    <span className="table-tag">
+      <ShoppingBag aria-hidden="true" /> {t.takeawayTag}
+    </span>
+  );
   return (
     <ThemedRoot theme={theme}>
     <div className="cust">
       <header className="cust-head">
         <div className="cust-top">
-          {theme.logo ? <img className="cust-logo" src={theme.logo} alt={`Logo ${data.store.name}`} /> : (
-            <span className="table-tag">
-              <UtensilsCrossed aria-hidden="true" /> {data.table.label}
-              {data.table.area && ` · ${data.table.area}`}
-            </span>
-          )}
+          {theme.logo ? <img className="cust-logo" src={theme.logo} alt={`Logo ${data.store.name}`} /> : placeTag}
           <LangSwitch lang={lang} setLang={setLang} />
         </div>
-        {theme.logo && (
-          <span className="table-tag">
-            <UtensilsCrossed aria-hidden="true" /> {data.table.label}
-            {data.table.area && ` · ${data.table.area}`}
-          </span>
-        )}
+        {theme.logo && placeTag}
         <h1 className="store">{data.store.name}</h1>
         {welcome && <p className="muted">{welcome}</p>}
         {!data.store.accepting_orders && (
@@ -165,9 +201,19 @@ export function CustomerMenuPage() {
       </header>
 
       <nav className="cust-nav" aria-label={t.menu}>
-        <div className="cust-search">
-          <Search aria-hidden="true" />
-          <input className="input" type="search" placeholder={t.search} value={q} onChange={(e) => setQ(e.target.value)} aria-label={t.search} />
+        <div className="cust-tools">
+          <div className="cust-search">
+            <Search aria-hidden="true" />
+            <input className="input" type="search" placeholder={t.search} value={q} onChange={(e) => setQ(e.target.value)} aria-label={t.search} />
+          </div>
+          <div className="view-toggle" role="group" aria-label={t.viewAs}>
+            <button type="button" aria-pressed={layout === "list"} onClick={() => pickView("list")} aria-label={t.listView} title={t.listView}>
+              <List aria-hidden="true" />
+            </button>
+            <button type="button" aria-pressed={layout === "grid"} onClick={() => pickView("grid")} aria-label={t.gridView} title={t.gridView}>
+              <LayoutGrid aria-hidden="true" />
+            </button>
+          </div>
         </div>
         {!q && sections.length > 1 && (
           <div className="chips">
@@ -200,7 +246,7 @@ export function CustomerMenuPage() {
                 const sub = subtitle(lang, d);
                 const desc = loc(lang, d.description, d.description_en);
                 return (
-                  <button key={d.id} className={`dish${d.sold_out ? " sold" : ""}`} onClick={() => setOpen(d)} aria-label={`${d.name}${sub ? `, ${sub}` : ""}, ${rupiah(d.price)}${d.sold_out ? `, ${t.soldOut}` : ""}. ${t.seeDetail}`}>
+                  <button key={d.id} className={`dish${d.sold_out ? " sold" : ""}`} onClick={() => setOpen(d)} aria-label={`${d.name}${sub ? `, ${sub}` : ""}, ${rupiah(d.price)}${isBest(d) ? `, ${t.bestSeller}` : ""}${d.sold_out ? `, ${t.soldOut}` : ""}. ${t.seeDetail}`}>
                     {inCart > 0 && <span className="count added">{inCart}</span>}
                     <div style={{ minWidth: 0 }}>
                       <div className="name">{d.name}</div>
@@ -210,12 +256,17 @@ export function CustomerMenuPage() {
                       <div className="tags">
                         {d.sold_out && <span className="badge badge-danger">{t.soldOut}</span>}
                         {d.few_left != null && <span className="badge badge-warn">{t.fewLeft(d.few_left)}</span>}
-                        {d.tags.split(",").filter(Boolean).map((tg) => (
-                          <span key={tg} className={`badge ${tg === "pedas" ? "badge-danger" : tg === "favorit" ? "badge-new" : ""}`}>{t.tags[tg] ?? tg}</span>
+                        {d.tags.split(",").filter((tg) => tg && tg !== "bestseller").map((tg) => (
+                          <span key={tg} className={`badge ${tg === "pedas" ? "badge-danger" : tg === "favorit" ? "badge-ok" : ""}`}>{t.tags[tg] ?? tg}</span>
                         ))}
                       </div>
                     </div>
                     <div className="media">
+                      {isBest(d) && (
+                        <span className="stamp-best">
+                          <ThumbsUp aria-hidden="true" /> {t.bestSeller}
+                        </span>
+                      )}
                       {d.image_url ? (
                         <img src={d.image_url} alt="" loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                       ) : d.video_url ? (
@@ -295,9 +346,13 @@ function DishModal({ dish, lang, canOrder, onClose, onAdd }: { dish: Dish; lang:
           {sub && <p className="dish-subtitle">{sub}</p>}
           <div className="row wrap" style={{ marginTop: 8 }}>
             <span className="strong money" style={{ fontSize: "1.15rem" }}>{rupiah(dish.price)}</span>
-            {dish.tags.split(",").filter(Boolean).map((tg) => (
-              <span key={tg} className="badge">{t.tags[tg] ?? tg}</span>
-            ))}
+            {dish.tags.split(",").filter(Boolean).map((tg) =>
+              tg === "bestseller" ? (
+                <span key={tg} className="badge badge-best"><ThumbsUp aria-hidden="true" /> {t.bestSeller}</span>
+              ) : (
+                <span key={tg} className="badge">{t.tags[tg] ?? tg}</span>
+              ),
+            )}
           </div>
         </div>
         {desc && <p style={{ color: "var(--ink-2)" }}>{desc}</p>}
@@ -359,6 +414,7 @@ function CartModal({
   const [name, setName] = useState(() => loadJSON<string>("mezan-name", ""));
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [locating, setLocating] = useState(false);
   const [nameErr, setNameErr] = useState<string | null>(null);
   const byId = new Map(data.items.map((i) => [i.id, i]));
   const subtotal = lines.reduce((s, l) => s + byId.get(l.id)!.price * l.qty, 0);
@@ -384,11 +440,18 @@ function CartModal({
     setBusy(true);
     try {
       saveJSON("mezan-name", name.trim());
+      let where = null;
+      if (data.geo.check) {
+        setLocating(true);
+        where = await getLocation();
+        setLocating(false);
+      }
       const r = await api.post<{ token: string; number: number }>("/api/public/orders", {
         tableCode: code,
         customerName: name.trim(),
         note,
         lang,
+        loc: where,
         items: lines.map((l) => ({ id: l.id, qty: l.qty, note: l.note })),
       });
       const mine = loadJSON<{ token: string; number: number; at: number }[]>(ordersKey(code), []);
@@ -407,11 +470,11 @@ function CartModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={t.orderFor(data.table.label)}
+      title={data.table ? t.orderFor(data.table.label) : t.orderTakeaway}
       footer={
         data.store.accepting_orders ? (
           <button className="btn btn-primary btn-lg btn-block" disabled={busy || lines.length === 0} onClick={send}>
-            {busy ? t.sending : `${t.send} · ${rupiah(total)}`}
+            {locating ? t.locChecking : busy ? t.sending : `${t.send} · ${rupiah(total)}`}
           </button>
         ) : (
           <p className="small muted">{t.showCashier}</p>
@@ -460,7 +523,12 @@ function CartModal({
               <Field label={t.orderNote} htmlFor="c-note">
                 <input id="c-note" className="input" value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder={t.orderNotePh} />
               </Field>
-              <p className="small muted">{t.payAtCashier}</p>
+              <p className="small muted">{data.table ? t.payAtCashier : t.payTakeaway}</p>
+              {data.geo.check && (
+                <p className="small muted loc-note">
+                  <MapPin aria-hidden="true" /> {t.locWhy}
+                </p>
+              )}
             </>
           )}
         </div>

@@ -34,6 +34,7 @@ interface PublicOrder {
   cancel_reason: string | null;
   store_name: string;
   table_code: string | null;
+  order_type?: "dine_in" | "takeaway";
   items: { id: string; name: string; name_en: string; qty: number; price: number; note: string }[];
 }
 
@@ -60,6 +61,7 @@ export function OrderStatusPage() {
 
   const idx = STEPS.findIndex((s) => s.key === o.status);
   const cancelled = o.status === "cancelled";
+  const steps = o.order_type === "takeaway" ? t.stepsTakeaway : t.steps;
 
   return (
     <ThemedRoot theme={data?.theme ?? DEFAULT_THEME}>
@@ -90,8 +92,8 @@ export function OrderStatusPage() {
                 <li key={s.key} className={state} aria-current={i === idx ? "step" : undefined}>
                   <span className="dot">{state !== "todo" && <Icon aria-hidden="true" />}</span>
                   <div>
-                    <div className="label">{t.steps[i][0]}</div>
-                    {i === idx && <div className="small muted">{t.steps[i][1]}</div>}
+                    <div className="label">{steps[i][0]}</div>
+                    {i === idx && <div className="small muted">{steps[i][1]}</div>}
                   </div>
                 </li>
               );

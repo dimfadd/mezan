@@ -35,6 +35,12 @@ export interface StoreInfo {
   max_photos: number;
   max_videos: number;
   menu_theme: string;
+  takeaway_code: string | null;
+  takeaway_qr_enabled: number;
+  geo_mode: "off" | "flag" | "block";
+  geo_lat: number | null;
+  geo_lng: number | null;
+  geo_radius_m: number;
   locked: boolean;
   grace_days: number;
 }

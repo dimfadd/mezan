@@ -15,5 +15,9 @@ export const MIGRATIONS: { name: string; sql: string }[] = [
   {
     "name": "0004_english.sql",
     "sql": "-- Versi bahasa Inggris (opsional) untuk isi yang dibaca pembeli. Kosong = pakai versi Indonesia.\nALTER TABLE menu_items ADD COLUMN name_en TEXT NOT NULL DEFAULT '';\nALTER TABLE menu_items ADD COLUMN description_en TEXT NOT NULL DEFAULT '';\nALTER TABLE menu_items ADD COLUMN portion_en TEXT NOT NULL DEFAULT '';\nALTER TABLE menu_items ADD COLUMN components_en TEXT NOT NULL DEFAULT '';\nALTER TABLE menu_items ADD COLUMN allergens_en TEXT NOT NULL DEFAULT '';\nALTER TABLE categories ADD COLUMN name_en TEXT NOT NULL DEFAULT '';\nALTER TABLE tenants ADD COLUMN welcome_note_en TEXT NOT NULL DEFAULT '';\n"
+  },
+  {
+    "name": "0005_qr_guard_takeaway.sql",
+    "sql": "-- QR bawa pulang per toko, pengaman lokasi untuk pesanan QR, dan hasil cek lokasi per pesanan.\n\n-- Kode QR bawa pulang: acak seperti kode meja, dibuat saat pertama dinyalakan.\nALTER TABLE tenants ADD COLUMN takeaway_code TEXT;\nALTER TABLE tenants ADD COLUMN takeaway_qr_enabled INTEGER NOT NULL DEFAULT 0;\nCREATE UNIQUE INDEX IF NOT EXISTS idx_tenants_takeaway_code ON tenants(takeaway_code);\n\n-- Pengaman lokasi: off = tidak dicek, flag = pesanan tetap masuk tapi ditandai, block = pesanan dari luar radius ditolak.\nALTER TABLE tenants ADD COLUMN geo_mode TEXT NOT NULL DEFAULT 'off';\nALTER TABLE tenants ADD COLUMN geo_lat REAL;\nALTER TABLE tenants ADD COLUMN geo_lng REAL;\nALTER TABLE tenants ADD COLUMN geo_radius_m INTEGER NOT NULL DEFAULT 100;\n\n-- Yang disimpan hanya hasil cek dan jaraknya, bukan koordinat pembeli.\n-- '' = tidak dicek, ok = di dalam radius, far = di luar radius, unknown = lokasi tidak diizinkan / tidak akurat.\nALTER TABLE orders ADD COLUMN geo_check TEXT NOT NULL DEFAULT '';\nALTER TABLE orders ADD COLUMN geo_distance_m INTEGER;\n"
   }
 ];

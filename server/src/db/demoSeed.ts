@@ -47,6 +47,7 @@ export async function seedDemo(db: DB): Promise<boolean> {
     id: tenantId, slug: "warung-contoh", name: "Warung Contoh", kind: "warung", plan_id: planIds.resto, status: "active",
     period_end: now + 20 * DAY, address: "Jl. Contoh No. 1", phone: "", tax_rate: 0, service_rate: 0,
     inventory_enabled: 1, qr_ordering_enabled: 1, tz_offset_minutes: TZ,
+    takeaway_code: "contoh-bawa", takeaway_qr_enabled: 1,
     welcome_note: "Pesan dari meja, bayar di kasir setelah makan.", welcome_note_en: "Order from your table, pay at the cashier after your meal.", created_at: now - 60 * DAY,
   });
   const owner = newId(), manager = newId(), staff1 = newId(), staff2 = newId();
@@ -66,7 +67,7 @@ export async function seedDemo(db: DB): Promise<boolean> {
   const menu: [string, string, number, string, string, number?][] = [
     ["Makanan", "Nasi Goreng Kampung", 22000, "Nasi goreng bumbu terasi, telur ceplok, kerupuk, acar.", "favorit"],
     ["Makanan", "Mie Ayam Bakso", 20000, "Mie kenyal, ayam kecap, dua bakso urat, sawi rebus.", ""],
-    ["Makanan", "Ayam Geprek Sambal Bawang", 18000, "Ayam goreng tepung digeprek dengan sambal bawang. Level pedas bisa diminta di catatan.", "pedas,favorit"],
+    ["Makanan", "Ayam Geprek Sambal Bawang", 18000, "Ayam goreng tepung digeprek dengan sambal bawang. Level pedas bisa diminta di catatan.", "bestseller,pedas"],
     ["Makanan", "Soto Ayam Lamongan", 17000, "Kuah kuning bening, suwiran ayam, koya, telur rebus setengah.", ""],
     ["Makanan", "Nasi Uduk Komplit", 16000, "Nasi uduk, ayam goreng, orek tempe, bihun, sambal kacang.", ""],
     ["Makanan", "Tahu Tempe Penyet", 12000, "Tahu dan tempe goreng, sambal terasi, lalapan.", "vegetarian"],
@@ -74,7 +75,7 @@ export async function seedDemo(db: DB): Promise<boolean> {
     ["Camilan", "Tahu Crispy", 8000, "Tahu goreng tepung renyah, cocol sambal kecap.", "vegetarian"],
     ["Minuman", "Es Teh Manis", 5000, "Teh tubruk diseduh pagi, gula bisa dikurangi.", ""],
     ["Minuman", "Es Jeruk Peras", 8000, "Jeruk peras langsung, bukan sirup.", ""],
-    ["Minuman", "Kopi Susu Gula Aren", 15000, "Espresso robusta lokal, susu segar, gula aren cair.", "favorit"],
+    ["Minuman", "Kopi Susu Gula Aren", 15000, "Espresso robusta lokal, susu segar, gula aren cair.", "bestseller"],
     ["Minuman", "Teh Tarik", 10000, "Teh hitam dan susu kental manis, ditarik sampai berbusa.", ""],
     ["Titipan", "Air Mineral 600 ml", 4000, "Botol dingin dari kulkas.", "", 36],
     ["Titipan", "Kerupuk Udang", 2000, "Per bungkus, titipan tetangga.", "", 4],
@@ -125,7 +126,7 @@ export async function seedDemo(db: DB): Promise<boolean> {
       components_en: english[name]?.components ?? "", allergens_en: english[name]?.allergens ?? "",
     });
     // bobot popularitas supaya laporan punya pola yang masuk akal
-    const weight = name.includes("Es Teh") ? 9 : tags.includes("favorit") ? 6 : name.includes("Teh Tarik") ? 1 : 3;
+    const weight = name.includes("Es Teh") ? 9 : tags.includes("favorit") || tags.includes("bestseller") ? 6 : name.includes("Teh Tarik") ? 1 : 3;
     items.push({ id, name, price, cat, weight, stock: stock != null });
   });
 

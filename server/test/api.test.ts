@@ -277,3 +277,85 @@ test("bahasa: isi Inggris tersimpan, galat untuk pembeli ikut bahasanya, kasir t
   const pos = await call("POST", "/api/store/orders", { orderType: "takeaway", items: [{ id: item.json.id, qty: 1 }] }, owner);
   assert.equal(pos.json.error, "Es Teh sedang habis.", "layar kasir tetap bahasa Indonesia");
 });
+
+test("QR bawa pulang: mati = tidak dikenal, nyala = pesanan takeaway tanpa meja, kode bisa diganti", async () => {
+  const { call, login, db } = await setup();
+  const owner = await login("owner@t");
+  const kasir = await login("kasir@t");
+  const item = await call("POST", "/api/store/items", { category_id: null, name: "Kopi", price: 12000 }, owner);
+  assert.equal((await call("PUT", "/api/store/takeaway", { enabled: true }, kasir)).status, 403, "karyawan tidak bisa mengatur");
+  const on = await call("PUT", "/api/store/takeaway", { enabled: true }, owner);
+  const code = on.json.code as string;
+  assert.ok(code.length >= 10);
+
+  const menu = await call("GET", `/api/public/table/${code}`);
+  assert.equal(menu.status, 200);
+  assert.equal(menu.json.mode, "takeaway");
+  assert.equal(menu.json.table, null);
+
+  const ok = await call("POST", "/api/public/orders", { tableCode: code, customerName: "Rani", items: [{ id: item.json.id, qty: 1 }] });
+  assert.equal(ok.status, 201);
+  const o = db.raw.prepare("SELECT order_type, table_id, source FROM orders").get() as { order_type: string; table_id: string | null; source: string };
+  assert.deepEqual(o, { order_type: "takeaway", table_id: null, source: "qr" });
+  const st = await call("GET", `/api/public/orders/${ok.json.token}`);
+  assert.equal(st.json.order.order_type, "takeaway");
+  assert.equal(st.json.order.table_code, code, "tombol pesan lagi kembali ke QR bawa pulang");
+
+  // Dimatikan: QR yang sama tidak bisa dipakai, tapi kodenya tetap untuk dinyalakan lagi.
+  await call("PUT", "/api/store/takeaway", { enabled: false }, owner);
+  assert.equal((await call("GET", `/api/public/table/${code}`)).status, 404);
+  const again = await call("PUT", "/api/store/takeaway", { enabled: true }, owner);
+  assert.equal(again.json.code, code);
+  const regen = await call("POST", "/api/store/takeaway/regenerate", undefined, owner);
+  assert.notEqual(regen.json.code, code);
+  assert.equal((await call("GET", `/api/public/table/${code}`)).status, 404, "kode lama mati setelah diganti");
+});
+
+test("pengaman lokasi: tandai pesanan dari jauh, tolak di mode ketat, koordinat pembeli tidak disimpan", async () => {
+  const { call, login, db } = await setup();
+  const owner = await login("owner@t");
+  const item = await call("POST", "/api/store/items", { category_id: null, name: "Teh", price: 5000 }, owner);
+  await call("POST", "/api/store/tables", { label: "Meja 1" }, owner);
+  const code = (db.raw.prepare("SELECT code FROM dining_tables").get() as { code: string }).code;
+  const store = { lat: -6.2, lng: 106.816666 };
+  const near = { lat: -6.2004, lng: 106.816666, acc: 20 }; // ±45 m
+  const far = { lat: -6.23, lng: 106.816666, acc: 15 }; // ±3,3 km
+  const order = (loc: unknown) => call("POST", "/api/public/orders", { tableCode: code, customerName: "A", items: [{ id: item.json.id, qty: 1 }], loc });
+
+  assert.equal((await call("PUT", "/api/store/qr-guard", { mode: "flag", lat: null, lng: null, radius: 100 }, owner)).status, 400, "mode nyala wajib ada titik toko");
+  assert.equal((await call("PUT", "/api/store/qr-guard", { mode: "flag", ...store, radius: 100 }, owner)).status, 200);
+  const menu = await call("GET", `/api/public/table/${code}`);
+  assert.deepEqual(menu.json.geo, { check: true, strict: false });
+  assert.equal(JSON.stringify(menu.json).includes("106.81"), false, "koordinat toko tidak dikirim ke pembeli");
+
+  assert.equal((await order(near)).status, 201);
+  assert.equal((await order(far)).status, 201);
+  assert.equal((await order(null)).status, 201);
+  const checks = db.raw.prepare("SELECT geo_check, geo_distance_m FROM orders ORDER BY created_at, rowid").all() as { geo_check: string; geo_distance_m: number | null }[];
+  assert.deepEqual(checks.map((c) => c.geo_check), ["ok", "far", "unknown"]);
+  assert.ok(checks[1].geo_distance_m! > 3000);
+  const cols = (db.raw.prepare("PRAGMA table_info(orders)").all() as { name: string }[]).map((c) => c.name);
+  assert.equal(cols.some((c) => /lat|lng/.test(c)), false);
+
+  await call("PUT", "/api/store/qr-guard", { mode: "block", ...store, radius: 100 }, owner);
+  db.raw.prepare("UPDATE orders SET status = 'done'").run(); // kosongkan batas pesanan berjalan per meja
+  assert.equal((await order(near)).status, 201);
+  const tooFar = await order(far);
+  assert.equal(tooFar.status, 403);
+  assert.match(tooFar.json.error, /km dari toko/);
+  assert.equal((await order(null)).status, 403, "tanpa izin lokasi ditolak di mode ketat");
+  assert.equal((await order({ lat: -6.2, lng: 106.816666, acc: 5000 })).status, 403, "lokasi yang terlalu kabur dianggap tidak diketahui");
+});
+
+test("best seller: label tersimpan dan jumlah terjual 30 hari ikut di daftar menu toko", async () => {
+  const { call, login, db } = await setup();
+  const owner = await login("owner@t");
+  const item = await call("POST", "/api/store/items", { category_id: null, name: "Geprek", price: 18000, tags: "bestseller,pedas" }, owner);
+  await call("POST", "/api/store/tables", { label: "Meja 1" }, owner);
+  const code = (db.raw.prepare("SELECT code FROM dining_tables").get() as { code: string }).code;
+  await call("POST", "/api/public/orders", { tableCode: code, customerName: "A", items: [{ id: item.json.id, qty: 3 }] });
+  const list = await call("GET", "/api/store/items", undefined, owner);
+  assert.equal(list.json.items[0].sold_30d, 3);
+  const menu = await call("GET", `/api/public/table/${code}`);
+  assert.equal(menu.json.items[0].tags, "bestseller,pedas");
+});
