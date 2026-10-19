@@ -32,7 +32,7 @@ export function AdminShell() {
   return (
     <div className="shell has-bottom-nav">
       <aside className="sidebar" aria-label="Navigasi admin">
-        <span className="wordmark">mezan<span className="dot">.</span></span>
+        <span className="wordmark">pesan<span className="dot">.</span>in</span>
         <div className="store-chip">
           <div className="name">Admin platform</div>
           <div className="role">{user?.name}</div>
@@ -52,7 +52,7 @@ export function AdminShell() {
         </div>
       </aside>
       <header className="topbar">
-        <span className="title">Admin Mezan</span>
+        <span className="title">Admin Pesan.in</span>
         <button className="icon-btn" aria-label="Keluar" onClick={async () => { await logout(); nav("/masuk"); }}><LogOut /></button>
       </header>
       <main className="main">
@@ -86,7 +86,7 @@ export function AdminOverview() {
   const c = data.counts;
   return (
     <>
-      <PageHead title="Ringkasan" sub="Kondisi seluruh toko yang memakai Mezan." />
+      <PageHead title="Ringkasan" sub="Kondisi seluruh toko yang memakai Pesan.in." />
       <div className="kpis" style={{ marginBottom: 20 }}>
         <div className="kpi hero">
           <span className="label">Pendapatan bulanan berulang</span>

@@ -1,9 +1,9 @@
 {
-  "name": "mezan",
+  "name": "pesanin",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Mezan: menu digital, pesan dari meja, kasir, stok, dan laporan untuk warung, kafe, dan toko.",
+  "description": "Pesan.in: menu digital, pesan dari meja, kasir, stok, dan laporan untuk warung, kafe, dan toko.",
   "scripts": {
     "dev": "concurrently -k -n api,web -c green,yellow \"npm:dev:api\" \"npm:dev:web\"",
     "dev:api": "tsx watch server/src/node.ts",

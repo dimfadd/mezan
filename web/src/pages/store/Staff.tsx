@@ -140,7 +140,7 @@ function StaffEditor({ row, canManager, onClose, onSaved }: { row: Partial<Staff
         <Field label="Nama" htmlFor="st-name">
           <input id="st-name" className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={60} placeholder="Mis. Rina" autoFocus />
         </Field>
-        <Field label="Username untuk masuk" htmlFor="st-login" hint="Huruf kecil tanpa spasi. Harus unik di seluruh Mezan, jadi tambahkan nama toko, mis. rina.warungku">
+        <Field label="Username untuk masuk" htmlFor="st-login" hint="Huruf kecil tanpa spasi. Harus unik di seluruh Pesan.in, jadi tambahkan nama toko, mis. rina.warungku">
           <input id="st-login" className="input" value={login} onChange={(e) => setLogin(e.target.value.toLowerCase().replace(/\s/g, ""))} maxLength={120} autoCapitalize="none" autoComplete="off" />
         </Field>
         {canManager && (

@@ -116,7 +116,7 @@ export function requireStore(roles: Role[] = ALL_STORE): MiddlewareHandler<Env> 
 export const requirePlatform: MiddlewareHandler<Env> = async (c, next) => {
   const u = c.var.user;
   if (!u) fail(401, "Sesi kamu habis. Silakan masuk lagi.");
-  if (u.role !== "platform_admin") fail(403, "Bagian ini hanya untuk admin Mezan.");
+  if (u.role !== "platform_admin") fail(403, "Bagian ini hanya untuk admin Pesan.in.");
   await next();
 };
 

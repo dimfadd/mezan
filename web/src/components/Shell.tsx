@@ -61,7 +61,7 @@ function FeedProvider({ children }: { children: ReactNode }) {
       if (fresh && soundEnabled()) chime();
     }
     seen.current = ids;
-    document.title = newCount > 0 ? `(${newCount}) Pesanan baru · Mezan` : "Mezan";
+    document.title = newCount > 0 ? `(${newCount}) Pesanan baru · Pesan.in` : "Pesan.in";
   }, [orders, newCount]);
   return <FeedCtx.Provider value={{ orders, error: error?.message ?? null, reload: () => reload(true), newCount }}>{children}</FeedCtx.Provider>;
 }
@@ -97,7 +97,7 @@ function SubscriptionBanner() {
         <AlertTriangle aria-hidden="true" />
         <div>
           {tenant.status === "suspended" ? "Akun toko ini sedang dinonaktifkan." : "Masa langganan sudah habis."} Pesanan lewat QR dan kasir dihentikan sementara.
-          {mgmt ? " Hubungi admin Mezan untuk memperpanjang. Data kamu tetap aman." : " Beri tahu pemilik toko."}
+          {mgmt ? " Hubungi admin Pesan.in untuk memperpanjang. Data kamu tetap aman." : " Beri tahu pemilik toko."}
         </div>
       </div>
     );
@@ -167,7 +167,7 @@ function ShellInner() {
     <div className="shell has-bottom-nav">
       <aside className="sidebar" aria-label="Navigasi utama">
         <a className="wordmark" href="/toko/pesanan" onClick={(e) => { e.preventDefault(); nav("/toko/pesanan"); }}>
-          mezan<span className="dot">.</span>
+          pesan<span className="dot">.</span>in
         </a>
         <div className="store-chip">
           <div className="name">{tenant.name}</div>

@@ -152,13 +152,13 @@ export function MenuDesignPage() {
             <div className="panel stack">
               <div className="row"><Lock aria-hidden="true" style={{ width: 20, height: 20, color: "var(--ink-2)" }} /><h2>Paket {tenant.plan_name} memakai tampilan template</h2></div>
               <p className="muted">
-                Menu QR kamu sekarang memakai tampilan bawaan Mezan (seperti pratinjau di samping). Tampilan ini sudah dirancang mudah dibaca di HP, jadi tidak wajib diubah.
+                Menu QR kamu sekarang memakai tampilan bawaan Pesan.in (seperti pratinjau di samping). Tampilan ini sudah dirancang mudah dibaca di HP, jadi tidak wajib diubah.
               </p>
               <p className="muted">
                 {premiumPlan
                   ? <>Paket <strong>{premiumPlan.name}</strong> ({rupiah(premiumPlan.price_monthly)}/bulan) membuka pengaturan warna, font, sudut kartu, gambar latar, logo, dan tata letak galeri foto.</>
                   : "Belum ada paket yang membuka pengaturan tampilan."}{" "}
-                Hubungi admin Mezan untuk pindah paket.
+                Hubungi admin Pesan.in untuk pindah paket.
               </p>
             </div>
           </div>
@@ -172,7 +172,7 @@ export function MenuDesignPage() {
     <>
       <PageHead
         title="Tampilan menu"
-        sub="Yang kamu ubah di sini hanya berlaku untuk menu QR pelanggan. Layar kasir tetap memakai tampilan Mezan."
+        sub="Yang kamu ubah di sini hanya berlaku untuk menu QR pelanggan. Layar kasir tetap memakai tampilan Pesan.in."
         actions={firstTable && (
           <a className="btn" href={`/m/${firstTable.code}`} target="_blank" rel="noreferrer">Buka menu asli</a>
         )}
@@ -253,7 +253,7 @@ export function MenuDesignPage() {
               type="button"
               className="btn"
               onClick={async () => {
-                if (await confirm({ title: "Kembali ke tampilan template?", body: "Semua warna, font, logo, dan latar kembali ke bawaan Mezan. Belum tersimpan sampai kamu menekan Simpan.", confirm: "Kembalikan" })) {
+                if (await confirm({ title: "Kembali ke tampilan template?", body: "Semua warna, font, logo, dan latar kembali ke bawaan Pesan.in. Belum tersimpan sampai kamu menekan Simpan.", confirm: "Kembalikan" })) {
                   setT(DEFAULT_THEME);
                   setColorKey((k) => k + 1);
                 }

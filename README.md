@@ -1,4 +1,4 @@
-# Mezan
+# Pesan.in
 
 Menu digital dengan foto dan video, pesan dari meja lewat QR, kasir (POS), stok opsional, dan laporan penjualan. Dibuat sebagai SaaS berlangganan bulanan untuk warung, kafe, resto, dan toko.
 
@@ -19,7 +19,7 @@ Akun data contoh (semua fiktif, toko contoh memakai paket Resto supaya editor ta
 
 | Peran | Login | Kata sandi |
 |---|---|---|
-| Admin Mezan (developer) | `admin@mezan.local` | `admin12345` |
+| Admin Pesan.in (developer) | `admin@mezan.local` | `admin12345` |
 | Pemilik toko | `pemilik@contoh.id` | `contoh12345` |
 | Manajer | `manajer@contoh.id` | `contoh12345` |
 | Karyawan (kasir) | `kasir@contoh.id` | `contoh12345` |
@@ -40,7 +40,7 @@ node tests/smoke.mjs out/   # screenshot semua halaman di ukuran HP/tablet/PC + 
 
 ## Detail menu untuk pembeli
 
-Ide inti Mezan: pembeli bisa membayangkan pesanannya sebelum memesan. Saat menu diketuk, pembeli melihat:
+Ide inti Pesan.in: pembeli bisa membayangkan pesanannya sebelum memesan. Saat menu diketuk, pembeli melihat:
 
 - **Galeri foto & video** yang bisa digeser, dengan mode layar penuh. Video diputar otomatis tanpa suara hanya saat terlihat. Foto berikutnya baru dimuat saat mendekat supaya hemat kuota.
 - **Porsi** (mis. "1 orang", "gelas 400 ml"), **perkiraan waktu saji**, **level pedas 0-5** (ikon cabai), **isi/komponen** sebagai daftar centang, dan **alergen**.
@@ -61,16 +61,25 @@ Menu QR dan halaman status pesanan bisa dipindah Indonesia/Inggris lewat tombol 
 
 | | UMKM (paket Warung, Kafe) | Bisnis besar (paket Resto) |
 |---|---|---|
-| Tampilan menu QR | Template Mezan | Bisa dipersonalisasi: 5 warna, font judul & isi (dikurasi), sudut kartu, tata letak daftar/galeri foto, logo, gambar latar |
+| Tampilan menu QR | Template Pesan.in | Bisa dipersonalisasi: 5 warna, font judul & isi (dikurasi), sudut kartu, tata letak daftar/galeri foto, logo, gambar latar |
 | Titik awal | | 5 gaya jadi (Kertas warung, Kopi susu, Malam, Laut, Bata) |
 
 Hak tampilan kustom diatur per paket lewat kolom `allow_branding` (Admin > Paket), jadi admin bisa memindahkan fitur ini ke paket mana pun tanpa ubah kode. Kalau toko turun paket, menu otomatis kembali ke template tanpa menghapus pengaturannya.
 
-Pengaman: kombinasi warna yang kontrasnya di bawah WCAG AA (4,5:1) ditolak di editor dan di server, karena menu yang tidak terbaca merugikan toko itu sendiri. Kustomisasi hanya berlaku di halaman pelanggan; layar kasir tetap memakai tampilan Mezan supaya karyawan tidak bingung. Aturan tema ada di `shared/menuTheme.ts` dan dipakai bersama server + web.
+Pengaman: kombinasi warna yang kontrasnya di bawah WCAG AA (4,5:1) ditolak di editor dan di server, karena menu yang tidak terbaca merugikan toko itu sendiri. Kustomisasi hanya berlaku di halaman pelanggan; layar kasir tetap memakai tampilan Pesan.in supaya karyawan tidak bingung. Aturan tema ada di `shared/menuTheme.ts` dan dipakai bersama server + web.
+
+## Landing page dengan simulasi
+
+Halaman depan (`web/src/pages/public/landing/`) memperagakan aplikasi lewat animasi, bukan klaim:
+
+- **Simulasi satu pesanan** dari Meja 4: pindai QR, lihat galeri, tambah catatan, kirim, tiket masuk ke kasir, dibuat, dibayar, omzet bertambah. HP pembeli dan layar kasir bergerak bersamaan. Di HP hanya satu layar yang tampil bergantian.
+- **Tab fitur** yang berpindah sendiri (kasir, stok, laporan, tampilan brand, dua bahasa, hak akses), masing-masing dengan peraga kecil. Tampilan brand memakai preset asli dari `shared/menuTheme.ts`, dua bahasa memakai kamus asli dari `shared/i18n.ts`.
+- Animasi berhenti saat tidak terlihat atau tab browser disembunyikan, bisa dijeda, dan langsung diam (bisa diklik per langkah) kalau perangkat meminta gerak dikurangi.
+- Dimuat terpisah dari menu QR, jadi pembeli yang memindai QR tidak ikut mengunduhnya.
 
 ## Siapa bisa apa
 
-| Fitur | Pelanggan | Karyawan | Manajer | Pemilik | Admin Mezan |
+| Fitur | Pelanggan | Karyawan | Manajer | Pemilik | Admin Pesan.in |
 |---|---|---|---|---|---|
 | Lihat menu (foto/video), pesan dari meja, pantau status | ya | | | | |
 | Papan pesanan, terima/tolak, tandai siap, terima bayar | | ya | ya | ya | |
@@ -117,13 +126,13 @@ web/
 
 ## Belum dikerjakan
 
-Ini yang perlu ada sebelum Mezan dijual ke toko sungguhan:
+Ini yang perlu ada sebelum Pesan.in dijual ke toko sungguhan:
 
 1. **Pembayaran langganan otomatis** (Midtrans/Xendit). Sekarang admin mencatat pembayaran manual dan masa aktif diperpanjang dari situ.
 2. **Pembayaran QRIS dinamis untuk pelanggan.** Saat ini kasir menandai lunas secara manual setelah cek dana masuk.
 3. **Varian & add-on menu** (ukuran, level pedas, topping berbayar). Sekarang diwakili lewat catatan per item.
 4. **Stok bahan baku/resep** (1 porsi nasi goreng = 200 g beras). Sekarang stok per produk jadi.
-5. **Lupa kata sandi lewat email** untuk pemilik. Sekarang reset dilakukan admin Mezan.
+5. **Lupa kata sandi lewat email** untuk pemilik. Sekarang reset dilakukan admin Pesan.in.
 6. **Uji di Cloudflare** (`worker.ts`) dan pembatas percobaan login berbasis Cloudflare (yang sekarang hanya di memori server).
 7. **Terjemahan otomatis** isi menu ke bahasa Inggris (butuh layanan penerjemah berbayar). Sekarang pemilik mengisi manual.
 8. **Domain/subdomain sendiri untuk toko premium** (mis. menu.namaresto.com) dan font unggahan sendiri. Sekarang font dipilih dari daftar Google Fonts yang dikurasi.

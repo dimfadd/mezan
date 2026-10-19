@@ -1,6 +1,6 @@
 {
-  "name": "Mezan",
-  "short_name": "Mezan",
+  "name": "Pesan.in",
+  "short_name": "Pesan.in",
   "description": "Menu digital, pesan dari meja, kasir, stok, dan laporan.",
   "lang": "id",
   "start_url": "/toko/pesanan",

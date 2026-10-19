@@ -155,7 +155,7 @@ analyticsRoutes.get("/export.csv", async (c) => {
   return new Response(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="mezan-${t.slug}-${from}-sd-${to}.csv"`,
+      "Content-Disposition": `attachment; filename="pesanin-${t.slug}-${from}-sd-${to}.csv"`,
     },
   });
 });

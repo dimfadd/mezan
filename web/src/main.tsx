@@ -9,7 +9,7 @@ import "./styles/app.css";
 import { SessionProvider, useSession, isManagement } from "./lib/session";
 import { applyTheme, watchSystemTheme } from "./lib/theme";
 import { ConfirmProvider, Loading, ToastProvider } from "./components/ui";
-import { LandingPage, LoginPage, RegisterPage } from "./pages/public/Public";
+import { LoginPage, RegisterPage } from "./pages/public/Public";
 import { CustomerMenuPage } from "./pages/customer/Menu";
 import { OrderStatusPage } from "./pages/customer/OrderStatus";
 
@@ -34,6 +34,8 @@ const AdminOverview = lazyNamed(admin, "AdminOverview");
 const AdminTenants = lazyNamed(admin, "AdminTenants");
 const AdminTenantDetail = lazyNamed(admin, "AdminTenantDetail");
 const AdminPlans = lazyNamed(admin, "AdminPlans");
+// Landing berisi animasi simulasi; dipisah supaya pembeli yang memindai QR tidak ikut mengunduhnya.
+const LandingPage = lazyNamed(() => import("./pages/public/landing/Landing"), "LandingPage");
 
 applyTheme();
 watchSystemTheme();

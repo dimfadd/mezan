@@ -28,7 +28,7 @@ export interface FontOption {
 
 // Daftar font dikurasi: semua punya huruf latin lengkap, enak dibaca di HP, dan cocok untuk menu.
 export const HEADING_FONTS: FontOption[] = [
-  { id: "fredoka", label: "Fredoka", family: '"Fredoka Variable", "Fredoka", system-ui, sans-serif', google: null, note: "Membulat dan ramah, font khas Mezan (bawaan)" },
+  { id: "fredoka", label: "Fredoka", family: '"Fredoka Variable", "Fredoka", system-ui, sans-serif', google: null, note: "Membulat dan ramah, font khas Pesan.in (bawaan)" },
   { id: "fraunces", label: "Fraunces", family: '"Fraunces", Georgia, serif', google: null, note: "Serif hangat, rasa menu cetak" },
   { id: "playfair", label: "Playfair Display", family: '"Playfair Display", Georgia, serif', google: "Playfair+Display:wght@600;700", note: "Elegan, cocok fine dining" },
   { id: "dmserif", label: "DM Serif Display", family: '"DM Serif Display", Georgia, serif', google: "DM+Serif+Display", note: "Tegas dan klasik" },
@@ -39,7 +39,7 @@ export const HEADING_FONTS: FontOption[] = [
 ];
 
 export const BODY_FONTS: FontOption[] = [
-  { id: "fredoka", label: "Fredoka", family: '"Fredoka Variable", "Fredoka", system-ui, sans-serif', google: null, note: "Font khas Mezan (bawaan)" },
+  { id: "fredoka", label: "Fredoka", family: '"Fredoka Variable", "Fredoka", system-ui, sans-serif', google: null, note: "Font khas Pesan.in (bawaan)" },
   { id: "jakarta", label: "Plus Jakarta Sans", family: '"Plus Jakarta Sans Variable", system-ui, sans-serif', google: null, note: "Paling tegas untuk teks kecil" },
   { id: "dmsans", label: "DM Sans", family: '"DM Sans", system-ui, sans-serif', google: "DM+Sans:wght@400;600;700", note: "Ramping dan rapi" },
   { id: "nunito", label: "Nunito", family: '"Nunito", system-ui, sans-serif', google: "Nunito:wght@400;600;700;800", note: "Membulat, ramah" },

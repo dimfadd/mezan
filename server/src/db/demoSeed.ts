@@ -9,7 +9,7 @@ const DAY = 86_400_000;
 const TZ = 420;
 
 export const DEMO_ACCOUNTS = [
-  ["Admin Mezan", "admin@mezan.local", "admin12345"],
+  ["Admin Pesan.in", "admin@mezan.local", "admin12345"],
   ["Pemilik toko", "pemilik@contoh.id", "contoh12345"],
   ["Manajer", "manajer@contoh.id", "contoh12345"],
   ["Karyawan kasir", "kasir@contoh.id", "contoh12345"],
@@ -40,7 +40,7 @@ export async function seedDemo(db: DB): Promise<boolean> {
     ins("plans", { id, ...p, active: 1, created_at: now });
   }
 
-  ins("users", { id: newId(), tenant_id: null, name: "Admin Mezan", login: "admin@mezan.local", password_hash: await hashPassword("admin12345"), role: "platform_admin", created_at: now });
+  ins("users", { id: newId(), tenant_id: null, name: "Admin Pesan.in", login: "admin@mezan.local", password_hash: await hashPassword("admin12345"), role: "platform_admin", created_at: now });
 
   const tenantId = newId();
   ins("tenants", {

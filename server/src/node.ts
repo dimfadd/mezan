@@ -27,7 +27,7 @@ if (process.env.NODE_ENV === "production" && existsSync(dist)) {
 }
 
 serve({ fetch: app.fetch, port }, () => {
-  console.log(`Mezan API jalan di http://localhost:${port}`);
+  console.log(`Pesan.in API jalan di http://localhost:${port}`);
 });
 
 function loadDotEnv() {

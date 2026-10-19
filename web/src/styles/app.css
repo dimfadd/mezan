@@ -1,10 +1,10 @@
 /*
-  Mezan, sistem visual.
+  Pesan.in, sistem visual.
   Alasan keputusan utama (R-31):
   - Kertas krem + tinta cokelat tua: meniru nota dan papan menu warung, lebih hangat dari putih-abu dashboard pada umumnya.
   - Hijau daun pisang (brand): warna "uang masuk / beres", dipakai untuk aksi utama dan status selesai.
   - Kunyit (aksen): satu warna penanda perhatian, hanya untuk pesanan baru dan tombol keranjang pelanggan.
-  - Fredoka: font khas Mezan (dipilih pemilik produk). Huruf membulat terasa ramah untuk warung & kafe, tetap jelas di HP.
+  - Fredoka: font khas Pesan.in (dipilih pemilik produk). Huruf membulat terasa ramah untuk warung & kafe, tetap jelas di HP.
   - Fraunces: tetap tersedia sebagai pilihan font judul di tampilan menu premium.
   - Motif identitas: tepi gerigi nota (.receipt-edge) di tiket pesanan, keranjang, dan status pesanan.
 */
@@ -747,23 +747,6 @@ dialog.modal.viewer .gallery { height: 100%; }
   .design-preview { position: static; order: -1; }
   .phone-frame { height: 480px; }
 }
-
-/* ---------- Landing ---------- */
-.landing { max-width: 1080px; margin: 0 auto; padding: 0 20px 60px; }
-.landing-nav { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; gap: 12px; }
-.landing-hero { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; align-items: center; padding: 40px 0 56px; }
-.landing-hero h1 { font-family: var(--font-menu); font-size: clamp(2rem, 5vw, 3.3rem); font-weight: 700; letter-spacing: -0.03em; line-height: 1.05; }
-.landing-hero .lead { font-size: 1.1rem; color: var(--ink-2); margin: 18px 0 26px; max-width: 46ch; }
-.flow { display: grid; gap: 0; border-top: 1px solid var(--line); }
-.flow-row { display: grid; grid-template-columns: 140px 1fr 1fr; gap: 24px; padding: 26px 0; border-bottom: 1px solid var(--line); align-items: start; }
-.flow-row .who { font-weight: 800; color: var(--brand-text); }
-.flow-row h3 { font-size: 1.15rem; margin-bottom: 6px; }
-@media (max-width: 799px) {
-  .landing-hero { grid-template-columns: 1fr; padding-top: 16px; }
-  .flow-row { grid-template-columns: 1fr; gap: 6px; }
-}
-
-.demo-ticket { background: var(--surface); border: 1px solid var(--line); border-bottom: 0; padding: 20px; border-radius: var(--radius-lg) var(--radius-lg) 0 0; display: grid; gap: 10px; }
 
 /* ---------- Cetak QR ---------- */
 @media print {

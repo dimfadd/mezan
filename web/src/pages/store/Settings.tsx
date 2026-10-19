@@ -176,7 +176,7 @@ export function SettingsPage() {
                 </table>
               </div>
               <p className="small muted">
-                Untuk ganti paket atau memperpanjang, hubungi admin Mezan. Pembayaran otomatis lewat aplikasi belum tersedia.
+                Untuk ganti paket atau memperpanjang, hubungi admin Pesan.in. Pembayaran otomatis lewat aplikasi belum tersedia.
               </p>
               {!!sub.data?.payments.length && (
                 <div>
