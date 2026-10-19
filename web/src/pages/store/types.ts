@@ -5,6 +5,15 @@ export interface OrderItem {
   price: number;
   qty: number;
   note: string;
+  person?: string;
+}
+
+export interface ServiceCall {
+  id: string;
+  table_label: string;
+  kind: "waiter" | "bill";
+  geo_check: string;
+  created_at: number;
 }
 
 export interface Order {

@@ -78,6 +78,15 @@ Pengaman: kombinasi warna yang kontrasnya di bawah WCAG AA (4,5:1) ditolak di ed
   - Yang disimpan hanya hasil cek dan jaraknya, bukan koordinat pembeli. Koordinat toko tidak dikirim ke pembeli.
   - Batasan: GPS di dalam gedung bisa meleset puluhan meter dan lokasi bisa dipalsukan aplikasi fake GPS. Ini penghalang untuk iseng, bukan jaminan. Lapisan utama tetap: pesanan QR harus diterima kasir dulu sebelum dibuat.
 
+## Panggil pelayan dan pesan bareng satu meja
+
+- **Panggil pelayan / minta bill**: tombol "Panggil" di menu QR meja. Panggilan tampil di atas papan Pesanan kasir (ikut bunyi notifikasi), ditandai "Selesai" oleh karyawan, dan pembeli melihat kapan sudah ditanggapi. Panggilan yang sama tidak digandakan; maksimal 10 panggilan per meja per jam. Pengaman lokasi juga berlaku.
+- **Pesan bareng**: semua HP yang memindai QR meja yang sama berbagi satu keranjang. Setiap orang memilih dari HP-nya sendiri, nama tampil per item, lalu siapa pun mengirim sekali untuk seluruh meja. HP lain langsung tahu pesanan sudah dikirim dan bisa membuka statusnya.
+  - Di tiket kasir, setiap item diberi nama pemesannya, dan ada rincian **Bagi per orang** (sudah termasuk service dan pajak secara sebanding).
+  - Keranjang disimpan di server (`table_cart_lines`) dan kedaluwarsa 3 jam. Maksimal 12 HP per meja dan 80 item sekali kirim.
+  - HP pembeli memeriksa keadaan meja tiap 4 detik saat ada teman semeja atau keranjang dibuka, dan tiap 20 detik saat sendirian; berhenti saat tab disembunyikan.
+- **QR berlogo**: QR meja dan bawa pulang memakai koreksi galat level H dengan ikon pesan.in di tengah. Sudah diuji terbaca decoder pada lebar 110-600 px.
+
 ## Tampilan daftar / kotak dan Best seller
 
 - Pembeli bisa memilih tampilan daftar atau kotak (grid) di menu QR. Pilihannya disimpan di HP; kalau belum memilih, ikut tata letak pilihan toko.
@@ -96,8 +105,8 @@ Halaman depan (`web/src/pages/public/landing/`) memperagakan aplikasi lewat anim
 
 | Fitur | Pelanggan | Karyawan | Manajer | Pemilik | Admin Pesan.in |
 |---|---|---|---|---|---|
-| Lihat menu (foto/video), pesan dari meja, pantau status | ya | | | | |
-| Papan pesanan, terima/tolak, tandai siap, terima bayar | | ya | ya | ya | |
+| Lihat menu (foto/video), pesan dari meja (sendiri atau bareng), panggil pelayan, pantau status | ya | | | | |
+| Papan pesanan, terima/tolak, tandai siap, terima bayar, tanggapi panggilan meja | | ya | ya | ya | |
 | Kasir (catat pesanan walk-in), cetak struk | | ya | ya | ya | |
 | Tandai menu habis/tersedia | | ya | ya | ya | |
 | Lihat stok | | ya | ya | ya | |

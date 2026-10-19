@@ -106,6 +106,26 @@ const id = {
   // lokasi
   locWhy: "Toko ini memastikan pesanan datang dari pengunjung. Lokasi HP dipakai sekali saat kirim dan tidak disimpan.",
   locChecking: "Memeriksa lokasi...",
+  // panggil pelayan
+  callStaff: "Panggil",
+  callTitle: "Butuh bantuan?",
+  callWaiter: "Panggil pelayan",
+  callWaiterSub: "Pelayan datang ke mejamu.",
+  callBill: "Minta bill",
+  callBillSub: "Kasir menyiapkan tagihan meja ini.",
+  callSent: (min: number) => (min < 1 ? "Sudah dipanggil, baru saja" : `Sudah dipanggil, ${min} menit lalu`),
+  callWaiting: "Pelayan sudah dipanggil. Tunggu sebentar ya.",
+  callBillWaiting: "Bill sedang disiapkan.",
+  callCancel: "Batalkan",
+  callDone: "Panggilanmu sudah ditanggapi.",
+  // pesan bareng
+  you: "Kamu",
+  guest: "Tamu",
+  groupHint: "Teman semeja bisa pindai QR yang sama. Pilihan mereka ikut masuk ke daftar ini.",
+  groupPeople: (n: number) => `${n} orang memilih di meja ini`,
+  sendTable: "Kirim pesanan meja",
+  groupSent: (n: number, name: string) => `Pesanan meja #${n} sudah dikirim oleh ${name}.`,
+  tableItems: (n: number) => `Meja: ${n} item`,
 };
 
 type Dict = typeof id;
@@ -201,6 +221,24 @@ const en: Dict = {
   ],
   locWhy: "This place checks that orders come from guests inside. Your location is used once when sending and is not stored.",
   locChecking: "Checking location...",
+  callStaff: "Call staff",
+  callTitle: "Need help?",
+  callWaiter: "Call a waiter",
+  callWaiterSub: "A waiter will come to your table.",
+  callBill: "Ask for the bill",
+  callBillSub: "The cashier prepares this table's bill.",
+  callSent: (min: number) => (min < 1 ? "Called just now" : `Called ${min} min ago`),
+  callWaiting: "Staff have been called. They'll be with you shortly.",
+  callBillWaiting: "Your bill is being prepared.",
+  callCancel: "Cancel",
+  callDone: "Staff have responded to your call.",
+  you: "You",
+  guest: "Guest",
+  groupHint: "Friends at this table can scan the same QR. Their picks show up in this list too.",
+  groupPeople: (n: number) => `${n} people picking at this table`,
+  sendTable: "Send table order",
+  groupSent: (n: number, name: string) => `Table order #${n} was sent by ${name}.`,
+  tableItems: (n: number) => `Table: ${n} ${n === 1 ? "item" : "items"}`,
 };
 
 export const DICT: Record<Lang, Dict> = { id, en };
@@ -237,6 +275,10 @@ const SERVER = {
     locationNeeded: "Toko ini hanya menerima pesanan QR dari dalam toko. Izinkan akses lokasi di browser, lalu kirim lagi. Atau pesan langsung ke kasir.",
     tooFar: (d: string) => `Lokasimu terbaca sekitar ${d} dari toko. Pesanan lewat QR hanya bisa dikirim dari dalam toko.`,
     takeawayBusy: "Antrean bawa pulang lewat QR sedang penuh. Silakan pesan langsung ke kasir.",
+    tableCartFull: "Keranjang meja ini sudah penuh. Kirim pesanan yang ada dulu, atau pesan ke kasir.",
+    tooManyItemsGroup: "Maksimal 80 item sekali kirim untuk satu meja. Kirim sebagian dulu.",
+    tableOnly: "Fitur ini hanya untuk QR meja.",
+    tooManyCalls: "Pelayan sudah dipanggil beberapa kali. Tunggu sebentar ya.",
   },
   en: {
     tableUnknown: "We don't recognise this table code. Please scan the QR on the table again.",
@@ -255,6 +297,10 @@ const SERVER = {
     locationNeeded: "This place only accepts QR orders from inside. Allow location access in your browser and send again, or order at the cashier.",
     tooFar: (d: string) => `Your location reads about ${d} from the store. QR orders can only be sent from inside.`,
     takeawayBusy: "The takeaway queue is full right now. Please order at the cashier.",
+    tableCartFull: "This table's order list is full. Send what's there first, or order at the cashier.",
+    tooManyItemsGroup: "A table can send up to 80 items at once. Please send part of it first.",
+    tableOnly: "This only works from a table QR.",
+    tooManyCalls: "Staff have been called a few times already. Please wait a moment.",
   },
 };
 

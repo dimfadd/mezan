@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bell, BellOff, Printer, QrCode, Search, ShoppingBasket, MapPinOff } from "lucide-react";
+import { Bell, BellOff, Printer, QrCode, Search, ShoppingBasket, MapPinOff, BellRing, Check, ReceiptText } from "lucide-react";
 import { useOrderFeed, soundEnabled } from "../../components/Shell";
 import { Empty, ErrorState, Loading, Modal, PageHead, Segmented, useConfirm, useToast } from "../../components/ui";
 import { PaymentModal } from "../../components/PaymentModal";
@@ -25,6 +25,15 @@ const COLS: { key: Col; title: string; empty: string }[] = [
 ];
 
 const distText = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(1).replace(".", ",")} km` : `${m} m`);
+
+/** Tagihan per orang: subtotal masing-masing ditambah bagian service + pajak yang sebanding. Sisa pembulatan ke orang pertama. */
+function splitBill(o: Order, persons: string[]): [string, number][] {
+  const sub = (p: string) => o.items.filter((i) => (i.person ?? "") === p).reduce((s, i) => s + i.price * i.qty, 0);
+  const rows: [string, number][] = persons.map((p) => [p, o.subtotal ? Math.round((sub(p) / o.subtotal) * o.total) : 0]);
+  const rest = o.total - rows.reduce((s, [, v]) => s + v, 0);
+  if (rows.length) rows[0][1] += rest;
+  return rows;
+}
 
 export function OrdersPage() {
   const [tab, setTab] = useState<"active" | "history">("active");
@@ -69,6 +78,45 @@ export function OrdersPage() {
   );
 }
 
+function CallStrip() {
+  const { calls, reload } = useOrderFeed();
+  const toast = useToast();
+  if (calls.length === 0) return null;
+  return (
+    <section className="call-strip" aria-label="Panggilan dari meja">
+      {calls.map((c) => {
+        const min = Math.floor((Date.now() - c.created_at) / 60000);
+        return (
+          <div className={`call-card ${c.kind}`} key={c.id} role="status">
+            {c.kind === "bill" ? <ReceiptText aria-hidden="true" /> : <BellRing aria-hidden="true" />}
+            <div style={{ minWidth: 0 }}>
+              <div className="strong">{c.table_label}</div>
+              <div className="small">
+                {c.kind === "bill" ? "Minta bill" : "Panggil pelayan"} · {min < 1 ? "baru saja" : `${min} menit lalu`}
+                {c.geo_check === "far" || c.geo_check === "unknown" ? " · lokasi tidak cocok" : ""}
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={async () => {
+                try {
+                  await api.post(`/api/store/calls/${c.id}/done`);
+                  await reload();
+                } catch (e) {
+                  toast((e as Error).message, "error");
+                }
+              }}
+            >
+              <Check /> Selesai
+            </button>
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
 function Board() {
   const { orders, error, reload } = useOrderFeed();
   const phone = useMediaQuery("(max-width: 699px)");
@@ -82,6 +130,7 @@ function Board() {
 
   return (
     <>
+      <CallStrip />
       {phone && (
         <div style={{ marginBottom: 14 }}>
           <Segmented
@@ -125,6 +174,7 @@ function Ticket({ order: o, onChanged }: { order: Order; onChanged: () => Promis
   const [cancelOpen, setCancelOpen] = useState(false);
   const [reason, setReason] = useState("");
   const waitMin = Math.floor((Date.now() - o.created_at) / 60000);
+  const persons = [...new Set(o.items.map((i) => i.person ?? "").filter(Boolean))];
 
   const move = async (status: Order["status"], extra?: object) => {
     setBusy(true);
@@ -186,6 +236,7 @@ function Ticket({ order: o, onChanged }: { order: Order; onChanged: () => Promis
             <li key={i.id}>
               <span className="q num">{i.qty}×</span>
               <span>
+                {persons.length > 1 && i.person && <span className="person-tag">{i.person}</span>}
                 {i.name}
                 {i.note && <span className="note">Catatan: {i.note}</span>}
               </span>
@@ -203,6 +254,17 @@ function Ticket({ order: o, onChanged }: { order: Order; onChanged: () => Promis
           )}
         </div>
         {o.status === "done" && <p className="tiny muted">Sudah diantar, tinggal pembayaran.</p>}
+        {persons.length > 1 && o.payment_status === "unpaid" && (
+          <details className="split">
+            <summary>Bagi per orang</summary>
+            <ul>
+              {splitBill(o, persons).map(([p, v]) => (
+                <li key={p}><span>{p}</span><span className="money">{rupiah(v)}</span></li>
+              ))}
+            </ul>
+            <p className="tiny muted">Sudah termasuk service dan pajak, dibagi sesuai yang dipesan masing-masing.</p>
+          </details>
+        )}
         <div className="ticket-actions">
           {o.status === "new" && (
             <>

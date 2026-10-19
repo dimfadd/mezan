@@ -4,6 +4,7 @@ import { ThemeToggle } from "../../../components/ThemeToggle";
 import { useSession } from "../../../lib/session";
 import { Story } from "./Story";
 import { Features } from "./Features";
+import { Extras } from "./Extras";
 import "../../../styles/landing.css";
 
 function homeFor(role?: string) {
@@ -56,6 +57,14 @@ export function LandingPage() {
           <p>Kasir, stok, laporan, sampai tampilan menu. Semuanya dari akun toko yang sama, di HP, tablet, atau komputer.</p>
         </div>
         <Features />
+      </section>
+
+      <section className="lp-sec" aria-labelledby="extra-h">
+        <div className="lp-sec-head">
+          <h2 id="extra-h">Hal kecil yang terasa di meja</h2>
+          <p>Yang membuat pembeli betah dan kasir tidak kewalahan saat ramai.</p>
+        </div>
+        <Extras />
       </section>
 
       <section className="lp-sec" aria-labelledby="class-h">

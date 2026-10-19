@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import QRCode from "qrcode";
+import { brandedQr } from "../../lib/qr";
 import { ExternalLink, LocateFixed, MapPin, Pencil, Plus, Printer, QrCode, ShoppingBag } from "lucide-react";
 import { Empty, ErrorState, Field, Loading, Modal, PageHead, Segmented, Switch, useConfirm, useToast } from "../../components/ui";
 import { api } from "../../lib/api";
@@ -12,7 +12,7 @@ export const tableUrl = (code: string) => `${window.location.origin}/m/${code}`;
 function QrImage({ code, label }: { code: string; label: string }) {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
-    QRCode.toDataURL(tableUrl(code), { margin: 1, width: 300, errorCorrectionLevel: "M" }).then(setSrc).catch(() => setSrc(null));
+    brandedQr(tableUrl(code)).then(setSrc).catch(() => setSrc(null));
   }, [code]);
   return src ? <img src={src} alt={`Kode QR ${label}`} /> : <div className="skeleton" style={{ width: 150, height: 150 }} />;
 }
@@ -61,6 +61,7 @@ export function TablesPage() {
             <QrImage code={tenant.takeaway_code} label="Bawa pulang" />
             <div className="label">Bawa pulang</div>
             <div className="small muted">Pindai untuk pesan, bayar di kasir</div>
+            <div className="qr-brand">pesan<span className="dot">.</span>in</div>
             <div className="acts no-print">
               <a className="btn btn-sm" href={`/m/${tenant.takeaway_code}`} target="_blank" rel="noreferrer">
                 <ExternalLink /> Buka
@@ -87,6 +88,7 @@ export function TablesPage() {
               <QrImage code={t.code} label={t.label} />
               <div className="label">{t.label}</div>
               <div className="small muted">{t.area || "Pindai untuk lihat menu & pesan"}</div>
+              <div className="qr-brand">pesan<span className="dot">.</span>in</div>
               {!t.active && <span className="badge badge-warn">Nonaktif</span>}
               {t.open_orders > 0 && <span className="badge badge-info">{t.open_orders} pesanan berjalan</span>}
               <div className="acts no-print">

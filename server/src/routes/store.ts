@@ -377,6 +377,12 @@ storeRoutes.delete("/tables/:id", mgmt, async (c) => {
 
 // ---------- Pesanan ----------
 
+storeRoutes.post("/calls/:id/done", async (c) => {
+  const t = storeOf(c);
+  const n = await run(c.var.db, "UPDATE service_calls SET status = 'done', done_at = ?, done_by = ? WHERE id = ? AND tenant_id = ? AND status = 'open'", Date.now(), c.var.user!.id, c.req.param("id"), t.id);
+  return c.json({ ok: true, changed: n });
+});
+
 
 storeRoutes.get("/orders", async (c) => {
   const t = storeOf(c);
@@ -409,7 +415,12 @@ storeRoutes.get("/orders", async (c) => {
     ...args,
   );
   const items = await loadOrderItems(c.var.db, orders.map((o) => o.id));
-  return c.json({ orders: orders.map((o) => ({ ...o, items: items.get(o.id) ?? [] })) });
+  // Panggilan pelayan ikut di polling papan pesanan, supaya tidak ada permintaan tambahan.
+  const calls =
+    scope === "active"
+      ? await all(c.var.db, "SELECT id, table_label, kind, geo_check, created_at FROM service_calls WHERE tenant_id = ? AND status = 'open' ORDER BY created_at", t.id)
+      : [];
+  return c.json({ orders: orders.map((o) => ({ ...o, items: items.get(o.id) ?? [] })), calls });
 });
 
 const posSchema = z.object({

@@ -9,6 +9,7 @@ export interface OrderLineInput {
   id: string;
   qty: number;
   note?: string;
+  person?: string;
 }
 
 export interface CreateOrderInput {
@@ -58,10 +59,10 @@ export async function createOrder(db: DB, input: CreateOrderInput) {
   const merged = new Map<string, OrderLineInput>();
   for (const l of input.lines) {
     // item yang sama dengan catatan berbeda tetap dipisah
-    const key = `${l.id}|${(l.note ?? "").trim()}`;
+    const key = `${l.id}|${(l.note ?? "").trim()}|${l.person ?? ""}`;
     const prev = merged.get(key);
     if (prev) prev.qty += l.qty;
-    else merged.set(key, { ...l, note: (l.note ?? "").trim() });
+    else merged.set(key, { ...l, note: (l.note ?? "").trim(), person: (l.person ?? "").trim() });
   }
   const ids = [...new Set(input.lines.map((l) => l.id))];
   const items = await all<ItemRow>(
@@ -128,8 +129,8 @@ export async function createOrder(db: DB, input: CreateOrderInput) {
     for (const l of merged.values()) {
       const it = byId.get(l.id)!;
       statements.push(
-        stmt(db, `INSERT INTO order_items (id, order_id, menu_item_id, category_name, name, price, qty, note)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, newId(), orderId, it.id, it.category_name ?? "", it.name, it.price, l.qty, l.note ?? ""),
+        stmt(db, `INSERT INTO order_items (id, order_id, menu_item_id, category_name, name, price, qty, note, person)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, newId(), orderId, it.id, it.category_name ?? "", it.name, it.price, l.qty, l.note ?? "", l.person ?? ""),
       );
     }
     if (useStock) {
@@ -183,7 +184,7 @@ export async function loadOrderItems(db: DB, orderIds: string[]) {
   if (orderIds.length === 0) return new Map<string, unknown[]>();
   const rows = await all<{ order_id: string } & Record<string, unknown>>(
     db,
-    `SELECT id, order_id, menu_item_id, name, price, qty, note FROM order_items
+    `SELECT id, order_id, menu_item_id, name, price, qty, note, person FROM order_items
      WHERE order_id IN (${orderIds.map(() => "?").join(",")})`,
     ...orderIds,
   );

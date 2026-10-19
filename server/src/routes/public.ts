@@ -1,12 +1,13 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import type { Env } from "../app";
-import { all, first } from "../db/types";
+import { all, first, run, stmt } from "../db/types";
 import { TENANT_SELECT, tenantLocked, type Tenant } from "../lib/auth";
 import { fail } from "../lib/http";
 import { createOrder, loadOrderItems } from "../lib/orders";
 import { loadGalleries } from "../lib/gallery";
 import { checkGeo, geoActive } from "../lib/geo";
+import { newId } from "../lib/security";
 import { pickLang, serverMsgs, type Lang } from "../../../shared/i18n";
 import { DEFAULT_THEME, normalizeTheme } from "../../../shared/menuTheme";
 
@@ -92,8 +93,10 @@ const orderSchema = (lang: Lang) => z.object({
   note: z.string().trim().max(200).default(""),
   items: z
     .array(z.object({ id: z.string().min(1).max(64), qty: z.number().int().min(1).max(50), note: z.string().trim().max(120).optional() }))
-    .min(1, serverMsgs(lang).cartEmpty)
-    .max(40, "Pesanan terlalu banyak untuk sekali kirim."),
+    .max(40, "Pesanan terlalu banyak untuk sekali kirim.")
+    .default([]),
+  // Pesan bareng: isi pesanan diambil dari keranjang meja di server, bukan dari HP pengirim.
+  group: z.boolean().optional(),
   loc: z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180), acc: z.number().min(0).max(100000) }).nullable().optional(),
 });
 
@@ -112,9 +115,25 @@ publicRoutes.post("/orders", async (c) => {
     if (geo.check === "unknown") fail(403, M.locationNeeded);
     if (geo.check === "far") fail(403, M.tooFar(km(geo.distance!)));
   }
-  // Batas anti-iseng dari QR yang difoto orang: jumlah item per pesanan dan pesanan berjalan per jam.
-  const totalQty = b.items.reduce((n, i) => n + i.qty, 0);
-  if (totalQty > 30) fail(400, M.tooManyItems);
+  // Pesan bareng: ambil semua pilihan orang-orang di meja ini.
+  let lines: { id: string; qty: number; note?: string; person?: string }[] = b.items;
+  let cartIds: string[] = [];
+  let customerName = b.customerName;
+  if (b.group) {
+    if (!table) fail(400, M.tableOnly);
+    const cart = await loadCart(c.var.db, table.id);
+    if (cart.length === 0) fail(400, M.cartEmpty);
+    cartIds = cart.map((l) => l.id);
+    lines = cart.map((l) => ({ id: l.menu_item_id, qty: l.qty, note: l.note, person: l.person || customerName }));
+    if (lines.reduce((n, i) => n + i.qty, 0) > 80) fail(400, M.tooManyItemsGroup);
+    // Nama pengirim di depan, supaya pelayan tahu siapa yang menekan kirim.
+    const names = [...new Set([customerName, ...lines.map((l) => l.person!)].filter(Boolean))];
+    if (names.length > 1) customerName = names.join(", ").length <= 40 ? names.join(", ") : `${names[0]} +${names.length - 1}`;
+  } else {
+    if (lines.length === 0) fail(400, M.cartEmpty);
+    // Batas anti-iseng dari QR yang difoto orang: jumlah item per pesanan dan pesanan berjalan per jam.
+    if (lines.reduce((n, i) => n + i.qty, 0) > 30) fail(400, M.tooManyItems);
+  }
   const hourAgo = Date.now() - 3600_000;
   if (table) {
     const open = await first<{ n: number }>(
@@ -140,12 +159,14 @@ publicRoutes.post("/orders", async (c) => {
     tableId: table?.id ?? null,
     tableLabel: table?.label ?? null,
     geo,
-    customerName: b.customerName,
+    customerName,
     note: b.note,
-    lines: b.items,
+    lines,
     userId: null,
     lang,
   });
+  // Yang sudah terkirim dihapus. Pilihan yang ditambahkan orang lain setelah dibaca tetap tinggal untuk pesanan berikutnya.
+  if (cartIds.length) await run(c.var.db, `DELETE FROM table_cart_lines WHERE id IN (${cartIds.map(() => "?").join(",")})`, ...cartIds);
   return c.json({ token: order.token, number: order.number }, 201);
 });
 
@@ -170,4 +191,133 @@ publicRoutes.get("/orders/:token", async (c) => {
   const tenant = await first<Tenant>(c.var.db, `${TENANT_SELECT} WHERE t.id = ?`, o.tenant_id);
   const { id: _id, tenant_id: _t, tid: _tid, ...rest } = o;
   return c.json({ order: { ...rest, items: itemsOut }, theme: tenant ? publicTheme(tenant) : DEFAULT_THEME });
+});
+
+// ---------- Meja bersama: keranjang pesan bareng + panggil pelayan ----------
+
+const CART_TTL = 3 * 3600_000;
+type CartRow = { id: string; device: string; person: string; menu_item_id: string; qty: number; note: string; updated_at: number };
+
+async function loadCart(db: Env["Variables"]["db"], tableId: string) {
+  return all<CartRow>(
+    db,
+    "SELECT id, device, person, menu_item_id, qty, note, updated_at FROM table_cart_lines WHERE table_id = ? AND updated_at > ? ORDER BY updated_at, id",
+    tableId,
+    Date.now() - CART_TTL,
+  );
+}
+
+const deviceId = z.string().regex(/^[a-z0-9]{8,40}$/i);
+
+/**
+ * Keadaan meja untuk semua HP yang memindai QR yang sama: isi keranjang bersama,
+ * pesanan yang sedang berjalan, dan panggilan pelayan yang belum ditanggapi.
+ * Satu permintaan ini yang di-poll, supaya hemat kuota dan server.
+ */
+publicRoutes.get("/table/:code/state", async (c) => {
+  const lang = pickLang(c.req.query("lang"));
+  const { table } = await resolveCode(c, c.req.param("code"), lang);
+  if (!table) fail(400, serverMsgs(lang).tableOnly);
+  const me = deviceId.safeParse(c.req.query("device")).data ?? "";
+  const [cart, orders, calls] = await Promise.all([
+    loadCart(c.var.db, table.id),
+    all<{ public_token: string; number: number; customer_name: string; status: string; created_at: number }>(
+      c.var.db,
+      `SELECT public_token, number, customer_name, status, created_at FROM orders
+       WHERE table_id = ? AND source = 'qr' AND created_at > ? AND status IN ('new','preparing','ready') ORDER BY created_at DESC LIMIT 5`,
+      table.id,
+      Date.now() - CART_TTL,
+    ),
+    all<{ kind: string; created_at: number }>(c.var.db, "SELECT kind, created_at FROM service_calls WHERE table_id = ? AND status = 'open'", table.id),
+  ]);
+  return c.json({
+    lines: cart.map((l) => ({ id: l.id, item_id: l.menu_item_id, qty: l.qty, note: l.note, person: l.person, mine: l.device === me })),
+    people: new Set(cart.map((l) => l.device)).size,
+    orders: orders.map((o) => ({ token: o.public_token, number: o.number, name: o.customer_name, status: o.status, at: o.created_at })),
+    calls,
+  });
+});
+
+// Ganti semua pilihan milik satu HP di keranjang meja.
+publicRoutes.put("/table/:code/cart", async (c) => {
+  const raw = await c.req.json();
+  const lang = pickLang(raw?.lang);
+  const M = serverMsgs(lang);
+  const b = z
+    .object({
+      device: deviceId,
+      person: z.string().trim().max(30).default(""),
+      lines: z.array(z.object({ id: z.string().min(1).max(64), qty: z.number().int().min(1).max(50), note: z.string().trim().max(120).default("") })).max(30),
+    })
+    .parse(raw);
+  const { table, tenant } = await resolveCode(c, c.req.param("code"), lang);
+  if (!table) fail(400, M.tableOnly);
+  if (b.lines.reduce((n, l) => n + l.qty, 0) > 30) fail(400, M.tooManyItems);
+  const now = Date.now();
+  const cart = await loadCart(c.var.db, table.id);
+  const others = new Set(cart.filter((l) => l.device !== b.device).map((l) => l.device));
+  if (b.lines.length && others.size >= 12) fail(429, M.tableCartFull);
+  // Hanya menu milik toko ini yang boleh masuk.
+  const ids = [...new Set(b.lines.map((l) => l.id))];
+  const valid = ids.length
+    ? new Set((await all<{ id: string }>(c.var.db, `SELECT id FROM menu_items WHERE tenant_id = ? AND archived = 0 AND id IN (${ids.map(() => "?").join(",")})`, tenant.id, ...ids)).map((r) => r.id))
+    : new Set<string>();
+  const db = c.var.db;
+  await db.batch([
+    stmt(db, "DELETE FROM table_cart_lines WHERE table_id = ? AND (device = ? OR updated_at <= ?)", table.id, b.device, now - CART_TTL),
+    ...b.lines
+      .filter((l) => valid.has(l.id))
+      .map((l) =>
+        stmt(db, "INSERT INTO table_cart_lines (id, tenant_id, table_id, device, person, menu_item_id, qty, note, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          newId(), tenant.id, table.id, b.device, b.person, l.id, l.qty, l.note, now),
+      ),
+  ]);
+  return c.json({ ok: true });
+});
+
+// Siapa pun di meja boleh menghapus satu baris (mis. pilihan yang tidak jadi, atau isian orang iseng).
+publicRoutes.delete("/table/:code/cart/:lineId", async (c) => {
+  const { table } = await resolveCode(c, c.req.param("code"));
+  if (!table) fail(400, serverMsgs("id").tableOnly);
+  await run(c.var.db, "DELETE FROM table_cart_lines WHERE id = ? AND table_id = ?", c.req.param("lineId"), table.id);
+  return c.json({ ok: true });
+});
+
+const callSchema = z.object({
+  kind: z.enum(["waiter", "bill"]),
+  lang: z.string().optional(),
+  loc: z.object({ lat: z.number(), lng: z.number(), acc: z.number().min(0) }).nullable().optional(),
+});
+
+publicRoutes.post("/table/:code/calls", async (c) => {
+  const b = callSchema.parse(await c.req.json());
+  const lang = pickLang(b.lang);
+  const M = serverMsgs(lang);
+  const { table, tenant } = await resolveCode(c, c.req.param("code"), lang);
+  if (!table) fail(400, M.tableOnly);
+  if (tenantLocked(tenant)) fail(403, M.notAccepting);
+  const geo = checkGeo(tenant, b.loc);
+  if (tenant.geo_mode === "block") {
+    if (geo.check === "unknown") fail(403, M.locationNeeded);
+    if (geo.check === "far") fail(403, M.tooFar(km(geo.distance!)));
+  }
+  // Panggilan yang sama dan belum ditanggapi tidak digandakan; kasir cukup melihat satu.
+  const open = await first<{ id: string }>(c.var.db, "SELECT id FROM service_calls WHERE table_id = ? AND kind = ? AND status = 'open'", table.id, b.kind);
+  if (open) return c.json({ ok: true, id: open.id });
+  const recent = await first<{ n: number }>(c.var.db, "SELECT COUNT(*) AS n FROM service_calls WHERE table_id = ? AND created_at > ?", table.id, Date.now() - 3600_000);
+  if ((recent?.n ?? 0) >= 10) fail(429, M.tooManyCalls);
+  const id = newId();
+  await run(
+    c.var.db,
+    "INSERT INTO service_calls (id, tenant_id, table_id, table_label, kind, geo_check, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    id, tenant.id, table.id, table.label, b.kind, geo.check, Date.now(),
+  );
+  return c.json({ ok: true, id }, 201);
+});
+
+publicRoutes.delete("/table/:code/calls/:kind", async (c) => {
+  const { table } = await resolveCode(c, c.req.param("code"));
+  if (!table) fail(400, serverMsgs("id").tableOnly);
+  await run(c.var.db, "UPDATE service_calls SET status = 'cancelled', done_at = ? WHERE table_id = ? AND kind = ? AND status = 'open'", Date.now(), table.id, c.req.param("kind"));
+  return c.json({ ok: true });
 });

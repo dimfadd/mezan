@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ChevronRight, Clock3, Images, LayoutGrid, List, MapPin, Minus, Play, Plus, Search, ShoppingBag, ThumbsUp, Trash2, UtensilsCrossed, X } from "lucide-react";
+import { BellRing, ChevronRight, Clock3, Images, ReceiptText, Users, LayoutGrid, List, MapPin, Minus, Play, Plus, Search, ShoppingBag, ThumbsUp, Trash2, UtensilsCrossed, X } from "lucide-react";
 import { Empty, ErrorState, Field, Loading, Modal, Thumb, useToast } from "../../components/ui";
 import { api } from "../../lib/api";
 import { rupiah } from "../../lib/format";
@@ -11,6 +11,7 @@ import { Gallery, mediaSummary, type MediaRef } from "../../components/Gallery";
 import { DishFacts } from "../../components/DishInfo";
 import { DEFAULT_THEME, type MenuTheme } from "../../../../shared/menuTheme";
 import { loc, QUICK_NOTES, type Lang } from "../../../../shared/i18n";
+import { useTableSession, type CartLine, type SharedLine, type TableState } from "./tableSession";
 
 interface Dish {
   id: string;
@@ -42,11 +43,6 @@ interface MenuData {
   geo: { check: boolean; strict: boolean };
   categories: { id: string; name: string; name_en: string }[];
   items: Dish[];
-}
-interface CartLine {
-  id: string;
-  qty: number;
-  note: string;
 }
 
 const cartKey = (code: string) => `mezan-cart-${code}`;
@@ -90,7 +86,14 @@ export function CustomerMenuPage() {
   const { code = "" } = useParams();
   const { lang, setLang, t } = useLang();
   const { data, error, loading, reload } = useApi<MenuData>(`/api/public/table/${code}?lang=${lang}`);
-  const [cart, setCart] = useState<CartLine[]>(() => loadJSON(cartKey(code), []));
+  const toast = useToast();
+  const dineIn = !!data?.table;
+  // Meja: keranjang bersama di server (pesan bareng). Bawa pulang: keranjang di HP saja.
+  const session = useTableSession(code, dineIn, lang, (m) => toast(m, "error"));
+  const [localCart, setLocalCart] = useState<CartLine[]>(() => loadJSON(cartKey(code), []));
+  const cart = dineIn ? session.mine : localCart;
+  const setCart = dineIn ? session.setMine : setLocalCart;
+  const [callOpen, setCallOpen] = useState(false);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<Dish | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
@@ -114,7 +117,32 @@ export function CustomerMenuPage() {
   };
   const myOrders = loadJSON<{ token: string; number: number; at: number }[]>(ordersKey(code), []).filter((o) => Date.now() - o.at < 12 * 3600_000);
 
-  useEffect(() => saveJSON(cartKey(code), cart), [cart, code]);
+  useEffect(() => {
+    if (!dineIn) saveJSON(cartKey(code), localCart);
+  }, [dineIn, localCart, code]);
+  const st = session.state;
+  const othersLines = (st?.lines ?? []).filter((l) => !l.mine);
+  useEffect(() => session.setFast(cartOpen || callOpen || othersLines.length > 0 || (st?.calls.length ?? 0) > 0), [cartOpen, callOpen, othersLines.length, st?.calls.length, session]);
+
+  // Kabar dari meja: pesanan dikirim teman semeja, panggilan sudah ditanggapi.
+  const seenOrders = useRef<Set<string> | null>(null);
+  const prevCalls = useRef<string[]>([]);
+  useEffect(() => {
+    if (!st) return;
+    const tokens = new Set(st.orders.map((o) => o.token));
+    const mineTokens = new Set(myOrders.map((o) => o.token));
+    if (seenOrders.current) {
+      const fresh = st.orders.find((o) => !seenOrders.current!.has(o.token) && !mineTokens.has(o.token));
+      if (fresh) toast(t.groupSent(fresh.number, fresh.name));
+    }
+    seenOrders.current = tokens;
+    const kinds = st.calls.map((c) => c.kind);
+    if (prevCalls.current.some((k) => !kinds.includes(k as "waiter" | "bill") && !cancelledCall.current.has(k))) toast(t.callDone);
+    cancelledCall.current.clear();
+    prevCalls.current = kinds;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [st]);
+  const cancelledCall = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (data) document.title = `${data.store.name} · ${t.menu}`;
   }, [data, t]);
@@ -122,8 +150,9 @@ export function CustomerMenuPage() {
   const byId = useMemo(() => new Map((data?.items ?? []).map((i) => [i.id, i])), [data]);
   // Buang item yang sudah tidak ada/habis dari keranjang lama.
   const validCart = cart.filter((l) => byId.has(l.id) && !byId.get(l.id)!.sold_out);
-  const count = validCart.reduce((s, l) => s + l.qty, 0);
-  const subtotal = validCart.reduce((s, l) => s + byId.get(l.id)!.price * l.qty, 0);
+  const validOthers = othersLines.filter((l) => byId.has(l.item_id) && !byId.get(l.item_id)!.sold_out);
+  const count = validCart.reduce((s, l) => s + l.qty, 0) + validOthers.reduce((s, l) => s + l.qty, 0);
+  const subtotal = validCart.reduce((s, l) => s + byId.get(l.id)!.price * l.qty, 0) + validOthers.reduce((s, l) => s + byId.get(l.item_id)!.price * l.qty, 0);
 
   const sections = useMemo(() => {
     if (!data) return [];
@@ -182,7 +211,14 @@ export function CustomerMenuPage() {
       <header className="cust-head">
         <div className="cust-top">
           {theme.logo ? <img className="cust-logo" src={theme.logo} alt={`Logo ${data.store.name}`} /> : placeTag}
-          <LangSwitch lang={lang} setLang={setLang} />
+          <div className="row" style={{ gap: 6 }}>
+            {dineIn && (
+              <button type="button" className={`call-btn${st?.calls.length ? " on" : ""}`} onClick={() => setCallOpen(true)}>
+                <BellRing aria-hidden="true" /> {t.callStaff}
+              </button>
+            )}
+            <LangSwitch lang={lang} setLang={setLang} />
+          </div>
         </div>
         {theme.logo && placeTag}
         <h1 className="store">{data.store.name}</h1>
@@ -193,11 +229,21 @@ export function CustomerMenuPage() {
             <div>{t.notOpen}</div>
           </div>
         )}
-        {myOrders.length > 0 && (
-          <Link className="btn btn-sm" style={{ justifySelf: "start", marginTop: 6 }} to={`/m/${code}/pesanan/${myOrders[myOrders.length - 1].token}`}>
-            {t.seeStatus} #{myOrders[myOrders.length - 1].number} <ChevronRight />
-          </Link>
+        {st && st.calls.length > 0 && (
+          <div className="banner info" role="status" style={{ margin: "8px 0 0" }}>
+            <BellRing aria-hidden="true" />
+            <div>{st.calls.some((c) => c.kind === "waiter") ? t.callWaiting : t.callBillWaiting}</div>
+          </div>
         )}
+        {(() => {
+          // Pesanan terakhir meja ini (siapa pun pengirimnya), atau pesanan HP ini sendiri.
+          const last = st?.orders[0] ?? (myOrders.length ? { token: myOrders[myOrders.length - 1].token, number: myOrders[myOrders.length - 1].number } : null);
+          return last ? (
+            <Link className="btn btn-sm" style={{ justifySelf: "start", marginTop: 6 }} to={`/m/${code}/pesanan/${last.token}`}>
+              {t.seeStatus} #{last.number} <ChevronRight />
+            </Link>
+          ) : null;
+        })()}
       </header>
 
       <nav className="cust-nav" aria-label={t.menu}>
@@ -291,7 +337,7 @@ export function CustomerMenuPage() {
       {count > 0 && (
         <button className="cartbar" onClick={() => setCartOpen(true)}>
           <span>
-            {t.items(count)} · <span className="money">{rupiah(subtotal)}</span>
+            {validOthers.length ? <><Users aria-hidden="true" className="cartbar-ico" /> {t.tableItems(count)}</> : t.items(count)} · <span className="money">{rupiah(subtotal)}</span>
           </span>
           <span className="go">
             {data.store.accepting_orders ? t.viewOrder : t.viewChoices} <ChevronRight aria-hidden="true" />
@@ -307,8 +353,25 @@ export function CustomerMenuPage() {
         data={data}
         lines={validCart}
         setLines={setCart}
+        others={validOthers}
+        people={st?.people ?? 0}
+        session={dineIn ? session : null}
         onClose={() => setCartOpen(false)}
       />
+      {dineIn && (
+        <CallSheet
+          open={callOpen}
+          code={code}
+          lang={lang}
+          geo={data.geo}
+          calls={st?.calls ?? []}
+          onClose={() => setCallOpen(false)}
+          onChanged={(cancelled) => {
+            if (cancelled) cancelledCall.current.add(cancelled);
+            session.refresh();
+          }}
+        />
+      )}
     </div>
     </ThemedRoot>
   );
@@ -398,6 +461,9 @@ function CartModal({
   data,
   lines,
   setLines,
+  others,
+  people,
+  session,
   onClose,
 }: {
   open: boolean;
@@ -406,6 +472,9 @@ function CartModal({
   data: MenuData;
   lines: CartLine[];
   setLines: (fn: (c: CartLine[]) => CartLine[]) => void;
+  others: SharedLine[];
+  people: number;
+  session: ReturnType<typeof useTableSession> | null;
   onClose: () => void;
 }) {
   const { t } = useLang();
@@ -417,7 +486,11 @@ function CartModal({
   const [locating, setLocating] = useState(false);
   const [nameErr, setNameErr] = useState<string | null>(null);
   const byId = new Map(data.items.map((i) => [i.id, i]));
-  const subtotal = lines.reduce((s, l) => s + byId.get(l.id)!.price * l.qty, 0);
+  const group = !!session;
+  useEffect(() => {
+    session?.setPerson(name.trim());
+  }, [name, session]);
+  const subtotal = lines.reduce((s, l) => s + byId.get(l.id)!.price * l.qty, 0) + others.reduce((s, l) => s + byId.get(l.item_id)!.price * l.qty, 0);
   const service = Math.round((subtotal * data.store.service_rate) / 100);
   const tax = Math.round(((subtotal + service) * data.store.tax_rate) / 100);
   const total = subtotal + service + tax;
@@ -446,17 +519,22 @@ function CartModal({
         where = await getLocation();
         setLocating(false);
       }
+      if (session) {
+        session.setPerson(name.trim());
+        await session.flush(); // pastikan pilihan terakhir HP ini sudah sampai sebelum meja dikirim
+      }
       const r = await api.post<{ token: string; number: number }>("/api/public/orders", {
         tableCode: code,
         customerName: name.trim(),
         note,
         lang,
         loc: where,
-        items: lines.map((l) => ({ id: l.id, qty: l.qty, note: l.note })),
+        ...(group ? { group: true } : { items: lines.map((l) => ({ id: l.id, qty: l.qty, note: l.note })) }),
       });
       const mine = loadJSON<{ token: string; number: number; at: number }[]>(ordersKey(code), []);
       saveJSON(ordersKey(code), [...mine.slice(-4), { token: r.token, number: r.number, at: Date.now() }]);
-      setLines(() => []);
+      if (session) session.reset();
+      else setLines(() => []);
       onClose();
       nav(`/m/${code}/pesanan/${r.token}`);
     } catch (e) {
@@ -473,18 +551,27 @@ function CartModal({
       title={data.table ? t.orderFor(data.table.label) : t.orderTakeaway}
       footer={
         data.store.accepting_orders ? (
-          <button className="btn btn-primary btn-lg btn-block" disabled={busy || lines.length === 0} onClick={send}>
-            {locating ? t.locChecking : busy ? t.sending : `${t.send} · ${rupiah(total)}`}
+          <button className="btn btn-primary btn-lg btn-block" disabled={busy || (lines.length === 0 && others.length === 0)} onClick={send}>
+            {locating ? t.locChecking : busy ? t.sending : `${group && others.length ? t.sendTable : t.send} · ${rupiah(total)}`}
           </button>
         ) : (
           <p className="small muted">{t.showCashier}</p>
         )
       }
     >
-      {lines.length === 0 ? (
-        <Empty title={t.nothingYet}>{t.tapToAdd}</Empty>
+      {lines.length === 0 && others.length === 0 ? (
+        <div className="stack">
+          <Empty title={t.nothingYet}>{t.tapToAdd}</Empty>
+          {group && <p className="small muted" style={{ textAlign: "center" }}>{t.groupHint}</p>}
+        </div>
       ) : (
         <div className="stack">
+          {group && (
+            <p className="small muted group-note">
+              <Users aria-hidden="true" /> {people > 1 ? `${t.groupPeople(people)}. ` : ""}{t.groupHint}
+            </p>
+          )}
+          {group && others.length > 0 && lines.length > 0 && <div className="person-h">{t.you}{name.trim() ? ` (${name.trim()})` : ""}</div>}
           <div className="cart-lines">
             {lines.map((l, idx) => {
               const d = byId.get(l.id)!;
@@ -506,6 +593,7 @@ function CartModal({
               );
             })}
           </div>
+          {group && <OthersLines others={others} byId={byId} lang={lang} noteLabel={noteLabel} onRemove={(id) => session!.removeLine(id)} />}
           <hr className="divider-dashed" />
           {(service > 0 || tax > 0) && (
             <>
@@ -533,6 +621,121 @@ function CartModal({
           )}
         </div>
       )}
+    </Modal>
+  );
+}
+
+function OthersLines({ others, byId, lang, noteLabel, onRemove }: { others: SharedLine[]; byId: Map<string, Dish>; lang: Lang; noteLabel: (n: string) => string; onRemove: (id: string) => void }) {
+  const { t } = useLang();
+  if (others.length === 0) return null;
+  const groups = new Map<string, SharedLine[]>();
+  for (const l of others) {
+    const k = l.person || t.guest;
+    groups.set(k, [...(groups.get(k) ?? []), l]);
+  }
+  return (
+    <>
+      {[...groups].map(([who, ls]) => (
+        <div key={who}>
+          <div className="person-h">{who}</div>
+          <div className="cart-lines">
+            {ls.map((l) => {
+              const d = byId.get(l.item_id)!;
+              const sub = subtitle(lang, d);
+              return (
+                <div className="cart-line" key={l.id}>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="strong">{l.qty}× {d.name}</div>
+                    {sub && <div className="tiny muted">{sub}</div>}
+                    {l.note && <div className="small" style={{ color: "var(--warn-text)" }}>{noteLabel(l.note)}</div>}
+                    <div className="small muted money">{rupiah(d.price * l.qty)}</div>
+                  </div>
+                  <button type="button" className="icon-btn" onClick={() => onRemove(l.id)} aria-label={`${t.remove} ${d.name} (${who})`}>
+                    <Trash2 />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function CallSheet({
+  open,
+  code,
+  lang,
+  geo,
+  calls,
+  onClose,
+  onChanged,
+}: {
+  open: boolean;
+  code: string;
+  lang: Lang;
+  geo: MenuData["geo"];
+  calls: TableState["calls"];
+  onClose: () => void;
+  onChanged: (cancelledKind?: string) => void;
+}) {
+  const { t } = useLang();
+  const toast = useToast();
+  const [busy, setBusy] = useState<string | null>(null);
+  const call = async (kind: "waiter" | "bill") => {
+    setBusy(kind);
+    try {
+      const where = geo.check ? await getLocation() : null;
+      await api.post(`/api/public/table/${code}/calls`, { kind, lang, loc: where });
+      onChanged();
+      onClose();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setBusy(null);
+    }
+  };
+  const cancel = async (kind: string) => {
+    try {
+      await api.del(`/api/public/table/${code}/calls/${kind}`);
+      onChanged(kind);
+    } catch (e) {
+      toast((e as Error).message, "error");
+    }
+  };
+  const opts = [
+    { kind: "waiter" as const, icon: <BellRing aria-hidden="true" />, title: t.callWaiter, sub: t.callWaiterSub },
+    { kind: "bill" as const, icon: <ReceiptText aria-hidden="true" />, title: t.callBill, sub: t.callBillSub },
+  ];
+  return (
+    <Modal open={open} onClose={onClose} title={t.callTitle}>
+      <div className="stack">
+        {opts.map((o) => {
+          const pending = calls.find((c) => c.kind === o.kind);
+          return (
+            <div key={o.kind} className={`call-opt${pending ? " pending" : ""}`}>
+              <button type="button" disabled={!!pending || busy !== null} onClick={() => call(o.kind)}>
+                <span className="ico">{o.icon}</span>
+                <span>
+                  <span className="t">{o.title}</span>
+                  <span className="s">{pending ? t.callSent(Math.floor((Date.now() - pending.created_at) / 60000)) : busy === o.kind ? t.sending : o.sub}</span>
+                </span>
+              </button>
+              {pending && (
+                <button type="button" className="btn btn-sm btn-ghost" onClick={() => cancel(o.kind)}>
+                  {t.callCancel}
+                </button>
+              )}
+            </div>
+          );
+        })}
+        {geo.check && (
+          <p className="small muted loc-note">
+            <MapPin aria-hidden="true" /> {t.locWhy}
+          </p>
+        )}
+      </div>
     </Modal>
   );
 }

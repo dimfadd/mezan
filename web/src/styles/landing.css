@@ -458,3 +458,114 @@
   .lp-kpis > div:first-child { grid-column: 1 / -1; }
   .lp-b-head { flex-wrap: wrap; gap: 10px; }
 }
+
+/* ---------- Bento fitur tambahan ---------- */
+.lp-bento { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.lp-card { display: grid; grid-template-rows: auto 1fr; background: var(--surface); border: 1px solid var(--line); border-radius: 22px; overflow: hidden; min-width: 0; }
+.lp-card.span2 { grid-column: span 2; }
+.lp-card.tall { grid-row: span 2; }
+.lp-card-demo { display: grid; place-items: center; min-height: 190px; padding: 18px; background: var(--surface-2); border-bottom: 1px solid var(--line); font-size: 12px; }
+.lp-card.tall .lp-card-demo { min-height: 420px; }
+.lp-card-copy { padding: 16px 18px 20px; }
+.lp-card-copy h3 { display: flex; gap: 8px; align-items: center; font-family: var(--font-menu); font-size: 1.12rem; font-weight: 700; line-height: 1.2; }
+.lp-card-copy .ic { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: var(--brand-soft); color: var(--brand-text); flex: none; }
+.lp-card-copy .ic svg { width: 17px; height: 17px; }
+.lp-card-copy p { color: var(--ink-2); margin-top: 6px; font-size: 0.95rem; }
+.lp-mini-logo { font-weight: 700; font-size: 15px; line-height: 1; }
+
+.lp-call { display: grid; grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1.2fr); align-items: center; gap: 6px; width: 100%; max-width: 560px; }
+.lp-call-phone, .lp-call-board { background: var(--paper); border: 1px solid var(--line); border-radius: 16px; padding: 12px; display: grid; gap: 10px; min-height: 120px; align-content: start; }
+.lp-call-board { background: var(--surface); }
+.lp-call-board small { color: var(--ink-3); font-weight: 600; }
+.lp-call-btn { position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface); font-weight: 600; font-size: 11px; transition: background 0.3s, border-color 0.3s; }
+.lp-call-btn svg { width: 13px; height: 13px; }
+.lp-call-btn.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.lp-call-btn.on svg { animation: lp-ring 0.9s ease 2; transform-origin: 50% 10%; }
+.lp-call-msg { font-size: 11.5px; color: var(--ink-2); background: var(--surface); border-radius: 10px; padding: 8px 10px; border: 1px solid var(--line); }
+.lp-call-arrow { height: 2px; background: repeating-linear-gradient(90deg, var(--line-strong) 0 6px, transparent 6px 10px); position: relative; }
+.lp-call-arrow::after { content: ""; position: absolute; right: -2px; top: -4px; border: 5px solid transparent; border-left-color: var(--line-strong); }
+.lp-call-card { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 10px; background: var(--accent-soft); border: 1px solid var(--accent); animation: lp-drop 0.45s both; }
+.lp-call-card > svg { width: 18px; height: 18px; color: var(--warn-text); flex: none; }
+.lp-call-card > div { flex: 1; display: grid; min-width: 0; }
+.lp-call-card span { font-size: 10.5px; color: var(--ink-2); }
+.lp-call-card .lp-btn { flex: none; }
+
+.lp-group { width: 100%; max-width: 300px; display: grid; gap: 12px; align-content: center; }
+.lp-avatars { display: flex; align-items: center; }
+.lp-avatars span { width: 30px; height: 30px; border-radius: 50%; color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 13px; border: 2px solid var(--surface-2); margin-left: -6px; }
+.lp-avatars span:first-child { margin-left: 0; }
+.lp-avatars small { margin-left: 8px; color: var(--ink-2); font-weight: 600; }
+.lp-group-list { display: grid; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px; min-height: 178px; align-content: start; }
+.lp-group-line { display: grid; grid-template-columns: 8px 38px minmax(0, 1fr) auto; gap: 6px; align-items: center; font-size: 11.5px; animation: lp-drop 0.4s both; }
+.lp-group-line i { width: 8px; height: 8px; border-radius: 50%; }
+.lp-group-line .who { font-weight: 700; color: var(--ink-2); }
+.lp-group-line .it { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lp-group-line b { font-family: var(--font-num); }
+.lp-group .lp-btn { padding: 9px 10px; font-size: 12px; }
+
+.lp-split { width: 100%; max-width: 250px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: grid; gap: 7px; }
+.lp-split-h { display: flex; justify-content: space-between; align-items: center; }
+.lp-split-row { display: grid; grid-template-columns: 8px 1fr auto; gap: 8px; align-items: center; font-size: 12px; }
+.lp-split-row i { width: 8px; height: 8px; border-radius: 50%; }
+.lp-split-row b, .lp-split-tot b { font-family: var(--font-num); }
+.lp-split-tot { display: flex; justify-content: space-between; border-top: 1px dashed var(--line-strong); padding-top: 7px; font-weight: 700; font-size: 12px; }
+
+.lp-geo { display: grid; gap: 10px; justify-items: center; }
+.lp-radar { position: relative; width: 150px; height: 120px; }
+.lp-radar .ring { position: absolute; left: 50%; top: 50%; width: 92px; height: 92px; margin: -46px 0 0 -46px; border-radius: 50%; border: 2px dashed var(--brand); background: color-mix(in srgb, var(--brand) 10%, transparent); }
+.lp-radar .ring.r2 { border: 0; background: color-mix(in srgb, var(--brand) 18%, transparent); animation: lp-radar 2.4s ease-out infinite; }
+.lp-radar .pin { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -80%); color: var(--brand-text); }
+.lp-radar .pin svg { width: 22px; height: 22px; }
+.lp-radar .dot { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; border: 2px solid var(--surface); }
+.lp-radar .dot.ok { background: var(--brand); }
+.lp-radar .dot.far { background: var(--danger); animation: lp-pulse-bad 1.6s ease-in-out infinite; }
+.lp-radar .lbl { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); font-size: 10px; font-weight: 600; color: var(--ink-3); }
+.lp-geo-note { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+@keyframes lp-radar { from { transform: scale(0.3); opacity: 0.9; } to { transform: scale(1.25); opacity: 0; } }
+@keyframes lp-pulse-bad { 0%, 100% { box-shadow: 0 0 0 0 var(--danger-soft); } 50% { box-shadow: 0 0 0 6px var(--danger-soft); } }
+
+.lp-pickup { display: flex; gap: 14px; align-items: center; }
+.lp-pickup-bag { display: grid; place-items: center; width: 58px; height: 58px; border-radius: 16px; background: var(--accent); color: var(--accent-ink); }
+.lp-pickup-bag svg { width: 28px; height: 28px; }
+.lp-pickup-board { display: grid; justify-items: center; background: #1e1b16; color: #f7f4ee; border-radius: 14px; padding: 10px 22px; animation: lp-flip 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.lp-pickup-board small { font-size: 10px; letter-spacing: 0.04em; opacity: 0.8; }
+.lp-pickup-board b { font-family: var(--font-num); font-size: 30px; line-height: 1.1; color: #f0b43a; }
+@keyframes lp-flip { from { transform: rotateX(70deg); opacity: 0; } to { transform: none; opacity: 1; } }
+
+.lp-best { width: 100%; max-width: 260px; display: grid; gap: 8px; }
+.lp-best-toggle { display: flex; gap: 2px; justify-self: end; padding: 2px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line); }
+.lp-best-toggle span { display: grid; place-items: center; width: 26px; height: 22px; border-radius: 6px; color: var(--ink-2); transition: background 0.3s, color 0.3s; }
+.lp-best-toggle span.on { background: var(--ink); color: var(--surface); }
+.lp-best-toggle svg { width: 13px; height: 13px; }
+.lp-best-list { display: grid; gap: 6px; }
+.lp-best-list.grid { grid-template-columns: 1fr 1fr; }
+.lp-best-card { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 8px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 5px; animation: lp-fade 0.4s both; }
+.lp-best-card .th { position: relative; width: 40px; height: 40px; border-radius: 7px; overflow: visible; }
+.lp-best-card .th svg.lp-food { border-radius: 7px; }
+.lp-best-card .tx { display: grid; font-size: 11px; min-width: 0; }
+.lp-best-card .tx span { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lp-best-card .tx b { font-family: var(--font-num); color: var(--brand-text); }
+.lp-best-list.grid .lp-best-card { grid-template-columns: 1fr; }
+.lp-best-list.grid .th { width: 100%; height: 56px; }
+.lp-stamp { position: absolute; left: -4px; top: -6px; display: inline-flex; align-items: center; gap: 2px; padding: 1px 5px; border-radius: 5px; transform: rotate(-5deg); background: var(--accent); color: var(--accent-ink); font-size: 8.5px; font-weight: 700; white-space: nowrap; box-shadow: 0 2px 5px rgb(0 0 0 / 0.18); }
+.lp-stamp svg { width: 9px; height: 9px; }
+.lp-best-list:not(.grid) .lp-stamp { font-size: 0; gap: 0; padding: 3px; }
+
+.lp-qrdemo { display: grid; gap: 8px; justify-items: center; }
+.lp-qrbox { position: relative; padding: 8px; background: #fff; border-radius: 10px; box-shadow: var(--shadow-lift); color: #1e1b16; overflow: hidden; }
+.lp-qrbox > svg { display: block; }
+.lp-qrlogo { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: grid; padding: 3px; border-radius: 10px; background: #fff; }
+.lp-qrdemo code { font-size: 11px; color: var(--ink-2); background: var(--surface); padding: 2px 8px; border-radius: 6px; border: 1px solid var(--line); }
+
+@media (max-width: 999px) {
+  .lp-bento { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lp-card.tall { grid-row: auto; }
+  .lp-card.tall .lp-card-demo { min-height: 300px; }
+}
+@media (max-width: 649px) {
+  .lp-bento { grid-template-columns: minmax(0, 1fr); }
+  .lp-card.span2 { grid-column: auto; }
+  .lp-call { grid-template-columns: minmax(0, 1fr); }
+  .lp-call-arrow { width: 2px; height: 18px; justify-self: center; background: repeating-linear-gradient(180deg, var(--line-strong) 0 6px, transparent 6px 10px); }
+  .lp-call-arrow::after { right: -4px; top: auto; bottom: -6px; border-left-color: transparent; border-top-color: var(--line-strong); }
+}

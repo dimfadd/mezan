@@ -9,16 +9,17 @@ import { useApi, useMediaQuery } from "../lib/hooks";
 import { date, ROLE_LABEL } from "../lib/format";
 import { ThemeToggle } from "./ThemeToggle";
 import { Modal } from "./ui";
-import type { Order } from "../pages/store/types";
+import type { Order, ServiceCall } from "../pages/store/types";
 
 // ---------- Umpan pesanan aktif (dipakai bersama sidebar & papan pesanan) ----------
 interface Feed {
   orders: Order[] | null;
+  calls: ServiceCall[];
   error: string | null;
   reload: () => Promise<void>;
   newCount: number;
 }
-const FeedCtx = createContext<Feed>({ orders: null, error: null, reload: async () => {}, newCount: 0 });
+const FeedCtx = createContext<Feed>({ orders: null, calls: [], error: null, reload: async () => {}, newCount: 0 });
 export const useOrderFeed = () => useContext(FeedCtx);
 
 function chime() {
@@ -49,21 +50,24 @@ export function soundEnabled() {
 }
 
 function FeedProvider({ children }: { children: ReactNode }) {
-  const { data, error, reload } = useApi<{ orders: Order[] }>("/api/store/orders?scope=active", { poll: 7000 });
+  const { data, error, reload } = useApi<{ orders: Order[]; calls?: ServiceCall[] }>("/api/store/orders?scope=active", { poll: 7000 });
   const orders = data?.orders ?? null;
-  const newCount = orders?.filter((o) => o.status === "new").length ?? 0;
+  const calls = data?.calls ?? [];
+  // Angka di menu Pesanan = pesanan baru + panggilan meja yang belum ditanggapi.
+  const newCount = (orders?.filter((o) => o.status === "new").length ?? 0) + calls.length;
   const seen = useRef<Set<string> | null>(null);
   useEffect(() => {
     if (!orders) return;
-    const ids = new Set(orders.filter((o) => o.status === "new").map((o) => o.id));
+    const ids = new Set([...orders.filter((o) => o.status === "new").map((o) => o.id), ...calls.map((c) => c.id)]);
     if (seen.current) {
       const fresh = [...ids].some((id) => !seen.current!.has(id));
       if (fresh && soundEnabled()) chime();
     }
     seen.current = ids;
     document.title = newCount > 0 ? `(${newCount}) Pesanan baru · Pesan.in` : "Pesan.in";
-  }, [orders, newCount]);
-  return <FeedCtx.Provider value={{ orders, error: error?.message ?? null, reload: () => reload(true), newCount }}>{children}</FeedCtx.Provider>;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders, newCount, calls.length]);
+  return <FeedCtx.Provider value={{ orders, calls, error: error?.message ?? null, reload: () => reload(true), newCount }}>{children}</FeedCtx.Provider>;
 }
 
 // ---------- Navigasi ----------

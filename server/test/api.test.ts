@@ -359,3 +359,55 @@ test("best seller: label tersimpan dan jumlah terjual 30 hari ikut di daftar men
   const menu = await call("GET", `/api/public/table/${code}`);
   assert.equal(menu.json.items[0].tags, "bestseller,pedas");
 });
+
+test("pesan bareng: dua HP satu keranjang meja, dikirim sekali, nama per item tersimpan", async () => {
+  const { call, login, db } = await setup();
+  const owner = await login("owner@t");
+  const nasi = await call("POST", "/api/store/items", { category_id: null, name: "Nasi", price: 15000 }, owner);
+  const teh = await call("POST", "/api/store/items", { category_id: null, name: "Teh", price: 5000 }, owner);
+  await call("POST", "/api/store/tables", { label: "Meja 1" }, owner);
+  const code = (db.raw.prepare("SELECT code FROM dining_tables").get() as { code: string }).code;
+
+  assert.equal((await call("PUT", `/api/public/table/${code}/cart`, { device: "hpsari0001", person: "Sari", lines: [{ id: nasi.json.id, qty: 2, note: "Pedas sedikit" }] })).status, 200);
+  await call("PUT", `/api/public/table/${code}/cart`, { device: "hpbudi0001", person: "Budi", lines: [{ id: teh.json.id, qty: 1 }, { id: "bukan-menu-toko", qty: 1 }] });
+  const st = await call("GET", `/api/public/table/${code}/state?device=hpsari0001`);
+  assert.equal(st.json.lines.length, 2, "menu asing dibuang");
+  assert.equal(st.json.people, 2);
+  assert.deepEqual(st.json.lines.map((l: { mine: boolean }) => l.mine), [true, false]);
+
+  // Sari mengganti pilihannya: hanya baris milik HP-nya yang berubah.
+  await call("PUT", `/api/public/table/${code}/cart`, { device: "hpsari0001", person: "Sari", lines: [{ id: nasi.json.id, qty: 1, note: "" }] });
+  const sent = await call("POST", "/api/public/orders", { tableCode: code, customerName: "Sari", group: true });
+  assert.equal(sent.status, 201);
+  const o = db.raw.prepare("SELECT id, customer_name, subtotal FROM orders").get() as { id: string; customer_name: string; subtotal: number };
+  assert.equal(o.subtotal, 20000);
+  assert.equal(o.customer_name, "Sari, Budi");
+  const persons = (db.raw.prepare("SELECT person FROM order_items WHERE order_id = ? ORDER BY person").all(o.id) as { person: string }[]).map((r) => r.person);
+  assert.deepEqual(persons, ["Budi", "Sari"]);
+  const after = await call("GET", `/api/public/table/${code}/state?device=hpbudi0001`);
+  assert.equal(after.json.lines.length, 0, "keranjang meja kosong setelah dikirim");
+  assert.equal(after.json.orders[0].number, sent.json.number, "HP lain melihat pesanan meja yang terkirim");
+  assert.equal((await call("POST", "/api/public/orders", { tableCode: code, customerName: "Sari", group: true })).status, 400, "keranjang kosong ditolak");
+});
+
+test("panggil pelayan: tidak dobel, muncul di papan kasir, ditandai selesai, bukan untuk QR bawa pulang", async () => {
+  const { call, login, db } = await setup();
+  const owner = await login("owner@t");
+  const kasir = await login("kasir@t");
+  await call("POST", "/api/store/tables", { label: "Meja 2" }, owner);
+  const code = (db.raw.prepare("SELECT code FROM dining_tables").get() as { code: string }).code;
+  assert.equal((await call("POST", `/api/public/table/${code}/calls`, { kind: "waiter" })).status, 201);
+  assert.equal((await call("POST", `/api/public/table/${code}/calls`, { kind: "waiter" })).status, 200, "panggilan sama tidak digandakan");
+  assert.equal((await call("POST", `/api/public/table/${code}/calls`, { kind: "bill" })).status, 201);
+  const board = await call("GET", "/api/store/orders?scope=active", undefined, kasir);
+  assert.equal(board.json.calls.length, 2);
+  assert.equal(board.json.calls[0].table_label, "Meja 2");
+  assert.equal((await call("POST", `/api/store/calls/${board.json.calls[0].id}/done`, undefined, kasir)).status, 200);
+  await call("DELETE", `/api/public/table/${code}/calls/bill`);
+  assert.equal((await call("GET", "/api/store/orders?scope=active", undefined, kasir)).json.calls.length, 0);
+  const st = await call("GET", `/api/public/table/${code}/state`);
+  assert.equal(st.json.calls.length, 0);
+
+  const tw = await call("PUT", "/api/store/takeaway", { enabled: true }, owner);
+  assert.equal((await call("POST", `/api/public/table/${tw.json.code}/calls`, { kind: "waiter" })).status, 400);
+});

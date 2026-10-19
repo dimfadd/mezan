@@ -167,3 +167,17 @@ export function FakeQR({ size = 120 }: { size?: number }) {
     </svg>
   );
 }
+
+/** Ikon aplikasi pesan.in (sama dengan web/public/icons/icon.svg). */
+export function AppIcon({ size = 30 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 512 512" width={size} height={size} aria-hidden="true">
+      <rect width="512" height="512" rx="112" fill="#1f6b4f" />
+      <g fill="none" stroke="#f7f4ee" strokeWidth="58" strokeLinecap="round">
+        <path d="M166 176v232" />
+        <circle cx="252" cy="250" r="86" />
+      </g>
+      <circle cx="388" cy="334" r="32" fill="#e8a317" />
+    </svg>
+  );
+}
