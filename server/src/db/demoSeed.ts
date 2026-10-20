@@ -127,10 +127,20 @@ export async function seedDemo(db: DB, opts: { adminPassword?: string } = {}): P
     "Nasi Uduk Komplit": 8500, "Tahu Tempe Penyet": 4500, "Bubur Ayam": 5000, "Pisang Goreng Keju": 4000, "Tahu Crispy": 2600,
     "Es Teh Manis": 1200, "Es Jeruk Peras": 3200, "Kopi Susu Gula Aren": 5200, "Teh Tarik": 3500, "Air Mineral 600 ml": 2800, "Kerupuk Udang": 1500,
   };
+  const DEMO_ART: Record<string, string> = {
+    "Nasi Goreng Kampung": "nasgor", "Ayam Geprek Sambal Bawang": "geprek", "Soto Ayam Lamongan": "soto", "Pisang Goreng Keju": "pisang",
+    "Es Teh Manis": "esteh", "Es Jeruk Peras": "jeruk", "Kopi Susu Gula Aren": "kopi", "Teh Tarik": "teh", "Air Mineral 600 ml": "air", "Kerupuk Udang": "kerupuk",
+  };
+  const DEMO_VIDEO = new Set(["geprek", "kopi", "nasgor", "esteh"]);
   const items: { id: string; name: string; price: number; cat: string; weight: number; stock: boolean }[] = [];
   menu.forEach(([cat, name, price, description, tags, stock], i) => {
     const id = newId();
+    const art = DEMO_ART[name];
+    const media: { kind: string; url: string }[] = art ? [`/demo/menu/${art}-1.svg`, `/demo/menu/${art}-2.svg`].map((url) => ({ kind: "image", url })) : [];
+    if (art && DEMO_VIDEO.has(art)) media.push({ kind: "video", url: `/demo/menu/${art}.mp4` });
     ins("menu_items", {
+      // Sampul disalin ke menu_items, sama seperti saat pemilik mengunggah lewat form.
+      image_url: media[0]?.url ?? null, video_url: media.find((m) => m.kind === "video")?.url ?? null,
       id, tenant_id: tenantId, category_id: cats[cat], name, description, price, tags, available: 1,
       track_stock: stock != null ? 1 : 0, stock_qty: stock ?? 0, low_stock_at: stock != null ? 6 : 5,
       unit: cat === "Titipan" ? (name.startsWith("Air") ? "botol" : "bungkus") : cat === "Minuman" ? "gelas" : "porsi",
@@ -146,6 +156,10 @@ export async function seedDemo(db: DB, opts: { adminPassword?: string } = {}): P
     // bobot popularitas supaya laporan punya pola yang masuk akal
     const weight = name.includes("Es Teh") ? 9 : tags.includes("favorit") || tags.includes("bestseller") ? 6 : name.includes("Teh Tarik") || name === "Bubur Ayam" ? 1 : 3;
     items.push({ id, name, price, cat, weight, stock: stock != null });
+    // Foto & video peraga (ilustrasi, bukan foto sungguhan) supaya galeri dan mode video bisa dicoba.
+    if (media.length) {
+      media.forEach((m, sort) => ins("menu_media", { id: newId(), tenant_id: tenantId, menu_item_id: id, kind: m.kind, url: m.url, sort, created_at: now - 60 * DAY }));
+    }
   });
 
   const tables: { id: string; label: string }[] = [];
