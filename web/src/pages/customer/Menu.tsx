@@ -336,7 +336,7 @@ export function CustomerMenuPage() {
           </div>
         </div>
         {!q && sections.length > 1 && (
-          <div className="chips">
+          <div className="chips cat-chips">
             {sections.map((s) => (
               <button
                 key={s.id}

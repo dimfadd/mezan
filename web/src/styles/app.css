@@ -471,6 +471,10 @@ dialog.modal[open] { display: flex; flex-direction: column; animation: pop 0.16s
 }
 
 .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+/* Kategori menu pembeli: di tengah. Pakai margin auto, bukan justify-content: center, supaya kalau kategorinya banyak dan bisa digeser, yang paling kiri tidak terpotong. */
+.cat-chips > :first-child { margin-left: auto; }
+.cat-chips > :last-child { margin-right: auto; }
+@media (max-width: 460px) { .cat-chips { gap: 6px; } .cat-chips .chip { padding: 0 12px; } }
 .chip {
   flex: none; min-height: 38px; padding: 0 14px; border-radius: 19px; border: 1px solid var(--line-strong);
   background: var(--surface); font-weight: 650; cursor: pointer; color: var(--ink-2); white-space: nowrap;
