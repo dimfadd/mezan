@@ -13,7 +13,9 @@ async function boot() {
   const db: ScriptDB = turso ? openTurso(turso, process.env.TURSO_AUTH_TOKEN) : await openTmpSqlite("/tmp/mezan.db");
   await migrateRemote(db);
   // Data contoh diisi otomatis kalau database masih kosong. Matikan dengan DEMO_SEED=0 untuk produksi.
-  if (process.env.DEMO_SEED !== "0") await seedDemo(db);
+  // ADMIN_PASSWORD (minimal 12 karakter) mengganti sandi admin contoh, supaya panel admin tidak terbuka untuk umum.
+  const adminPassword = process.env.ADMIN_PASSWORD && process.env.ADMIN_PASSWORD.length >= 12 ? process.env.ADMIN_PASSWORD : undefined;
+  if (process.env.DEMO_SEED !== "0") await seedDemo(db, { adminPassword });
   const blob = process.env.BLOB_READ_WRITE_TOKEN;
   return createApp({
     db,

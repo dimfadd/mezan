@@ -5,6 +5,8 @@ import { all, first, run, stmt } from "../db/types";
 import { GRACE_DAYS, requirePlatform } from "../lib/auth";
 import { fail } from "../lib/http";
 import { hashPassword, newId, randomCode } from "../lib/security";
+import { forgetSite, loadSite, siteSchemas } from "../lib/site";
+import { DEFAULT_SITE, SITE_KEYS, type SiteKey } from "../../../shared/site";
 
 export const platformRoutes = new Hono<Env>();
 platformRoutes.use("*", requirePlatform);
@@ -193,5 +195,36 @@ platformRoutes.put("/plans/:id", async (c) => {
   const n = await run(c.var.db, `UPDATE plans SET code=?, name=?, price_monthly=?, max_tables=?, max_staff=?, allow_video=?, allow_inventory=?, allow_analytics=?, allow_branding=?, max_photos=?, max_videos=?, active=?, sort=? WHERE id=?`,
     b.code, b.name, b.price_monthly, b.max_tables, b.max_staff, b.allow_video, b.allow_inventory, b.allow_analytics, b.allow_branding, b.max_photos, b.max_videos, b.active, b.sort, c.req.param("id"));
   if (!n) fail(404, "Paket tidak ditemukan.");
+  return c.json({ ok: true });
+});
+
+// ---------- Konten situs publik ----------
+
+platformRoutes.get("/site", async (c) => c.json({ site: await loadSite(c.var.db, true), defaults: DEFAULT_SITE }));
+
+platformRoutes.put("/site/:key", async (c) => {
+  const key = c.req.param("key") as SiteKey;
+  if (!SITE_KEYS.includes(key)) fail(404, "Bagian konten tidak dikenal.");
+  const parsed = siteSchemas[key].safeParse(await c.req.json());
+  if (!parsed.success) fail(400, parsed.error.issues[0]?.message ?? "Isian belum benar.");
+  await run(
+    c.var.db,
+    `INSERT INTO site_content (key, value, updated_at, updated_by) VALUES (?, ?, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+    key,
+    JSON.stringify(parsed.data),
+    Date.now(),
+    c.var.user!.id,
+  );
+  forgetSite();
+  return c.json({ ok: true, value: parsed.data });
+});
+
+// Kembalikan satu bagian ke isi bawaan.
+platformRoutes.delete("/site/:key", async (c) => {
+  const key = c.req.param("key") as SiteKey;
+  if (!SITE_KEYS.includes(key)) fail(404, "Bagian konten tidak dikenal.");
+  await run(c.var.db, "DELETE FROM site_content WHERE key = ?", key);
+  forgetSite();
   return c.json({ ok: true });
 });

@@ -42,8 +42,10 @@ const AdminOverview = lazyNamed(admin, "AdminOverview");
 const AdminTenants = lazyNamed(admin, "AdminTenants");
 const AdminTenantDetail = lazyNamed(admin, "AdminTenantDetail");
 const AdminPlans = lazyNamed(admin, "AdminPlans");
+const AdminSite = lazyNamed(() => import("./pages/admin/SiteContent"), "AdminSite");
 // Landing berisi animasi simulasi; dipisah supaya pembeli yang memindai QR tidak ikut mengunduhnya.
 const LandingPage = lazyNamed(() => import("./pages/public/landing/Landing"), "LandingPage");
+const SolutionPage = lazyNamed(() => import("./pages/public/Solution"), "SolutionPage");
 
 applyTheme();
 watchSystemTheme();
@@ -79,6 +81,7 @@ createRoot(document.getElementById("root")!).render(
               <Route path="/" element={<LandingPage />} />
               <Route path="/masuk" element={<LoginPage />} />
               <Route path="/daftar" element={<RegisterPage />} />
+              <Route path="/solusi/:slug" element={<SolutionPage />} />
               <Route path="/syarat" element={<TermsPage />} />
               <Route path="/privasi" element={<PrivacyPage />} />
               <Route path="/m/:code" element={<CustomerMenuPage />} />
@@ -108,6 +111,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="toko" element={<AdminTenants />} />
                 <Route path="toko/:id" element={<AdminTenantDetail />} />
                 <Route path="paket" element={<AdminPlans />} />
+                <Route path="situs" element={<AdminSite />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>

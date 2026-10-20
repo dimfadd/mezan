@@ -72,6 +72,10 @@ for (const theme of ["light", "dark"]) {
   await p.goto(`${BASE}/antre/contoh-antre`);
   await p.waitForSelector("#w-name");
   await shot(p, "antre-daftar-hp");
+  // Halaman solusi bisnis
+  await p.goto(`${BASE}/solusi/kedai-kopi`);
+  await p.waitForSelector(".sol-hero");
+  await shot(p, "solusi-hp");
   // Halaman hukum
   for (const pg of ["syarat", "privasi"]) {
     await p.goto(`${BASE}/${pg}`);
@@ -123,6 +127,9 @@ for (const size of ["pc", "tablet", "hp"]) {
   await p.goto(`${BASE}/admin/toko`);
   await p.waitForLoadState("networkidle");
   await shot(p, "admin-toko-pc");
+  await p.goto(`${BASE}/admin/situs`);
+  await p.waitForLoadState("networkidle");
+  await shot(p, "admin-situs-pc");
   await c.close();
 }
 

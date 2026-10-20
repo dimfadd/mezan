@@ -8,6 +8,8 @@ import { createOrder, loadOrderItems, loadPriceRules } from "../lib/orders";
 import { attachPairs } from "../lib/pairs";
 import { awardStamp, memberCard, normalizePhone } from "../lib/loyalty";
 import { orderEta } from "../lib/eta";
+import { loadSite } from "../lib/site";
+import { publicSite } from "../../../shared/site";
 import { businessDay } from "../lib/http";
 import { randomToken } from "../lib/security";
 import { loadGalleries } from "../lib/gallery";
@@ -509,4 +511,10 @@ publicRoutes.get("/waitlist/entry/:token", async (c) => {
 publicRoutes.delete("/waitlist/entry/:token", async (c) => {
   await run(c.var.db, "UPDATE waitlist SET status = 'cancelled', done_at = ? WHERE token = ? AND status IN ('waiting','called')", Date.now(), c.req.param("token"));
   return c.json({ ok: true });
+});
+
+// ---------- Konten situs (landing, halaman solusi, footer) ----------
+publicRoutes.get("/site", async (c) => {
+  c.header("Cache-Control", "public, max-age=30");
+  return c.json({ site: publicSite(await loadSite(c.var.db)) });
 });

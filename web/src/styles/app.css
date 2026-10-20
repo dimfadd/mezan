@@ -1020,3 +1020,40 @@ s.was { color: var(--ink-3); font-weight: 500; text-decoration-thickness: 1.5px;
 .legal-foot nav { display: flex; gap: 14px; flex-wrap: wrap; }
 .legal-foot a { color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
 .legal-foot.compact { justify-content: center; text-align: center; border-top: 0; padding: 18px 16px 24px; font-size: 0.75rem; }
+
+/* ---------- Panduan langkah awal toko ---------- */
+.onb { margin-bottom: 18px; display: grid; gap: 12px; border-color: var(--accent); }
+.onb-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.onb-head h2 { font-size: 1.1rem; }
+.onb-bar { height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.onb-bar span { display: block; height: 100%; background: var(--brand); border-radius: inherit; transition: width 0.4s; }
+.onb-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.onb-steps li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; align-items: start; }
+.onb-steps li > div { display: grid; gap: 4px; justify-items: start; }
+.onb-dot { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--line-strong); font-weight: 800; font-size: 0.9rem; }
+.onb-dot svg { width: 16px; height: 16px; }
+.onb-steps li.done .onb-dot { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); }
+.onb-steps li.done b { color: var(--ink-3); text-decoration: line-through; }
+@media (max-width: 759px) { .onb-steps { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- Admin: konten situs ---------- */
+.sc-h { font-size: 1.05rem; }
+.sc-block { display: grid; gap: 10px; border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; background: var(--paper); }
+.sc-block-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 220px) auto; gap: 8px; align-items: center; }
+.sc-sec { display: grid; gap: 8px; border-left: 3px solid var(--line); padding-left: 10px; }
+.sc-links { display: grid; gap: 8px; }
+.sc-link { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto; gap: 6px; align-items: center; }
+.sc-link:has(input:nth-of-type(3)) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto; }
+.sc-tools { display: inline-flex; gap: 2px; }
+.sc-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 6px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.sc-row:last-of-type { border-bottom: 0; }
+.sc-quote { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.sc-consent { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; align-items: start; font-weight: 600; padding: 10px 12px; border-radius: var(--radius); background: var(--warn-soft); color: var(--warn-text); }
+.sc-consent input { width: 18px; height: 18px; margin-top: 2px; }
+.sc-actions { position: sticky; bottom: 0; background: var(--paper); padding: 12px 0; border-top: 1px solid var(--line); z-index: 2; }
+@media (max-width: 699px) {
+  .sc-block-head { grid-template-columns: minmax(0, 1fr) auto; }
+  .sc-block-head select { grid-column: 1 / -1; grid-row: 2; }
+  .sc-link, .sc-link:has(input:nth-of-type(3)) { grid-template-columns: minmax(0, 1fr); padding-bottom: 8px; border-bottom: 1px dashed var(--line); }
+  .sc-link .sc-tools { justify-self: end; }
+}

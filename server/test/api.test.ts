@@ -681,3 +681,49 @@ test("perkiraan siap: slot dapur dibagi, antrean ke-berapa, waktu siap tercatat,
   assert.equal((await call("GET", `/api/public/orders/${tok(o2.json.id)}`)).json.eta, null);
   assert.equal((db.raw.prepare("SELECT kitchen_lanes FROM tenants WHERE id = ?").get(tenantId) as { kitchen_lanes: number }).kitchen_lanes, 4);
 });
+
+test("konten situs: bawaan tampil, hanya admin platform yang bisa ubah, tautan & testimoni divalidasi", async () => {
+  const { call, login, db } = await setup();
+  db.raw.prepare("INSERT INTO users (id, tenant_id, name, login, password_hash, role, created_at) VALUES (?, NULL, 'Admin', 'admin@p', ?, 'platform_admin', ?)").run(newId(), await hashPassword("rahasia123"), Date.now());
+  const pub = await call("GET", "/api/public/site");
+  assert.equal(pub.status, 200);
+  assert.ok(pub.json.site.solutions.length >= 1, "solusi bawaan tampil");
+  assert.equal(pub.json.site.testimonials.length, 0, "tanpa testimoni bawaan");
+  const auto = pub.json.site.nav.find((g: { auto?: string }) => g.auto === "solutions");
+  assert.equal(auto.sections[0].items.length, pub.json.site.solutions.length, "dropdown solusi terisi otomatis");
+
+  const owner = await login("owner@t");
+  assert.equal((await call("PUT", "/api/platform/site/footer", {}, owner)).status, 403, "pemilik toko tidak bisa ubah situs");
+  const admin = await login("admin@p");
+  const footer = { tagline: "x", columns: [{ title: "A", links: [{ label: "Jahat", href: "javascript:alert(1)" }] }], contact: { email: "", whatsapp: "", address: "", hours: "" } };
+  assert.equal((await call("PUT", "/api/platform/site/footer", footer, admin)).status, 400, "tautan javascript: ditolak");
+  footer.columns[0].links[0].href = "/syarat";
+  assert.equal((await call("PUT", "/api/platform/site/footer", footer, admin)).status, 200);
+
+  const t = { id: "a1", quote: "Pesanan jadi lebih rapi sejak pakai ini.", name: "Sari", role: "Pemilik", business: "Kopi Sari", city: "Solo", photo_url: "", consent: false, published: true };
+  assert.equal((await call("PUT", "/api/platform/site/testimonials", [t], admin)).status, 400, "terbit tanpa izin ditolak");
+  assert.equal((await call("PUT", "/api/platform/site/testimonials", [{ ...t, consent: true }, { ...t, id: "a2", published: false }], admin)).status, 200);
+  const sols = pub.json.site.solutions.map((s: { published: boolean }, i: number) => ({ ...s, published: i === 0 }));
+  assert.equal((await call("PUT", "/api/platform/site/solutions", [...sols, { ...sols[0] }], admin)).status, 400, "alamat solusi kembar ditolak");
+  assert.equal((await call("PUT", "/api/platform/site/solutions", sols, admin)).status, 200);
+
+  const after = (await call("GET", "/api/public/site")).json.site;
+  assert.equal(after.testimonials.length, 1, "hanya testimoni terbit yang tampil");
+  assert.equal(after.solutions.length, 1, "hanya solusi terbit yang tampil");
+  assert.equal(after.footer.columns[0].links[0].href, "/syarat");
+  assert.equal((await call("DELETE", "/api/platform/site/testimonials", undefined, admin)).status, 200);
+  assert.equal((await call("GET", "/api/public/site")).json.site.testimonials.length, 0, "kembali ke bawaan");
+});
+
+test("panduan langkah awal: hitungan menu, meja, dan pesanan QR", async () => {
+  const { call, login } = await setup();
+  const owner = await login("owner@t");
+  let o = (await call("GET", "/api/store/onboarding", undefined, owner)).json;
+  assert.deepEqual([o.items, o.tables, o.qrOrders], [0, 0, 0]);
+  const it = await call("POST", "/api/store/items", { category_id: null, name: "Teh", price: 5000 }, owner);
+  await call("POST", "/api/store/tables", { label: "Meja 1" }, owner);
+  o = (await call("GET", "/api/store/onboarding", undefined, owner)).json;
+  assert.deepEqual([o.items, o.tables], [1, 1]);
+  await call("POST", "/api/public/orders", { tableCode: o.firstTableCode, customerName: "A", items: [{ id: it.json.id, qty: 1 }] });
+  assert.equal((await call("GET", "/api/store/onboarding", undefined, owner)).json.qrOrders, 1);
+});

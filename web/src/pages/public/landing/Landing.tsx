@@ -1,36 +1,22 @@
 import { Link } from "react-router-dom";
-import { ArrowDown, Check } from "lucide-react";
-import { ThemeToggle } from "../../../components/ThemeToggle";
-import { LegalFoot } from "../Legal";
-import { useSession } from "../../../lib/session";
+import { ArrowDown, ArrowRight, Check } from "lucide-react";
+import { useScrollToHash, useSite } from "../../../lib/site";
 import { Story } from "./Story";
 import { Features } from "./Features";
 import { Extras } from "./Extras";
 import { Ops } from "./Ops";
 import { EtaSpotlight } from "./Eta";
+import { SiteNav } from "./SiteNav";
+import { SiteFooter } from "./SiteFooter";
+import { EaseSteps, Monitor, Testimonials } from "./Trust";
 import "../../../styles/landing.css";
 
-function homeFor(role?: string) {
-  return role === "platform_admin" ? "/admin" : "/toko/pesanan";
-}
-
 export function LandingPage() {
-  const { user } = useSession();
+  const { solutions } = useSite();
+  useScrollToHash();
   return (
     <div className="lp">
-      <nav className="lp-nav" aria-label="Utama">
-        <span className="wordmark">pesan<span className="dot">.</span>in</span>
-        <div className="row">
-          {user ? (
-            <Link className="btn btn-primary" to={homeFor(user.role)}>Buka dasbor</Link>
-          ) : (
-            <>
-              <Link className="btn btn-ghost" to="/masuk">Masuk</Link>
-              <Link className="btn btn-primary" to="/daftar">Daftarkan usaha</Link>
-            </>
-          )}
-        </div>
-      </nav>
+      <SiteNav />
 
       <header className="lp-hero">
         <h1>
@@ -44,6 +30,11 @@ export function LandingPage() {
           <a className="btn btn-lg" href="#simulasi"><ArrowDown aria-hidden="true" /> Lihat cara kerjanya</a>
           {import.meta.env.DEV && <a className="btn btn-ghost btn-lg" href="/m/contoh-meja1">Buka menu contoh</a>}
         </div>
+        <ul className="lp-assure">
+          <li><Check aria-hidden="true" /> Tanpa kartu kredit</li>
+          <li><Check aria-hidden="true" /> Tanpa pasang aplikasi</li>
+          <li><Check aria-hidden="true" /> Bisa mulai dari satu HP</li>
+        </ul>
       </header>
 
       <section id="simulasi" className="lp-sec" aria-labelledby="sim-h">
@@ -54,6 +45,14 @@ export function LandingPage() {
         <Story />
       </section>
 
+      <section id="mudah" className="lp-sec" aria-labelledby="mudah-h">
+        <div className="lp-sec-head">
+          <h2 id="mudah-h">Gampang, bahkan untuk yang baru pertama pakai aplikasi kasir</h2>
+          <p>Banyak fitur bukan berarti rumit. Tiga langkah ini cukup untuk mulai menerima pesanan, sisanya bisa dinyalakan pelan-pelan.</p>
+        </div>
+        <EaseSteps />
+      </section>
+
       <section id="antrean" className="lp-sec" aria-labelledby="eta-h">
         <div className="lp-sec-head">
           <h2 id="eta-h">Tidak ada lagi "masih lama, Kak?"</h2>
@@ -62,7 +61,7 @@ export function LandingPage() {
         <EtaSpotlight />
       </section>
 
-      <section className="lp-sec" aria-labelledby="extra-h">
+      <section id="pembeli" className="lp-sec" aria-labelledby="extra-h">
         <div className="lp-sec-head">
           <h2 id="extra-h">Yang membuat pembeli betah dan kembali</h2>
           <p>Menu yang hidup di layar, pelayan yang bisa dipanggil dari HP, dan stempel yang terkumpul setiap belanja.</p>
@@ -70,7 +69,7 @@ export function LandingPage() {
         <Extras />
       </section>
 
-      <section className="lp-sec" aria-labelledby="ops-h">
+      <section id="untung" className="lp-sec" aria-labelledby="ops-h">
         <div className="lp-sec-head">
           <h2 id="ops-h">Untung lebih jelas, kebocoran lebih sedikit</h2>
           <p>Tahu menu mana yang benar-benar menghasilkan, tawarkan pasangan yang pas, lalu jaga dapur, laci, dan pesanan tetap rapi, bahkan saat internet putus.</p>
@@ -78,7 +77,11 @@ export function LandingPage() {
         <Ops />
       </section>
 
-      <section className="lp-sec" aria-labelledby="feat-h">
+      <section id="pantau" className="lp-sec" aria-labelledby="pantau-h">
+        <Monitor />
+      </section>
+
+      <section id="fitur" className="lp-sec" aria-labelledby="feat-h">
         <div className="lp-sec-head">
           <h2 id="feat-h">Dasar yang dipakai setiap hari</h2>
           <p>Kasir, stok, laporan, sampai tampilan menu. Semuanya dari akun toko yang sama, di HP, tablet, atau komputer.</p>
@@ -86,7 +89,9 @@ export function LandingPage() {
         <Features />
       </section>
 
-      <section className="lp-sec" aria-labelledby="class-h">
+      <Testimonials />
+
+      <section id="paket" className="lp-sec" aria-labelledby="class-h">
         <div className="lp-sec-head">
           <h2 id="class-h">Cocok untuk gerobak sampai resto</h2>
           <p>Mulai dari template yang sudah rapi. Naik paket kalau usahanya tumbuh, datanya tetap.</p>
@@ -113,6 +118,14 @@ export function LandingPage() {
             </ul>
           </article>
         </div>
+        {solutions.length > 0 && (
+          <nav className="lp-sol" aria-label="Solusi per jenis usaha">
+            <span>Lihat yang paling pas untuk usahamu:</span>
+            {solutions.map((s) => (
+              <Link key={s.slug} className="chip" to={`/solusi/${s.slug}`}>{s.name} <ArrowRight aria-hidden="true" /></Link>
+            ))}
+          </nav>
+        )}
       </section>
 
       <section className="lp-final receipt-edge" aria-labelledby="final-h">
@@ -123,11 +136,7 @@ export function LandingPage() {
         </div>
       </section>
 
-      <footer className="lp-foot">
-        <span className="small muted">Pesan.in, menu QR dan kasir untuk warung, kafe, dan resto.</span>
-        <div style={{ width: 240 }}><ThemeToggle /></div>
-      </footer>
-      <LegalFoot />
+      <SiteFooter />
     </div>
   );
 }

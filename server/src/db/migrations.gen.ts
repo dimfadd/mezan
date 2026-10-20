@@ -31,5 +31,9 @@ export const MIGRATIONS: { name: string; sql: string }[] = [
   {
     "name": "0008_order_eta.sql",
     "sql": "-- Perkiraan waktu siap untuk pembeli: kapan pesanan benar-benar siap (untuk belajar dari riwayat),\n-- berapa pesanan yang bisa dimasak bersamaan, dan saklar untuk menyembunyikan perkiraan.\nALTER TABLE orders ADD COLUMN ready_at INTEGER;\nALTER TABLE tenants ADD COLUMN kitchen_lanes INTEGER NOT NULL DEFAULT 3;\nALTER TABLE tenants ADD COLUMN eta_enabled INTEGER NOT NULL DEFAULT 1;\n"
+  },
+  {
+    "name": "0009_site_content.sql",
+    "sql": "-- Konten situs publik (menu atas, halaman solusi bisnis, testimoni, footer) yang diubah dari panel admin.\n-- Satu baris per bagian, isinya JSON. Bagian yang belum ada memakai isi bawaan di shared/site.ts.\nCREATE TABLE site_content (\n  key TEXT PRIMARY KEY,\n  value TEXT NOT NULL,\n  updated_at INTEGER NOT NULL,\n  updated_by TEXT REFERENCES users(id) ON DELETE SET NULL\n);\n"
   }
 ];

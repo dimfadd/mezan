@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, Outlet, useNavigate, useParams, Link } from "react-router-dom";
-import { ArrowLeft, Building2, CreditCard, Gauge, LogOut, Plus, Search } from "lucide-react";
+import { ArrowLeft, Building2, CreditCard, Gauge, Globe, LogOut, Plus, Search } from "lucide-react";
 import { Empty, ErrorState, Field, Loading, Modal, MoneyInput, PageHead, Switch, useToast } from "../../components/ui";
 import { ThemeToggle } from "../../components/ThemeToggle";
 import { EphemeralBanner } from "../../components/Shell";
@@ -28,6 +28,7 @@ export function AdminShell() {
     { to: "/admin", label: "Ringkasan", icon: <Gauge />, end: true },
     { to: "/admin/toko", label: "Toko", icon: <Building2 /> },
     { to: "/admin/paket", label: "Paket", icon: <CreditCard /> },
+    { to: "/admin/situs", label: "Konten situs", icon: <Globe /> },
   ];
   return (
     <div className="shell has-bottom-nav">
@@ -59,7 +60,7 @@ export function AdminShell() {
         <EphemeralBanner />
         <Outlet />
       </main>
-      <nav className="bottom-nav" aria-label="Navigasi admin" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+      <nav className="bottom-nav" aria-label="Navigasi admin" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
         {items.map((i) => (
           <NavLink key={i.to} to={i.to} end={i.end} className={({ isActive }) => (isActive ? "active" : "")}>
             {i.icon}

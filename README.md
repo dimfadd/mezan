@@ -129,8 +129,22 @@ Halaman depan (`web/src/pages/public/landing/`) memperagakan aplikasi lewat anim
 - **Simulasi satu pesanan** dari Meja 4: pindai QR, lihat galeri, tambah catatan, kirim, tiket masuk ke kasir, dibuat, dibayar, omzet bertambah. HP pembeli dan layar kasir bergerak bersamaan. Di HP hanya satu layar yang tampil bergantian.
 - **Tab fitur dasar** yang berpindah sendiri (kasir, stok, laporan, tampilan brand, dua bahasa, hak akses), masing-masing dengan peraga kecil. Tampilan brand memakai preset asli dari `shared/menuTheme.ts`, dua bahasa memakai kamus asli dari `shared/i18n.ts`.
 - Animasi berhenti saat tidak terlihat atau tab browser disembunyikan, bisa dijeda, dan langsung diam (bisa diklik per langkah) kalau perangkat meminta gerak dikurangi.
+- Menu atas dengan dropdown Layanan & Solusi bisnis (menu geser di HP), bagian "Cara mulai" tiga langkah, "Pantau usaha dari HP", testimoni (kalau ada), dan footer berkolom; semuanya dari Konten situs di admin. Pembeli bisa memasang Pesan.in ke layar utama (PWA), bukan lewat Play Store/App Store.
+- Toko baru melihat panduan "Mulai jualan dalam 3 langkah" di halaman Pesanan (isi menu, buat meja & cetak QR, coba pesan dari HP) yang tercentang sendiri.
 - Urutan halaman disusun untuk meyakinkan pemilik: simulasi satu pesanan, lalu sorotan antrean & perkiraan siap ("Tidak ada lagi 'masih lama, Kak?'"), lalu "Yang membuat pembeli betah dan kembali" (mode video, panggil pelayan, pesan bareng, stempel, struk & rating, QR bawa pulang, antrean saat penuh, bagi tagihan), lalu "Untung lebih jelas, kebocoran lebih sedikit" (modal & untung, pasangan, jam & happy hour, best seller, layar dapur, kasir offline, shift, pengaman lokasi, QR berlogo), dan terakhir tab fitur dasar.
 - Dimuat terpisah dari menu QR, jadi pembeli yang memindai QR tidak ikut mengunduhnya.
+
+## Panel admin Pesan.in (`/admin`)
+
+Untuk pengelola platform (peran `platform_admin`), bukan pemilik toko:
+
+- **Ringkasan**: jumlah toko (masa coba, aktif, lewat masa tenggang, dinonaktifkan), pendapatan bulanan berulang, pendaftar 30 hari, langganan yang akan habis, pembayaran terakhir.
+- **Toko**: cari dan buat toko, lihat detail, ubah paket/status/masa aktif, catat pembayaran langganan, reset sandi pengguna toko.
+- **Paket**: harga, batas meja/karyawan/foto/video, dan fitur per paket.
+- **Konten situs**: menu atas (tautan atau dropdown berkolom), halaman **solusi bisnis** (`/solusi/<alamat>`: judul, pembuka, masalah yang dibereskan, fitur yang ditampilkan, terbit/draf), **testimoni**, dan **footer** (kolom tautan, WhatsApp, email, jam layanan, alamat). Isi bawaan ada di `shared/site.ts`; tombol "Isi bawaan" mengembalikan satu bagian. Tautan divalidasi (hanya `/`, `#`, `https://`, `mailto:`).
+- Testimoni hanya bisa terbit kalau admin mencentang punya izin tertulis dari orangnya (diperiksa juga di server), dan bagian testimoni di landing baru tampil setelah ada yang terbit. Jangan mengisi testimoni karangan.
+
+**Keamanan:** data contoh membuat admin `admin@mezan.local` / `admin12345`. Di Vercel, isi variabel `ADMIN_PASSWORD` (minimal 12 karakter) supaya admin tidak memakai sandi contoh, dan `DEMO_SEED=0` untuk produksi. Tanpa Turso, database Vercel bersifat sementara: perubahan Konten situs hilang saat server mulai ulang.
 
 ## Hak cipta dan halaman hukum
 

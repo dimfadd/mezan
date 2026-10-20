@@ -15,7 +15,11 @@ export const DEMO_ACCOUNTS = [
   ["Karyawan kasir", "kasir@contoh.id", "contoh12345"],
 ] as const;
 
-export async function seedDemo(db: DB): Promise<boolean> {
+/**
+ * opts.adminPassword: sandi admin platform. Di server publik (Vercel), isi lewat ADMIN_PASSWORD
+ * supaya admin tidak memakai sandi contoh yang tertulis di README.
+ */
+export async function seedDemo(db: DB, opts: { adminPassword?: string } = {}): Promise<boolean> {
   if (await first(db, "SELECT 1 FROM users LIMIT 1")) return false;
   const now = Date.now();
   let seed = 20261019;
@@ -40,7 +44,7 @@ export async function seedDemo(db: DB): Promise<boolean> {
     ins("plans", { id, ...p, active: 1, created_at: now });
   }
 
-  ins("users", { id: newId(), tenant_id: null, name: "Admin Pesan.in", login: "admin@mezan.local", password_hash: await hashPassword("admin12345"), role: "platform_admin", created_at: now });
+  ins("users", { id: newId(), tenant_id: null, name: "Admin Pesan.in", login: "admin@mezan.local", password_hash: await hashPassword(opts.adminPassword || "admin12345"), role: "platform_admin", created_at: now });
 
   const tenantId = newId();
   ins("tenants", {

@@ -323,6 +323,20 @@ storeRoutes.post("/media", mgmt, async (c) => {
 
 // ---------- Meja & QR ----------
 
+// Panduan langkah awal untuk toko baru: hitungan sederhana untuk mencentang langkah yang sudah selesai.
+storeRoutes.get("/onboarding", async (c) => {
+  const t = storeOf(c);
+  const r = await first<{ items: number; tables: number; qr: number; code: string | null }>(
+    c.var.db,
+    `SELECT (SELECT COUNT(*) FROM menu_items WHERE tenant_id = ? AND archived = 0) AS items,
+            (SELECT COUNT(*) FROM dining_tables WHERE tenant_id = ? AND active = 1) AS tables,
+            (SELECT COUNT(*) FROM orders WHERE tenant_id = ? AND source = 'qr') AS qr,
+            (SELECT code FROM dining_tables WHERE tenant_id = ? AND active = 1 ORDER BY created_at LIMIT 1) AS code`,
+    t.id, t.id, t.id, t.id,
+  );
+  return c.json({ items: r?.items ?? 0, tables: r?.tables ?? 0, qrOrders: r?.qr ?? 0, firstTableCode: r?.code ?? null, qrEnabled: !!t.qr_ordering_enabled });
+});
+
 storeRoutes.get("/tables", async (c) => {
   const t = storeOf(c);
   return c.json({

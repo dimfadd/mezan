@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Onboarding } from "../../components/Onboarding";
 import { Bell, BellOff, Printer, QrCode, Search, ShoppingBasket, MapPinOff, BellRing, Check, ReceiptText, MessageCircle, WifiOff, CircleCheck } from "lucide-react";
 import { ReceiptShare } from "../../components/ReceiptShare";
 import { useOrderFeed, soundEnabled } from "../../components/Shell";
@@ -41,6 +42,7 @@ export function OrdersPage() {
   const [sound, setSound] = useState(soundEnabled());
   return (
     <>
+      <Onboarding />
       <PageHead
         title="Pesanan"
         sub={tab === "active" ? "Diperbarui otomatis tiap beberapa detik." : "Semua pesanan per tanggal."}
