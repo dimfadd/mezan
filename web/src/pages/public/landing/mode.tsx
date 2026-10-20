@@ -206,26 +206,28 @@ export const SUB_OPTIONS: Record<Mode, SlideOption<Sub>[]> = {
 export function FloatingModeSwitch({ mode, onChange, watch }: { mode: Mode; onChange: (m: Mode) => void; watch: string }) {
   const [show, setShow] = useState(false);
   useEffect(() => {
-    const el = document.getElementById(watch);
-    const end = document.getElementById("lp-end");
-    if (!el) return;
-    let past = false;
-    let atEnd = false;
-    const sync = () => setShow(past && !atEnd);
-    const io = new IntersectionObserver(([e]) => {
-      past = !e.isIntersecting && e.boundingClientRect.top < 0;
-      sync();
-    });
-    // Sembunyikan di ajakan penutup & footer supaya tidak menutupi tombol daftar.
-    const io2 = new IntersectionObserver(([e]) => {
-      atEnd = e.isIntersecting || e.boundingClientRect.top < 0;
-      sync();
-    });
-    io.observe(el);
-    if (end) io2.observe(end);
+    // Dihitung dari posisi gulir, bukan IntersectionObserver: lompatan langsung ke bawah
+    // (geser cepat, tombol akhir halaman) tidak memicu observer, sehingga pil bisa tertinggal di atas footer.
+    let raf = 0;
+    const sync = () => {
+      raf = 0;
+      const el = document.getElementById(watch);
+      const end = document.getElementById("lp-end");
+      if (!el) return;
+      const past = el.getBoundingClientRect().bottom < 0;
+      const atEnd = !!end && end.getBoundingClientRect().top < window.innerHeight;
+      setShow(past && !atEnd);
+    };
+    const on = () => {
+      if (!raf) raf = requestAnimationFrame(sync);
+    };
+    sync();
+    window.addEventListener("scroll", on, { passive: true });
+    window.addEventListener("resize", on);
     return () => {
-      io.disconnect();
-      io2.disconnect();
+      window.removeEventListener("scroll", on);
+      window.removeEventListener("resize", on);
+      cancelAnimationFrame(raf);
     };
   }, [watch]);
   return (

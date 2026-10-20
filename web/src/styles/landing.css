@@ -6,6 +6,12 @@
 */
 
 .lp { max-width: 1180px; margin: 0 auto; padding: 0 20px 40px; }
+/* Teks pemasaran memakai Plus Jakarta Sans (tegas, buatan studio Indonesia). Judul ikut lewat --font-menu.
+   Peragaan aplikasi di dalamnya dikembalikan ke font aplikasi supaya tampil persis seperti aslinya. */
+.lp { --font-mkt: "Plus Jakarta Sans Variable", system-ui, -apple-system, "Segoe UI", sans-serif; --font-menu: var(--font-mkt); font-family: var(--font-mkt); }
+.lp .lp-stage, .lp .lp-card-demo, .lp .lp-panel-demo, .lp .ez-art, .lp .mo-visual {
+  --font-menu: "Fredoka Variable", "Fredoka", system-ui, sans-serif; font-family: var(--font);
+}
 .lp-nav { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; gap: 12px; }
 
 /* ---------- Hero ---------- */
@@ -995,7 +1001,10 @@
 .sf .legal-foot { margin-top: 28px; padding-left: 0; padding-right: 0; }
 @media (max-width: 899px) {
   .sf-in { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .sf-brand { grid-column: 1 / -1; }
+  .sf-brand { grid-column: 1 / -1; justify-items: center; text-align: center; }
+  .sf-brand > p { margin-inline: auto; }
+  .sf-contact li { justify-content: center; }
+  .sf-install { justify-self: center; text-align: left; }
 }
 @media (max-width: 339px) { .sf-in { grid-template-columns: minmax(0, 1fr); } }
 
@@ -1065,11 +1074,7 @@
 .lp-mode.compact button[aria-checked="true"], .lp-mode.compact button[aria-checked="true"] > svg { color: var(--paper); }
 .lp-mode-float { position: fixed; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom)); z-index: 40; transform: translate(-50%, 24px); opacity: 0; pointer-events: none; transition: transform 0.3s ease, opacity 0.3s ease; }
 .lp-mode-float.show { transform: translate(-50%, 0); opacity: 1; pointer-events: auto; }
-/* Di layar lebar pil pindah ke pojok supaya tidak menutupi peragaan di tengah. */
-@media (min-width: 900px) {
-  .lp-mode-float { left: auto; right: 22px; bottom: 22px; transform: translateY(24px); }
-  .lp-mode-float.show { transform: none; }
-}
+
 .lp-subbody { animation: lp-body-in 0.45s ease both; }
 /* Bilah sudut pandang: lengket di bawah menu atas, jadi pengunjung selalu tahu sedang melihat sisi siapa. */
 .lp-subbar { position: sticky; top: 68px; z-index: 25; display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 28px; padding: 8px 0; background: color-mix(in srgb, var(--paper) 92%, transparent); backdrop-filter: blur(10px); scroll-margin-top: 68px; }
@@ -1225,3 +1230,9 @@
 .lp-vp span.out { opacity: 0.45; text-decoration: line-through; }
 .lp-till-p { position: relative; }
 .lp-till-p.hit { box-shadow: 0 0 0 2px var(--brand); }
+
+/* Judul pemasaran lebih tegas (Plus Jakarta Sans 800). */
+.lp .lp-hero h1 { font-weight: 800; letter-spacing: -0.04em; }
+.lp .lp-sec-head h2, .lp .lp-final h2, .lp .mo-copy h2 { font-weight: 800; letter-spacing: -0.035em; }
+.lp .lp-card-copy h3, .lp .lp-class h3, .lp .ez-steps h3, .lp .lp-panel-copy h3 { font-weight: 800; letter-spacing: -0.02em; }
+.lp .lead, .lp-sec-head p { letter-spacing: -0.005em; }
