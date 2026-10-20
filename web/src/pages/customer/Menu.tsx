@@ -269,11 +269,6 @@ export function CustomerMenuPage() {
         <div className="cust-top">
           {theme.logo ? <img className="cust-logo" src={theme.logo} alt={`Logo ${data.store.name}`} /> : placeTag}
           <div className="row" style={{ gap: 6 }}>
-            {dineIn && st?.bill && (
-              <button type="button" className="call-btn bill-chip" onClick={() => setCallOpen(true)}>
-                <ReceiptText aria-hidden="true" /> <span className="money">{t.billChip(rupiah(st.bill.total))}</span>
-              </button>
-            )}
             {dineIn && (
               <button type="button" className={`call-btn${st?.calls.length ? " on" : ""}`} onClick={() => setCallOpen(true)}>
                 <BellRing aria-hidden="true" /> {t.callStaff}
@@ -300,11 +295,23 @@ export function CustomerMenuPage() {
         {(() => {
           // Pesanan terakhir meja ini (siapa pun pengirimnya), atau pesanan HP ini sendiri.
           const last = st?.orders[0] ?? (myOrders.length ? { token: myOrders[myOrders.length - 1].token, number: myOrders[myOrders.length - 1].number } : null);
-          return last ? (
-            <Link className="btn btn-sm" style={{ justifySelf: "start", marginTop: 6 }} to={`/m/${code}/pesanan/${last.token}`}>
-              {t.seeStatus} #{last.number} <ChevronRight />
-            </Link>
-          ) : null;
+          const bill = dineIn && st?.bill ? st.bill : null;
+          if (!last && !bill) return null;
+          // Status pesanan dan tagihan meja sejajar di bawah nama toko, supaya baris atas tidak penuh.
+          return (
+            <div className="cust-order-row">
+              {last && (
+                <Link className="btn btn-sm" to={`/m/${code}/pesanan/${last.token}`}>
+                  {t.seeStatus} #{last.number} <ChevronRight />
+                </Link>
+              )}
+              {bill && (
+                <button type="button" className="btn btn-sm bill-chip" onClick={() => setCallOpen(true)}>
+                  <ReceiptText aria-hidden="true" /> <span className="money">{t.billChip(rupiah(bill.total))}</span>
+                </button>
+              )}
+            </div>
+          );
         })()}
       </header>
 

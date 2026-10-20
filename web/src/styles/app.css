@@ -656,6 +656,9 @@ dialog.modal[open] { display: flex; flex-direction: column; animation: pop 0.16s
 
 /* ---------- Pilihan bahasa (halaman pelanggan) ---------- */
 .cust-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+/* Tombol kanan boleh turun baris di layar sempit, jangan sampai melebarkan halaman. */
+.cust-top > .row { flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
+.cust-order-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
 .lang-switch {
   display: inline-flex; align-items: center; gap: 2px; padding: 3px 3px 3px 8px; border-radius: var(--radius);
   background: var(--surface); border: 1px solid var(--line-strong); color: var(--ink-2); flex: none;
