@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Film, ImagePlus, Pencil, Plus, Star, ThumbsUp, Trash2, UtensilsCrossed, Clock3, Percent, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Barcode, Film, ImagePlus, Pencil, Plus, Star, ThumbsUp, Trash2, UtensilsCrossed, Clock3, Percent, X } from "lucide-react";
 import { ALL_DAYS, hasSchedule, scheduleText } from "../../../../shared/schedule";
 import { ScheduleFields } from "./ScheduleFields";
 import { PriceRules } from "./PriceRules";
@@ -11,7 +11,10 @@ import { VIDEO_MAX_SECONDS } from "../../lib/media";
 import { uploadMedia } from "../../lib/upload";
 import { mediaSummary, type MediaRef } from "../../components/Gallery";
 import { Chilis } from "../../components/DishInfo";
-import { isManagement, useSession } from "../../lib/session";
+import { isManagement, isRetail, useSession } from "../../lib/session";
+import { BarcodeField, VariantEditor, fromDraft, toDraft, type DraftVariant } from "./VariantEditor";
+import { LabelPrint } from "./Labels";
+import { priceRange } from "../../../../shared/variants";
 import { STATION_LABEL, TAG_LABEL, type Category, type MenuItem } from "./types";
 
 export function MenuManagePage() {
@@ -24,6 +27,9 @@ export function MenuManagePage() {
   const [catsOpen, setCatsOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [filter, setFilter] = useState<"all" | "off" | "noen">("all");
+  const [labelsOpen, setLabelsOpen] = useState(false);
+  const retail = isRetail(tenant);
+  const noun = retail ? "produk" : "menu";
 
   const grouped = useMemo(() => {
     const list = (items.data?.items ?? []).filter((i) => filter === "all" || (filter === "off" ? !i.available : !i.name_en && !i.description_en));
@@ -52,19 +58,30 @@ export function MenuManagePage() {
   return (
     <>
       <PageHead
-        title={mgmt ? "Menu & produk" : "Menu"}
-        sub={mgmt ? "Yang kamu ubah di sini langsung tampil di menu QR pelanggan." : "Tandai menu yang habis supaya pelanggan tidak memesannya."}
+        title={retail ? "Produk" : mgmt ? "Menu & produk" : "Menu"}
+        sub={
+          retail
+            ? "Harga, varian ukuran & warna, barcode, dan stok. Langsung terpakai di Kasir."
+            : mgmt
+              ? "Yang kamu ubah di sini langsung tampil di menu QR pelanggan."
+              : "Tandai menu yang habis supaya pelanggan tidak memesannya."
+        }
         actions={
           mgmt && (
             <>
-              <button className="btn" onClick={() => setRulesOpen(true)}>
-                <Percent /> Promo jam
+              <button className="btn" onClick={() => setLabelsOpen(true)}>
+                <Barcode /> Cetak label
               </button>
+              {!retail && (
+                <button className="btn" onClick={() => setRulesOpen(true)}>
+                  <Percent /> Promo jam
+                </button>
+              )}
               <button className="btn" onClick={() => setCatsOpen(true)}>
                 Atur kategori
               </button>
-              <button className="btn btn-primary" onClick={() => setEditing({ available: 1, track_stock: 0, low_stock_at: 5, unit: "porsi", tags: "" })}>
-                <Plus /> Tambah menu
+              <button className="btn btn-primary" onClick={() => setEditing({ available: 1, track_stock: retail ? 1 : 0, low_stock_at: 5, unit: retail ? "pcs" : "porsi", tags: "" })}>
+                <Plus /> Tambah {noun}
               </button>
             </>
           )
@@ -72,12 +89,12 @@ export function MenuManagePage() {
       />
       <div className="row wrap" style={{ marginBottom: 16 }}>
         <button className="chip" aria-pressed={filter === "all"} onClick={() => setFilter("all")}>
-          Semua menu
+          Semua {noun}
         </button>
         <button className="chip" aria-pressed={filter === "off"} onClick={() => setFilter("off")}>
           Sedang habis ({offCount})
         </button>
-        {mgmt && (items.data?.items.length ?? 0) > 0 && (
+        {mgmt && !retail && (items.data?.items.length ?? 0) > 0 && (
           <button className="chip" aria-pressed={filter === "noen"} onClick={() => setFilter("noen")}>
             Belum ada versi Inggris ({items.data!.items.filter((i) => !i.name_en && !i.description_en).length})
           </button>
@@ -91,10 +108,10 @@ export function MenuManagePage() {
         <div className="panel">
           <Empty
             icon={<UtensilsCrossed aria-hidden="true" />}
-            title="Menu masih kosong"
-            action={mgmt && <button className="btn btn-primary" onClick={() => setEditing({ available: 1, unit: "porsi", tags: "" })}><Plus /> Tambah menu pertama</button>}
+            title={retail ? "Produk masih kosong" : "Menu masih kosong"}
+            action={mgmt && <button className="btn btn-primary" onClick={() => setEditing({ available: 1, track_stock: retail ? 1 : 0, unit: retail ? "pcs" : "porsi", tags: "" })}><Plus /> Tambah {noun} pertama</button>}
           >
-            Mulai dari menu yang paling sering dipesan. Foto bisa ditambahkan belakangan.
+            {retail ? "Mulai dari barang yang paling laku. Ukuran dan warna bisa dibuat sebagai varian." : "Mulai dari menu yang paling sering dipesan. Foto bisa ditambahkan belakangan."}
           </Empty>
         </div>
       ) : grouped.length === 0 ? (
@@ -129,7 +146,16 @@ export function MenuManagePage() {
                           <div style={{ minWidth: 0 }}>
                             <div className="title">{it.name}</div>
                             <div className="meta">
-                              <span className="money small strong">{rupiah(it.price)}</span>
+                              <span className="money small strong">
+                                {it.variants?.length
+                                  ? (() => {
+                                      const r = priceRange(it.price, it.variants);
+                                      return r.min === r.max ? rupiah(r.min) : `${rupiah(r.min)}–${rupiah(r.max)}`;
+                                    })()
+                                  : rupiah(it.price)}
+                              </span>
+                              {(it.variants?.length ?? 0) > 0 && <span className="badge">{it.variants!.length} varian</span>}
+                              {(it.barcode || it.variants?.some((v) => v.barcode)) && <span className="badge" title="Punya barcode"><Barcode aria-hidden="true" /></span>}
                               {!it.available && <span className="badge badge-danger">Habis</span>}
                               {hasSchedule(it) && <span className="badge"><Clock3 aria-hidden="true" /> {scheduleText(it)}</span>}
                               {mgmt && it.cost != null && it.price > 0 && (
@@ -170,6 +196,7 @@ export function MenuManagePage() {
           tenantId={tenant?.id ?? ""}
           planName={tenant?.plan_name ?? ""}
           stockOn={!!tenant?.inventory_enabled}
+          retail={isRetail(tenant)}
           allItems={items.data?.items ?? []}
           salesNote={salesNote(editing, items.data?.items ?? [])}
           onClose={() => setEditing(null)}
@@ -180,6 +207,7 @@ export function MenuManagePage() {
           }}
         />
       )}
+      {mgmt && <LabelPrint open={labelsOpen} items={items.data?.items ?? []} onClose={() => setLabelsOpen(false)} />}
       {mgmt && <PriceRules open={rulesOpen} categories={cats.data?.categories ?? []} onClose={() => setRulesOpen(false)} />}
       {mgmt && (
         <CategoryManager
@@ -214,11 +242,13 @@ function ItemEditor({
   tenantId,
   planName,
   stockOn,
+  retail,
   allItems,
   salesNote,
   onClose,
   onSaved,
 }: {
+  retail: boolean;
   allItems: MenuItem[];
   item: Partial<MenuItem>;
   categories: Category[];
@@ -252,13 +282,20 @@ function ItemEditor({
     available: item.available ?? 1,
     track_stock: item.track_stock ?? 0,
     low_stock_at: item.low_stock_at ?? 5,
-    unit: item.unit ?? "porsi",
+    unit: item.unit ?? (retail ? "pcs" : "porsi"),
     avail_days: item.avail_days ?? ALL_DAYS,
     avail_from: item.avail_from ?? null,
     avail_to: item.avail_to ?? null,
     pair_ids: (item.pair_ids ?? "").split(",").filter(Boolean),
     cost: (item.cost ?? "") as number | "",
+    barcode: item.barcode ?? "",
+    sku: item.sku ?? "",
+    opt1_name: item.opt1_name ?? "",
+    opt2_name: item.opt2_name ?? "",
+    variants: (item.variants ?? []).map(toDraft) as DraftVariant[],
   });
+  const [withVariants, setWithVariants] = useState((item.variants?.length ?? 0) > 0);
+  const noun = retail ? "produk" : "menu";
   const timed = f.avail_from != null || f.avail_days !== ALL_DAYS;
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -267,16 +304,28 @@ function ItemEditor({
 
   const save = async () => {
     const errs: Record<string, string> = {};
-    if (!f.name.trim()) errs.name = "Nama menu wajib diisi.";
-    if (f.price === "") errs.price = "Isi harga. Tulis 0 kalau gratis.";
+    if (!f.name.trim()) errs.name = `Nama ${noun} wajib diisi.`;
+    if (f.price === "") errs.price = withVariants ? "Isi harga dasar. Varian yang harganya dikosongkan memakai harga ini." : "Isi harga. Tulis 0 kalau gratis.";
+    if (withVariants && !f.variants.length) errs.variants = "Isi pilihan varian, atau matikan Punya varian.";
+    if (withVariants && f.variants.length && !f.opt1_name.trim()) errs.variants = "Isi nama pilihan, mis. Ukuran atau Warna.";
     setErrors(errs);
     if (Object.keys(errs).length) return;
     setBusy(true);
-    const body = { ...f, category_id: f.category_id || null, tags: f.tags.join(","), price: Number(f.price), prep_minutes: f.prep_minutes === "" ? null : f.prep_minutes, cost: f.cost === "" ? null : f.cost };
+    const body = {
+      ...f,
+      category_id: f.category_id || null,
+      tags: f.tags.join(","),
+      price: Number(f.price),
+      prep_minutes: f.prep_minutes === "" ? null : f.prep_minutes,
+      cost: f.cost === "" ? null : f.cost,
+      variants: withVariants ? f.variants.map(fromDraft) : [],
+      opt1_name: withVariants ? f.opt1_name.trim() : "",
+      opt2_name: withVariants ? f.opt2_name.trim() : "",
+    };
     try {
       if (isNew) await api.post("/api/store/items", body);
       else await api.put(`/api/store/items/${item.id}`, body);
-      toast(isNew ? `${f.name} ditambahkan ke menu.` : "Perubahan disimpan.");
+      toast(isNew ? `${f.name} ditambahkan.` : "Perubahan disimpan.");
       onSaved();
     } catch (e) {
       toast((e as Error).message, "error");
@@ -301,7 +350,7 @@ function ItemEditor({
       open
       wide
       onClose={onClose}
-      title={isNew ? "Tambah menu" : `Ubah ${item.name}`}
+      title={isNew ? `Tambah ${noun}` : `Ubah ${item.name}`}
       footer={
         <>
           {!isNew && (
@@ -313,17 +362,17 @@ function ItemEditor({
             Batal
           </button>
           <button className="btn btn-primary" onClick={save} disabled={busy || !!uploading}>
-            {busy ? "Menyimpan..." : isNew ? "Tambah ke menu" : "Simpan perubahan"}
+            {busy ? "Menyimpan..." : isNew ? `Tambah ${noun}` : "Simpan perubahan"}
           </button>
         </>
       }
     >
       <div className="form-grid">
         <div className="form-row">
-          <Field label="Nama menu" htmlFor="it-name" error={errors.name}>
-            <input id="it-name" className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} maxLength={80} placeholder="Mis. Nasi Goreng Kampung" autoFocus={isNew} />
+          <Field label={`Nama ${noun}`} htmlFor="it-name" error={errors.name}>
+            <input id="it-name" className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} maxLength={80} placeholder={retail ? "Mis. Kaos Polos Cotton" : "Mis. Nasi Goreng Kampung"} autoFocus={isNew} />
           </Field>
-          <Field label="Harga" htmlFor="it-price" error={errors.price}>
+          <Field label={withVariants ? "Harga dasar" : "Harga"} htmlFor="it-price" error={errors.price}>
             <MoneyInput id="it-price" value={f.price} onChange={(v) => setF({ ...f, price: v })} />
           </Field>
         </div>
@@ -338,11 +387,43 @@ function ItemEditor({
               ))}
             </select>
           </Field>
-          <Field label="Satuan" htmlFor="it-unit" hint="Dipakai di stok, mis. porsi, gelas, botol.">
+          <Field label="Satuan" htmlFor="it-unit" hint={retail ? "Dipakai di stok, mis. pcs, pasang, lusin." : "Dipakai di stok, mis. porsi, gelas, botol."}>
             <input id="it-unit" className="input" value={f.unit} onChange={(e) => setF({ ...f, unit: e.target.value })} maxLength={20} />
           </Field>
         </div>
-        <CostField price={f.price} cost={f.cost} onChange={(cost) => setF({ ...f, cost })} />
+        <CostField price={f.price} cost={f.cost} unit={f.unit} retail={retail} onChange={(cost) => setF({ ...f, cost })} />
+
+        <section className="stack" aria-labelledby="it-var-h" style={{ borderTop: "1px solid var(--line)", paddingTop: 16 }}>
+          <div>
+            <h3 id="it-var-h">Varian & barcode</h3>
+            <p className="small muted" style={{ marginTop: 4 }}>
+              {retail ? "Untuk ukuran dan warna, tiap kombinasi punya harga, stok, dan barcode sendiri." : "Mis. ukuran gelas Reguler/Besar, atau level. Tiap pilihan bisa punya harga sendiri."}
+            </p>
+          </div>
+          <Switch checked={withVariants} onChange={setWithVariants} label={`${retail ? "Produk" : "Menu"} ini punya varian`} hint="Pembeli dan kasir wajib memilih varian sebelum menambahkan." />
+          {withVariants ? (
+            <>
+              <VariantEditor
+                opt1Name={f.opt1_name}
+                opt2Name={f.opt2_name}
+                rows={f.variants}
+                basePrice={f.price}
+                showStock={stockOn && !!f.track_stock}
+                showCost
+                onChange={(v) => setF((s) => ({ ...s, opt1_name: v.opt1Name, opt2_name: v.opt2Name, variants: v.rows }))}
+              />
+              {errors.variants && <p role="alert" className="small" style={{ color: "var(--danger)", fontWeight: 600 }}>{errors.variants}</p>}
+              {stockOn && !f.track_stock && <p className="hint">Nyalakan "Hitung stok" di bawah untuk mengisi stok per varian.</p>}
+            </>
+          ) : (
+            <div className="form-row">
+              <BarcodeField id="it-barcode" value={f.barcode} onChange={(barcode) => setF((s) => ({ ...s, barcode }))} />
+              <Field label="SKU / kode barang" htmlFor="it-sku" hint="Opsional, kode internal toko.">
+                <input id="it-sku" className="input" value={f.sku} maxLength={40} onChange={(e) => setF({ ...f, sku: e.target.value })} />
+              </Field>
+            </div>
+          )}
+        </section>
         <Field label="Deskripsi" htmlFor="it-desc" hint="Tulis isi, porsi, atau rasa. Ini yang dibaca pelanggan sebelum memesan.">
           <textarea id="it-desc" className="textarea" value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} maxLength={500} placeholder="Mis. Nasi goreng bumbu terasi, telur ceplok, kerupuk, acar." />
         </Field>
@@ -378,7 +459,7 @@ function ItemEditor({
           name={f.name}
         />
 
-        <section className="stack" aria-labelledby="it-detail-h" style={{ borderTop: "1px solid var(--line)", paddingTop: 16 }}>
+        {!retail && <section className="stack" aria-labelledby="it-detail-h" style={{ borderTop: "1px solid var(--line)", paddingTop: 16 }}>
           <div>
             <h3 id="it-detail-h">Biar pembeli terbayang</h3>
             <p className="small muted" style={{ marginTop: 4 }}>Semua boleh dikosongkan. Yang diisi akan tampil saat pembeli membuka detail menu.</p>
@@ -409,10 +490,10 @@ function ItemEditor({
           <Field label="Alergen / pantangan" htmlFor="it-allergen" hint="Mis. mengandung kacang, udang, susu">
             <input id="it-allergen" className="input" value={f.allergens} onChange={(e) => setF({ ...f, allergens: e.target.value })} maxLength={120} />
           </Field>
-        </section>
+        </section>}
 
 
-        <section className="stack" aria-labelledby="it-sched-h" style={{ borderTop: "1px solid var(--line)", paddingTop: 16 }}>
+        {!retail && <section className="stack" aria-labelledby="it-sched-h" style={{ borderTop: "1px solid var(--line)", paddingTop: 16 }}>
           <div>
             <h3 id="it-sched-h">Jam tersedia</h3>
             <p className="small muted" style={{ marginTop: 4 }}>Untuk menu sarapan, menu malam, atau menu akhir pekan. Di luar jam, menu tetap terlihat dengan keterangan jamnya tapi tidak bisa dipesan.</p>
@@ -422,7 +503,7 @@ function ItemEditor({
             <button type="button" className="chip" aria-pressed={timed} onClick={() => setF({ ...f, avail_from: f.avail_from ?? 360, avail_to: f.avail_to ?? 600 })}>Jam tertentu</button>
           </div>
           {timed && <ScheduleFields days={f.avail_days} from={f.avail_from} to={f.avail_to} onChange={(v) => setF({ ...f, avail_days: v.days, avail_from: v.from, avail_to: v.to })} allowAllDay />}
-        </section>
+        </section>}
 
         <PairPicker self={item.id} items={allItems} value={f.pair_ids} onChange={(pair_ids) => setF({ ...f, pair_ids })} />
 
@@ -455,10 +536,10 @@ function ItemEditor({
           </div>
         </details>
 
-        <Switch checked={!!f.available} onChange={(v) => setF({ ...f, available: v ? 1 : 0 })} label="Tersedia untuk dipesan" hint="Matikan kalau sedang habis. Menu tetap terlihat dengan tanda Habis." />
+        <Switch checked={!!f.available} onChange={(v) => setF({ ...f, available: v ? 1 : 0 })} label={retail ? "Dijual" : "Tersedia untuk dipesan"} hint={retail ? "Matikan untuk menyembunyikan dari kasir sementara." : "Matikan kalau sedang habis. Menu tetap terlihat dengan tanda Habis."} />
         {stockOn && (
           <>
-            <Switch checked={!!f.track_stock} onChange={(v) => setF({ ...f, track_stock: v ? 1 : 0 })} label="Hitung stok menu ini" hint="Cocok untuk barang jadi (minuman botol, kerupuk). Stok berkurang otomatis tiap terjual. Isi jumlahnya di halaman Stok." />
+            <Switch checked={!!f.track_stock} onChange={(v) => setF({ ...f, track_stock: v ? 1 : 0 })} label={`Hitung stok ${noun} ini`} hint={withVariants ? "Stok dihitung per varian (isi di daftar varian di atas). Berkurang otomatis tiap terjual." : "Cocok untuk barang jadi (minuman botol, kerupuk). Stok berkurang otomatis tiap terjual. Isi jumlahnya di halaman Stok."} />
             {!!f.track_stock && (
               <Field label="Ingatkan kalau stok tinggal" htmlFor="it-low">
                 <input id="it-low" className="input num" style={{ maxWidth: 160 }} inputMode="numeric" value={f.low_stock_at} onChange={(e) => setF({ ...f, low_stock_at: Number(e.target.value.replace(/\D/g, "") || 0) })} />
@@ -693,25 +774,25 @@ function GalleryEditor({
 }
 
 /** Modal (HPP) per porsi, dengan margin yang langsung terlihat. */
-function CostField({ price, cost, onChange }: { price: number | ""; cost: number | ""; onChange: (v: number | "") => void }) {
+function CostField({ price, cost, onChange, unit = "porsi", retail = false }: { price: number | ""; cost: number | ""; onChange: (v: number | "") => void; unit?: string; retail?: boolean }) {
   const p = Number(price) || 0;
   const c = cost === "" ? null : cost;
   const margin = c != null && p > 0 ? p - c : null;
   const pct = margin != null ? Math.round((margin / p) * 100) : null;
   return (
     <div className="form-row">
-      <Field label="Modal per porsi (HPP, opsional)" htmlFor="it-cost" hint="Bahan + kemasan untuk satu porsi. Hanya terlihat pemilik dan manajer, dipakai di laporan margin.">
+      <Field label={`Modal per ${unit || "porsi"} (HPP, opsional)`} htmlFor="it-cost" hint={retail ? "Harga beli dari pemasok per barang. Hanya terlihat pemilik dan manajer, dipakai di laporan margin." : "Bahan + kemasan untuk satu porsi. Hanya terlihat pemilik dan manajer, dipakai di laporan margin."}>
         <MoneyInput id="it-cost" value={cost} onChange={onChange} />
       </Field>
       <div className="field">
-        <span className="field-label">Untung per porsi</span>
+        <span className="field-label">Untung per {unit || "porsi"}</span>
         {margin == null ? (
           <p className="small muted" style={{ paddingTop: 10 }}>Isi harga dan modal untuk melihat margin.</p>
         ) : (
           <p style={{ paddingTop: 8 }}>
             <span className="strong money">{rupiah(margin)}</span>{" "}
             <span className={`badge ${pct! < 30 ? "badge-warn" : "badge-ok"}`}>{pct}% dari harga</span>
-            {pct! < 30 && <span className="hint" style={{ display: "block", marginTop: 4 }}>Di bawah 30%: pertimbangkan naikkan harga atau kurangi porsi bahan mahal.</span>}
+            {pct! < 30 && <span className="hint" style={{ display: "block", marginTop: 4 }}>{retail ? "Di bawah 30%: pertimbangkan naikkan harga atau cari pemasok yang lebih murah." : "Di bawah 30%: pertimbangkan naikkan harga atau kurangi porsi bahan mahal."}</span>}
           </p>
         )}
       </div>

@@ -70,7 +70,14 @@ opsRoutes.get("/shifts/current", async (c) => {
   const t = storeOf(c);
   const s = await first<Shift>(c.var.db, `${SHIFT_SELECT} WHERE s.tenant_id = ? AND s.status = 'open'`, t.id);
   const last = s ? null : await first<Shift>(c.var.db, `${SHIFT_SELECT} WHERE s.tenant_id = ? AND s.status = 'closed' ORDER BY s.closed_at DESC LIMIT 1`, t.id);
-  return c.json({ shift: s, summary: s ? await summary(c.var.db, t.id, s) : null, last });
+  // Tagihan yang belum dibayar ikut ditampilkan, supaya kasir menagihnya sebelum tutup shift.
+  const unpaid = await first<{ n: number; total: number }>(
+    c.var.db,
+    "SELECT COUNT(*) AS n, COALESCE(SUM(total), 0) AS total FROM orders WHERE tenant_id = ? AND payment_status = 'unpaid' AND status != 'cancelled' AND created_at > ?",
+    t.id,
+    Date.now() - 3 * 86_400_000,
+  );
+  return c.json({ shift: s, summary: s ? await summary(c.var.db, t.id, s) : null, last, unpaid: { count: unpaid?.n ?? 0, total: unpaid?.total ?? 0 } });
 });
 
 opsRoutes.post("/shifts/open", async (c) => {
@@ -148,7 +155,7 @@ opsRoutes.get("/kitchen", async (c) => {
   const items = ids.length
     ? await all<{ id: string; order_id: string; name: string; qty: number; note: string; person: string; station: string; ready_at: number | null; prep_minutes: number | null }>(
         c.var.db,
-        `SELECT i.id, i.order_id, i.name, i.qty, i.note, i.person, i.station, i.ready_at, m.prep_minutes
+        `SELECT i.id, i.order_id, CASE WHEN i.variant_name != '' THEN i.name || ' (' || i.variant_name || ')' ELSE i.name END AS name, i.qty, i.note, i.person, i.station, i.ready_at, m.prep_minutes
          FROM order_items i LEFT JOIN menu_items m ON m.id = i.menu_item_id WHERE i.order_id IN (${ids.map(() => "?").join(",")})`,
         ...ids,
       )

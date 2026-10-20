@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Minus, Plus, Search, Trash2, ChevronUp, WifiOff, Clock3, Wallet, Sparkles } from "lucide-react";
+import { Minus, Plus, Search, Trash2, ChevronUp, WifiOff, Clock3, Wallet, Sparkles, ScanLine } from "lucide-react";
 import { Empty, ErrorState, Loading, Modal, PageHead, Segmented, Thumb, useToast } from "../../components/ui";
 import { PaymentModal, type PayMethod } from "../../components/PaymentModal";
 import { ReceiptShare } from "../../components/ReceiptShare";
@@ -13,11 +13,17 @@ import { useOrderFeed } from "../../components/Shell";
 import { newClientId, useOutbox } from "../../lib/outbox";
 import { priceNow, useStoreClock } from "../../lib/pricing";
 import { scheduleText } from "../../../../shared/schedule";
-import type { Category, DiningTable, LoyaltyCard, MenuItem, Order, Pricing } from "./types";
+import { lineName, priceRange, variantLabel } from "../../../../shared/variants";
+import { CameraScanner, useScannerInput } from "../../lib/barcode";
+import { VariantPicker } from "../../components/VariantPicker";
+import { Onboarding } from "../../components/Onboarding";
+import { isRetail } from "../../lib/session";
+import type { Category, DiningTable, ItemVariant, LoyaltyCard, MenuItem, Order, Pricing } from "./types";
 
 interface Line {
   key: string;
   item: MenuItem;
+  variant: ItemVariant | null;
   qty: number;
   note: string;
 }
@@ -48,23 +54,44 @@ export function PosPage() {
   const [noteFor, setNoteFor] = useState<Line | null>(null);
   const [noteText, setNoteText] = useState("");
   const [done, setDone] = useState<Done | null>(null);
+  const [picking, setPicking] = useState<MenuItem | null>(null);
+  const [picked, setPicked] = useState<ItemVariant | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const retail = isRetail(tenant);
+  const type = retail ? "takeaway" : orderType;
 
   const stockOn = !!tenant?.inventory_enabled;
   const all = items.data?.items ?? [];
   const list = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return all.filter((i) => (cat === "all" || i.category_id === cat) && (!s || i.name.toLowerCase().includes(s)));
+    return all.filter(
+      (i) =>
+        (cat === "all" || i.category_id === cat) &&
+        (!s || i.name.toLowerCase().includes(s) || i.sku?.toLowerCase() === s || i.barcode === s || (i.variants ?? []).some((v) => v.barcode === s || v.sku.toLowerCase() === s)),
+    );
   }, [all, cat, q]);
-  const price = (i: MenuItem) => priceNow(i, rules, clock);
+  // Barcode → produk (+ varian). Dibaca dari daftar yang tersimpan di HP, jadi scan tetap jalan saat offline.
+  const byCode = useMemo(() => {
+    const m = new Map<string, { item: MenuItem; variant: ItemVariant | null }>();
+    for (const i of all) {
+      if (i.barcode) m.set(i.barcode, { item: i, variant: null });
+      for (const v of i.variants ?? []) if (v.barcode) m.set(v.barcode, { item: i, variant: v });
+    }
+    return m;
+  }, [all]);
+  const price = (i: MenuItem, v?: ItemVariant | null) => priceNow({ ...i, price: v && v.price != null ? v.price : i.price }, rules, clock);
 
-  const subtotal = lines.reduce((s, l) => s + price(l.item).price * l.qty, 0);
+  const subtotal = lines.reduce((s, l) => s + price(l.item, l.variant).price * l.qty, 0);
   const service = Math.round((subtotal * (tenant?.service_rate ?? 0)) / 100);
   const tax = Math.round(((subtotal + service) * (tenant?.tax_rate ?? 0)) / 100);
   const total = subtotal + service + tax;
   const count = lines.reduce((s, l) => s + l.qty, 0);
 
-  const qtyInCart = (id: string) => lines.filter((l) => l.item.id === id).reduce((s, l) => s + l.qty, 0);
-  const soldOut = (i: MenuItem) => !i.available || (stockOn && !!i.track_stock && i.stock_qty - qtyInCart(i.id) <= 0);
+  const qtyInCart = (id: string, vid?: string | null) => lines.filter((l) => l.item.id === id && (vid === undefined || (l.variant?.id ?? null) === vid)).reduce((s, l) => s + l.qty, 0);
+  const vSoldOut = (i: MenuItem, v: ItemVariant) => !v.available || (stockOn && !!i.track_stock && v.stock_qty - qtyInCart(i.id, v.id) <= 0);
+  const hasVariants = (i: MenuItem) => (i.variants?.length ?? 0) > 0;
+  const soldOut = (i: MenuItem) =>
+    !i.available || (hasVariants(i) ? i.variants!.every((v) => vSoldOut(i, v)) : stockOn && !!i.track_stock && i.stock_qty - qtyInCart(i.id) <= 0);
   const blocked = (i: MenuItem) => soldOut(i) || !price(i).open;
 
   // Saran untuk ditawarkan kasir: pasangan dari menu yang sudah di keranjang, yang belum dipesan.
@@ -80,23 +107,49 @@ export function PosPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lines, all, clock]);
 
-  const add = (item: MenuItem) => {
-    if (blocked(item)) return;
+  const add = (item: MenuItem, variant: ItemVariant | null = null) => {
+    if (blocked(item)) return false;
+    if (hasVariants(item) && !variant) {
+      setPicked(null);
+      setPicking(item);
+      return true;
+    }
+    if (variant && vSoldOut(item, variant)) return false;
     setLines((ls) => {
-      const ex = ls.find((l) => l.item.id === item.id && l.note === "");
+      const ex = ls.find((l) => l.item.id === item.id && (l.variant?.id ?? null) === (variant?.id ?? null) && l.note === "");
       if (ex) return ls.map((l) => (l === ex ? { ...l, qty: l.qty + 1 } : l));
-      return [...ls, { key: `${item.id}-${Date.now()}`, item, qty: 1, note: "" }];
+      return [...ls, { key: `${item.id}-${variant?.id ?? ""}-${Date.now()}`, item, variant, qty: 1, note: "" }];
     });
+    return true;
   };
   const change = (key: string, d: number) =>
     setLines((ls) =>
       ls.flatMap((l) => {
         if (l.key !== key) return [l];
         const qty = l.qty + d;
-        if (d > 0 && stockOn && l.item.track_stock && qtyInCart(l.item.id) + d > l.item.stock_qty) return [l];
+        const have = l.variant ? l.variant.stock_qty : l.item.stock_qty;
+        if (d > 0 && stockOn && l.item.track_stock && qtyInCart(l.item.id, l.variant ? l.variant.id : undefined) + d > have) return [l];
         return qty <= 0 ? [] : [{ ...l, qty }];
       }),
     );
+  const label = (l: Line) => lineName(l.item.name, l.variant ? variantLabel(l.variant) : null);
+
+  // Hasil scan (alat scan, kamera, atau ketik kode lalu Enter).
+  const onScan = (code: string) => {
+    const hit = byCode.get(code);
+    if (!hit) {
+      toast(`Barcode ${code} belum terdaftar. Tambahkan di halaman produk.`, "error");
+      return false;
+    }
+    const name = lineName(hit.item.name, hit.variant ? variantLabel(hit.variant) : null);
+    if (!add(hit.item, hit.variant)) {
+      toast(`${name} habis.`, "error");
+      return false;
+    }
+    if (!hasVariants(hit.item) || hit.variant) toast(`Ditambahkan: ${name}`);
+    return true;
+  };
+  useScannerInput(onScan, !paying && !scanning && !picking && !noteFor);
 
   const reset = () => {
     setLines([]);
@@ -106,17 +159,17 @@ export function PosPage() {
   };
 
   const submit = async (payment: { method: PayMethod; amountReceived: number | null; phone?: string } | null) => {
-    if (orderType === "dine_in" && !tableId && (tables.data?.tables.length ?? 0) > 0) {
+    if (type === "dine_in" && !tableId && (tables.data?.tables.length ?? 0) > 0) {
       toast("Pilih meja dulu, atau ubah ke Bawa pulang.", "error");
       return;
     }
     setBusy(true);
     const clientId = newClientId();
     const body = {
-      orderType,
-      tableId: orderType === "dine_in" && tableId ? tableId : null,
+      orderType: type,
+      tableId: type === "dine_in" && tableId ? tableId : null,
       customerName: name,
-      items: lines.map((l) => ({ id: l.item.id, qty: l.qty, note: l.note })),
+      items: lines.map((l) => ({ id: l.item.id, variantId: l.variant?.id ?? null, qty: l.qty, note: l.note })),
       payment: payment ? { method: payment.method, amountReceived: payment.amountReceived } : null,
       ...(payment?.phone ? { phone: payment.phone } : {}),
     };
@@ -125,7 +178,7 @@ export function PosPage() {
         clientId,
         at: Date.now(),
         total,
-        summary: lines.map((l) => `${l.qty}× ${l.item.name}`).join(", ").slice(0, 120),
+        summary: lines.map((l) => `${l.qty}× ${label(l)}`).join(", ").slice(0, 120),
         body,
       });
       toast(`Internet putus. Pesanan disimpan sebagai Offline ${e.label} dan dikirim otomatis saat sinyal kembali.`);
@@ -170,23 +223,25 @@ export function PosPage() {
     <div className={`panel pos-cart${narrow && !cartOpen ? " collapsed" : ""}`} aria-label="Keranjang">
       <div className="stack">
         <div className="row between">
-          <h2>Pesanan baru</h2>
+          <h2>{retail ? "Penjualan baru" : "Pesanan baru"}</h2>
           {lines.length > 0 && (
             <button className="btn btn-ghost btn-sm" onClick={reset}>
               Kosongkan
             </button>
           )}
         </div>
-        <Segmented
-          label="Jenis pesanan"
-          value={orderType}
-          onChange={setOrderType}
-          options={[
-            { value: "dine_in", label: "Makan di sini" },
-            { value: "takeaway", label: "Bawa pulang" },
-          ]}
-        />
-        {orderType === "dine_in" && (tables.data?.tables.length ?? 0) > 0 && (
+        {!retail && (
+          <Segmented
+            label="Jenis pesanan"
+            value={orderType}
+            onChange={setOrderType}
+            options={[
+              { value: "dine_in", label: "Makan di sini" },
+              { value: "takeaway", label: "Bawa pulang" },
+            ]}
+          />
+        )}
+        {type === "dine_in" && (tables.data?.tables.length ?? 0) > 0 && (
           <select className="select" value={tableId} onChange={(e) => setTableId(e.target.value)} aria-label="Meja">
             <option value="">Pilih meja</option>
             {tables.data!.tables.filter((t) => t.active).map((t) => (
@@ -202,16 +257,19 @@ export function PosPage() {
         <hr className="divider-dashed" style={{ margin: "4px 0" }} />
         {lines.length === 0 ? (
           <p className="muted small" style={{ padding: "12px 0" }}>
-            Ketuk menu di sebelah {narrow ? "atas" : "kiri"} untuk menambahkan.
+            {retail ? `Scan barcode atau ketuk produk di sebelah ${narrow ? "atas" : "kiri"}.` : `Ketuk menu di sebelah ${narrow ? "atas" : "kiri"} untuk menambahkan.`}
           </p>
         ) : (
           <div className="cart-lines">
             {lines.map((l) => {
-              const p = price(l.item);
+              const p = price(l.item, l.variant);
               return (
                 <div className="cart-line" key={l.key}>
                   <div style={{ minWidth: 0 }}>
-                    <div className="strong" style={{ overflowWrap: "anywhere" }}>{l.item.name}</div>
+                    <div className="strong" style={{ overflowWrap: "anywhere" }}>
+                      {l.item.name}
+                      {l.variant && <span className="variant-tag">{variantLabel(l.variant)}</span>}
+                    </div>
                     <div className="small muted money">
                       {p.promo && <s className="was">{rupiah(p.list * l.qty)}</s>} {rupiah(p.price * l.qty)}
                       {p.promo && <span className="promo-tag">{p.promo}</span>}
@@ -228,11 +286,11 @@ export function PosPage() {
                     </button>
                   </div>
                   <div className="qty">
-                    <button onClick={() => change(l.key, -1)} aria-label={l.qty === 1 ? `Hapus ${l.item.name}` : `Kurangi ${l.item.name}`}>
+                    <button onClick={() => change(l.key, -1)} aria-label={l.qty === 1 ? `Hapus ${label(l)}` : `Kurangi ${label(l)}`}>
                       {l.qty === 1 ? <Trash2 /> : <Minus />}
                     </button>
                     <span className="num" aria-live="polite">{l.qty}</span>
-                    <button onClick={() => change(l.key, 1)} aria-label={`Tambah ${l.item.name}`}>
+                    <button onClick={() => change(l.key, 1)} aria-label={`Tambah ${label(l)}`}>
                       <Plus />
                     </button>
                   </div>
@@ -282,7 +340,7 @@ export function PosPage() {
           Bayar sekarang
         </button>
         <button className="btn btn-block" disabled={!lines.length || busy || tenant?.locked} onClick={() => submit(null)}>
-          Kirim ke dapur, bayar nanti
+          {retail ? "Simpan, bayar nanti" : "Kirim ke dapur, bayar nanti"}
         </button>
         {!outbox.online && <p className="tiny muted"><WifiOff aria-hidden="true" className="inline-ico" /> Offline: pesanan disimpan di perangkat ini dan dikirim saat sinyal kembali.</p>}
       </div>
@@ -293,8 +351,15 @@ export function PosPage() {
     <>
       <PageHead
         title="Kasir"
-        sub={items.stale ? "Offline: memakai daftar menu yang tersimpan di perangkat ini." : "Catat pesanan pelanggan yang datang langsung ke kasir."}
+        sub={
+          items.stale
+            ? "Offline: memakai daftar produk yang tersimpan di perangkat ini. Scan barcode tetap jalan."
+            : retail
+              ? "Scan barcode dengan alat scan atau kamera, atau ketuk produknya."
+              : "Catat pesanan pelanggan yang datang langsung ke kasir."
+        }
       />
+      {retail && <Onboarding />}
       {feed.shiftOpen === false && (
         <div className="banner info" role="note">
           <Wallet aria-hidden="true" />
@@ -306,9 +371,32 @@ export function PosPage() {
       )}
       <div className="pos">
         <div className="stack" style={{ minWidth: 0 }}>
-          <div className="cust-search">
-            <Search aria-hidden="true" />
-            <input className="input" placeholder="Cari menu" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Cari menu" />
+          <div className="row" style={{ gap: 8 }}>
+            <div className="cust-search" style={{ flex: 1 }}>
+              <Search aria-hidden="true" />
+              <input
+                className="input"
+                placeholder={retail ? "Cari produk, SKU, atau ketik barcode" : "Cari menu"}
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                onKeyDown={(e) => {
+                  // Alat scan yang mengetik ke kolom ini, atau kode diketik manual lalu Enter.
+                  if (e.key !== "Enter") return;
+                  const code = q.trim();
+                  if (byCode.has(code)) {
+                    e.preventDefault();
+                    if (onScan(code)) setQ("");
+                  } else if (list.length === 1) {
+                    e.preventDefault();
+                    if (add(list[0])) setQ("");
+                  }
+                }}
+                aria-label={retail ? "Cari produk atau barcode" : "Cari menu"}
+              />
+            </div>
+            <button type="button" className="btn" onClick={() => setScanning(true)} aria-label="Scan barcode dengan kamera" title="Scan barcode dengan kamera">
+              <ScanLine /> <span className="hide-sm">Scan</span>
+            </button>
           </div>
           <div className="chips" role="group" aria-label="Kategori">
             <button className="chip" aria-pressed={cat === "all"} onClick={() => setCat("all")}>
@@ -335,6 +423,8 @@ export function PosPage() {
                 const out = soldOut(i);
                 const p = price(i);
                 const left = stockOn && i.track_stock ? i.stock_qty - n : null;
+                const range = hasVariants(i) ? priceRange(i.price, i.variants!) : null;
+                const from = range && range.min !== range.max;
                 return (
                   <button
                     key={i.id}
@@ -349,8 +439,9 @@ export function PosPage() {
                     <div className="info">
                       <span className="name">{i.name}</span>
                       <span className="money small">
-                        {p.promo && <s className="was">{rupiah(p.list)}</s>} {rupiah(p.price)}
+                        {from ? <>mulai {rupiah(price(i, { price: range!.min } as ItemVariant).price)}</> : <>{p.promo && <s className="was">{rupiah(p.list)}</s>} {rupiah(range ? price(i, { price: range.min } as ItemVariant).price : p.price)}</>}
                       </span>
+                      {hasVariants(i) && <span className="tiny muted">{i.variants!.length} varian</span>}
                       {out ? (
                         <span className="badge badge-danger" style={{ justifySelf: "start" }}>Habis</span>
                       ) : !p.open ? (
@@ -380,12 +471,47 @@ export function PosPage() {
       )}
 
       <PaymentModal open={paying} total={total} busy={busy} onClose={() => setPaying(false)} onPay={(p) => submit(p)} />
+      <CameraScanner open={scanning} continuous onClose={() => setScanning(false)} onScan={onScan} title="Scan barang" />
+      <Modal
+        open={!!picking}
+        onClose={() => setPicking(null)}
+        title={picking ? `Pilih varian ${picking.name}` : ""}
+        footer={
+          <>
+            <button className="btn" onClick={() => setPicking(null)}>Batal</button>
+            <button
+              className="btn btn-primary"
+              disabled={!picked}
+              onClick={() => {
+                if (picking && picked) add(picking, picked);
+                setPicking(null);
+              }}
+            >
+              Tambah ke keranjang
+            </button>
+          </>
+        }
+      >
+        {picking && (
+          <VariantPicker
+            opt1Name={picking.opt1_name || "Pilihan"}
+            opt2Name={picking.opt2_name || ""}
+            variants={(picking.variants ?? []).map((v) => ({ ...v, sold_out: vSoldOut(picking, v) }))}
+            value={picked ? { ...picked, sold_out: false } : null}
+            onChange={(v) => setPicked(v)}
+            priceOf={(v) => {
+              const left = stockOn && picking.track_stock ? v.stock_qty - qtyInCart(picking.id, v.id) : null;
+              return `${rupiah(price(picking, v).price)}${left != null ? ` · sisa ${left}` : ""}`;
+            }}
+          />
+        )}
+      </Modal>
       <ReceiptShare open={!!done} order={done} phone={done?.phone} card={done?.card} onPrint={printDone} onClose={() => setDone(null)} />
 
       <Modal
         open={!!noteFor}
         onClose={() => setNoteFor(null)}
-        title={noteFor ? `Catatan untuk ${noteFor.item.name}` : ""}
+        title={noteFor ? `Catatan untuk ${label(noteFor)}` : ""}
         footer={
           <>
             <button className="btn" onClick={() => setNoteFor(null)}>

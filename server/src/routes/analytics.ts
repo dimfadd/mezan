@@ -171,7 +171,7 @@ analyticsRoutes.get("/export.csv", async (c) => {
     c.var.db,
     `SELECT o.business_day, o.number, o.created_at, o.table_label, o.customer_name, o.source, o.status, o.payment_status,
             o.payment_method, o.subtotal, o.service, o.tax, o.total,
-            (SELECT GROUP_CONCAT(i.qty || 'x ' || i.name, '; ') FROM order_items i WHERE i.order_id = o.id) AS items
+            (SELECT GROUP_CONCAT(i.qty || 'x ' || i.name || CASE WHEN i.variant_name != '' THEN ' (' || i.variant_name || ')' ELSE '' END, '; ') FROM order_items i WHERE i.order_id = o.id) AS items
      FROM orders o WHERE o.tenant_id = ? AND o.business_day BETWEEN ? AND ? ORDER BY o.created_at`,
     t.id, from, to,
   );

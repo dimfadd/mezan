@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Check, X } from "lucide-react";
 import { useApi } from "../lib/hooks";
-import { isManagement, useSession } from "../lib/session";
+import { isManagement, isRetail, useSession } from "../lib/session";
 
 interface Progress {
   items: number;
@@ -10,6 +10,8 @@ interface Progress {
   qrOrders: number;
   firstTableCode: string | null;
   qrEnabled: boolean;
+  orders: number;
+  barcodes: number;
 }
 
 const KEY = (id: string) => `pesanin-onboard-hide-${id}`;
@@ -30,7 +32,11 @@ export function Onboarding() {
   });
   const { data } = useApi<Progress>(show && !hidden ? "/api/store/onboarding" : null);
   if (!show || hidden || !data || !tenant) return null;
-  const steps = [
+  const steps = isRetail(tenant) ? [
+    { done: data.items > 0, title: "Isi produk", body: "Nama, harga, dan stok. Ukuran dan warna dibuat sebagai varian.", to: "/toko/menu", cta: "Buka Produk" },
+    { done: data.barcodes > 0, title: "Pasang barcode", body: "Scan barcode kemasan, atau buat kode toko lalu cetak labelnya.", to: "/toko/menu", cta: "Buka Produk" },
+    { done: data.orders > 0, title: "Coba jual di Kasir", body: "Scan barang atau ketuk produknya, lalu terima pembayaran.", to: "/toko/kasir", cta: "Buka Kasir" },
+  ] : [
     { done: data.items > 0, title: "Isi menu", body: "Nama, harga, dan foto. Bisa langsung dari kamera HP.", to: "/toko/menu", cta: "Buka Menu & produk" },
     { done: data.tables > 0, title: "Tambah meja & cetak QR", body: "Buat beberapa meja sekaligus, lalu cetak semua QR-nya.", to: "/toko/meja", cta: "Buka Meja & QR" },
     {
@@ -78,7 +84,7 @@ export function Onboarding() {
           </li>
         ))}
       </ol>
-      {!data.qrEnabled && <p className="tiny muted">Pesan lewat QR sedang dimatikan di Pengaturan. Nyalakan supaya pembeli bisa memesan dari meja.</p>}
+      {!isRetail(tenant) && !data.qrEnabled && <p className="tiny muted">Pesan lewat QR sedang dimatikan di Pengaturan. Nyalakan supaya pembeli bisa memesan dari meja.</p>}
     </section>
   );
 }

@@ -23,6 +23,7 @@ Akun data contoh (semua fiktif, toko contoh memakai paket Resto supaya editor ta
 | Pemilik toko | `pemilik@contoh.id` | `contoh12345` |
 | Manajer | `manajer@contoh.id` | `contoh12345` |
 | Karyawan (kasir) | `kasir@contoh.id` | `contoh12345` |
+| Pemilik toko baju (mode toko barang) | `toko@contoh.id` | `contoh12345` |
 
 Menu pelanggan Meja 1: http://localhost:5173/m/contoh-meja1
 
@@ -36,6 +37,8 @@ npm run typecheck
 npm run build        # build web ke web/dist
 npm start            # jalankan API + web hasil build dari satu server (port 8787)
 node tests/smoke.mjs out/   # screenshot semua halaman di ukuran HP/tablet/PC + cek error console
+node tests/flows.mjs out/   # uji alur fitur warung (offline, stempel, dapur, promo, antrean, dst)
+node tests/retail.mjs out/  # uji toko barang & tagihan meja (varian, scan, label, stok varian); pakai data contoh baru (npm run db:reset)
 ```
 
 ## Detail menu untuk pembeli
@@ -97,6 +100,20 @@ Pengaman: kombinasi warna yang kontrasnya di bawah WCAG AA (4,5:1) ditolak di ed
 - **Kasir tetap jalan saat internet putus.** Daftar menu, meja, dan sesi login disimpan di perangkat; pesanan baru masuk "kotak keluar" (Offline 1, 2, ...) dan dikirim otomatis saat sinyal kembali, dengan waktu aslinya (harga promo, tanggal, dan shift ikut waktu itu). Tiap pesanan membawa ID dari perangkat, jadi kiriman ulang tidak dobel. Penjualan offline tidak ditolak karena stok/jadwal (barangnya sudah keluar); stok turun sampai nol, tidak minus. Pesanan QR dari pembeli tetap butuh internet. Lihat `web/src/lib/outbox.tsx`.
 - **Kas & shift**: buka shift dengan modal awal, catat uang keluar/masuk laci, tutup dengan menghitung uang. Isi laci seharusnya = modal + penjualan tunai (dari waktu bayar) + masuk - keluar; selisih tersimpan saat tutup. Satu shift terbuka per toko. Riwayat hanya untuk pemilik/manajer. Kasir diingatkan (tidak dipaksa) kalau shift belum dibuka.
 - **Layar dapur per bagian**: kategori diarahkan ke Dapur atau Bar (kategori bernama minuman/kopi/teh otomatis ke Bar). Tiket menampilkan waktu sejak diterima, berubah kuning saat lewat waktu saji menu dan merah di 1,5x. Item dicentang satu per satu; kalau semua bagian selesai, pesanan otomatis jadi "Siap diantar". Bisa layar penuh untuk tablet di dapur.
+
+## Toko barang: varian, barcode, dan mode toko
+
+- **Varian** (`item_variants`): satu produk punya sampai dua pilihan (mis. Warna × Ukuran, atau Ukuran gelas). Pemilik mengetik isinya dipisah koma, semua kombinasi dibuat otomatis. Tiap varian punya harga (kosong = ikut harga produk), modal, SKU, barcode, stok, dan saklar dijual. Varian yang dihapus diarsipkan supaya riwayat penjualan utuh. Berlaku juga untuk usaha makanan (contoh: Teh Tarik Panas/Es).
+- **Stok per varian**: `menu_items.stock_qty` untuk produk bervarian selalu sama dengan jumlah stok varian aktif, diperbarui di transaksi yang sama (jual, batal, barang masuk, rusak, hitung ulang). Stok di editor produk tercatat sebagai penyesuaian di riwayat stok.
+- **Pesanan**: `order_items.name` tetap nama produk (laporan mengelompokkan per produk), varian disimpan di `variant_id` dan `variant_name`; struk, dapur, dan halaman pembeli menampilkan "Kaos Polos (Hitam / M)". Server menolak produk bervarian tanpa varian, varian milik produk lain, dan stok varian yang kurang.
+- **Barcode**: unik per toko di semua produk dan varian. Di kasir bisa lewat alat scan USB/Bluetooth (dibaca di mana saja di halaman, tanpa klik kolom), kamera HP (BarcodeDetector bawaan Chrome Android, selain itu ZXing yang dimuat saat dibutuhkan), atau diketik di kolom cari lalu Enter. Scan tetap jalan offline karena memakai daftar produk tersimpan. Barang tanpa barcode bisa dibuatkan kode EAN-13 berawalan 2 (rentang dalam toko menurut GS1) dan dicetak sebagai label 50×30 mm dari halaman Produk ("Cetak label", jumlah per barang atau sebanyak stok).
+- **Mode toko barang** (jenis usaha "Toko" di Pengaturan atau saat daftar): tanpa Layar dapur, Meja & QR, Antrean tunggu, dan Tampilan menu; masuk langsung ke Kasir; istilah Produk dan Penjualan; penjualan kasir langsung berstatus selesai; kolom khusus makanan (porsi, pedas, waktu saji, jam tersedia) disembunyikan; panduan langkah awal: isi produk, pasang barcode, coba jual.
+
+## Makan dulu, bayar belakangan (tagihan meja)
+
+- Tab **Tagihan** di halaman Pesanan menggabungkan semua pesanan yang belum dibayar per meja (QR maupun kasir; tanpa meja berdiri sendiri), lalu dibayar sekali (`POST /api/store/bills/pay`). Semua pesanan di tagihan lunas bersamaan atau tidak sama sekali: tabel `bill_guard` dengan CHECK membatalkan transaksi kalau ada pesanan yang sudah dibayar di perangkat lain. Stempel diberikan sekali per tagihan.
+- Tagihan yang sudah diantar lebih dari 30 menit tapi belum dibayar ditandai merah dan muncul sebagai peringatan; tutup shift memperingatkan kalau masih ada tagihan.
+- HP pembeli melihat tombol "Tagihan Rp..." dan rinciannya di menu meja, plus tombol Minta bill yang sudah ada.
 
 ## Antrean dapur dan perkiraan siap untuk pembeli
 

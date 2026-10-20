@@ -727,3 +727,111 @@ test("panduan langkah awal: hitungan menu, meja, dan pesanan QR", async () => {
   await call("POST", "/api/public/orders", { tableCode: o.firstTableCode, customerName: "A", items: [{ id: it.json.id, qty: 1 }] });
   assert.equal((await call("GET", "/api/store/onboarding", undefined, owner)).json.qrOrders, 1);
 });
+
+test("varian: harga & stok per varian, wajib pilih varian, batal mengembalikan stok varian", async () => {
+  const { call, login, db } = await setup();
+  const owner = await login("owner@t");
+  const kaos = await call("POST", "/api/store/items", {
+    category_id: null, name: "Kaos Polos", price: 75000, track_stock: 1, unit: "pcs", opt1_name: "Warna", opt2_name: "Ukuran",
+    variants: [
+      { opt1: "Hitam", opt2: "M", stock: 5, barcode: "2000000000015" },
+      { opt1: "Hitam", opt2: "XL", price: 85000, cost: 40000, stock: 2 },
+    ],
+  }, owner);
+  assert.equal(kaos.status, 201, JSON.stringify(kaos.json));
+  const item = (await call("GET", "/api/store/items", undefined, owner)).json.items.find((i: { id: string }) => i.id === kaos.json.id);
+  assert.equal(item.variants.length, 2);
+  assert.equal(item.stock_qty, 7, "stok produk = jumlah stok varian");
+  const [m, xl] = item.variants;
+  // Wajib pilih varian
+  const noVar = await call("POST", "/api/store/orders", { orderType: "takeaway", items: [{ id: kaos.json.id, qty: 1 }] }, owner);
+  assert.equal(noVar.status, 400);
+  assert.match(noVar.json.error, /varian/i);
+  // Stok XL tinggal 2
+  assert.equal((await call("POST", "/api/store/orders", { orderType: "takeaway", items: [{ id: kaos.json.id, variantId: xl.id, qty: 3 }] }, owner)).status, 409);
+  const o = await call("POST", "/api/store/orders", { orderType: "takeaway", items: [{ id: kaos.json.id, variantId: xl.id, qty: 2 }, { id: kaos.json.id, variantId: m.id, qty: 1 }] }, owner);
+  assert.equal(o.status, 201);
+  assert.equal(o.json.subtotal, 85000 * 2 + 75000, "harga XL ikut harga varian");
+  const row = db.raw.prepare("SELECT name, variant_name, unit_cost FROM order_items WHERE order_id = ? AND variant_id = ?").get(o.json.id, xl.id) as { name: string; variant_name: string; unit_cost: number };
+  assert.deepEqual([row.name, row.variant_name, row.unit_cost], ["Kaos Polos", "Hitam / XL", 40000]);
+  const stock = () => db.raw.prepare("SELECT (SELECT stock_qty FROM item_variants WHERE id = ?) AS xl, (SELECT stock_qty FROM item_variants WHERE id = ?) AS m, (SELECT stock_qty FROM menu_items WHERE id = ?) AS total").get(xl.id, m.id, kaos.json.id) as { xl: number; m: number; total: number };
+  assert.deepEqual(stock(), { xl: 0, m: 4, total: 4 });
+  // Nama varian tampil di daftar pesanan
+  const feed = await call("GET", "/api/store/orders?scope=active", undefined, owner);
+  assert.ok(feed.json.orders[0].items.some((i: { name: string }) => i.name === "Kaos Polos (Hitam / XL)"));
+  // Batal: stok varian kembali
+  await call("PATCH", `/api/store/orders/${o.json.id}/status`, { status: "cancelled", reason: "uji" }, owner);
+  assert.deepEqual(stock(), { xl: 2, m: 5, total: 7 });
+  // Tambah stok per varian
+  assert.equal((await call("POST", "/api/store/stock/movements", { itemId: kaos.json.id, mode: "restock", qty: 3 }, owner)).status, 400, "produk bervarian harus pilih varian");
+  assert.equal((await call("POST", "/api/store/stock/movements", { itemId: kaos.json.id, variantId: xl.id, mode: "restock", qty: 3 }, owner)).status, 200);
+  assert.deepEqual(stock(), { xl: 5, m: 5, total: 10 });
+});
+
+test("barcode: unik per toko, kombinasi varian tidak boleh kembar, varian dihapus diarsipkan", async () => {
+  const { call, login, db } = await setup();
+  const owner = await login("owner@t");
+  const a = await call("POST", "/api/store/items", { category_id: null, name: "Topi", price: 30000, barcode: "8991234567890" }, owner);
+  assert.equal(a.status, 201);
+  const clash = await call("POST", "/api/store/items", { category_id: null, name: "Gelang", price: 10000, barcode: "8991234567890" }, owner);
+  assert.equal(clash.status, 409);
+  assert.match(clash.json.error, /Topi/);
+  const clashV = await call("POST", "/api/store/items", { category_id: null, name: "Tas", price: 10000, opt1_name: "Warna", variants: [{ opt1: "Merah", barcode: "8991234567890" }] }, owner);
+  assert.equal(clashV.status, 409, "barcode varian juga dicek ke produk lain");
+  assert.equal((await call("POST", "/api/store/items", { category_id: null, name: "Tas", price: 10000, opt1_name: "Warna", variants: [{ opt1: "Merah" }, { opt1: "merah" }] }, owner)).status, 400, "kombinasi kembar ditolak");
+  assert.equal((await call("POST", "/api/store/items", { category_id: null, name: "Tas", price: 10000, variants: [{ opt1: "Merah" }] }, owner)).status, 400, "nama pilihan wajib");
+  const tas = await call("POST", "/api/store/items", { category_id: null, name: "Tas", price: 10000, opt1_name: "Warna", variants: [{ opt1: "Merah" }, { opt1: "Biru" }] }, owner);
+  const v = (await call("GET", "/api/store/items", undefined, owner)).json.items.find((i: { id: string }) => i.id === tas.json.id).variants;
+  // Simpan ulang hanya Merah: Biru diarsipkan, bukan dihapus
+  const put = await call("PUT", `/api/store/items/${tas.json.id}`, { category_id: null, name: "Tas", price: 10000, opt1_name: "Warna", variants: [{ id: v[0].id, opt1: "Merah" }] }, owner);
+  assert.equal(put.status, 200);
+  assert.equal((db.raw.prepare("SELECT archived FROM item_variants WHERE id = ?").get(v[1].id) as { archived: number }).archived, 1);
+  // Menu pembeli tidak membocorkan barcode/modal varian
+  await call("POST", "/api/store/tables", { label: "Meja 1" }, owner);
+  const code = (db.raw.prepare("SELECT code FROM dining_tables").get() as { code: string }).code;
+  const menu = await call("GET", `/api/public/table/${code}`);
+  const pubTas = menu.json.items.find((i: { id: string }) => i.id === tas.json.id);
+  assert.equal(pubTas.variants.length, 1);
+  assert.equal(pubTas.variants[0].barcode, undefined);
+});
+
+test("mode toko barang: penjualan kasir langsung selesai", async () => {
+  const { call, login, db, tenantId } = await setup();
+  db.raw.prepare("UPDATE tenants SET kind = 'toko' WHERE id = ?").run(tenantId);
+  const owner = await login("owner@t");
+  const it = await call("POST", "/api/store/items", { category_id: null, name: "Gelang", price: 10000 }, owner);
+  const o = await call("POST", "/api/store/orders", { orderType: "takeaway", items: [{ id: it.json.id, qty: 1 }], payment: { method: "cash", amountReceived: 20000 } }, owner);
+  assert.equal(o.status, 201);
+  assert.equal((db.raw.prepare("SELECT status FROM orders WHERE id = ?").get(o.json.id) as { status: string }).status, "done");
+});
+
+test("tagihan meja: digabung per meja, dibayar sekaligus, tidak bisa dibayar dobel", async () => {
+  const { call, login, db } = await setup();
+  const owner = await login("owner@t");
+  const kasir = await login("kasir@t");
+  const it = await call("POST", "/api/store/items", { category_id: null, name: "Nasi", price: 10000 }, owner);
+  await call("POST", "/api/store/tables", { label: "Meja 1" }, owner);
+  const code = (db.raw.prepare("SELECT code FROM dining_tables").get() as { code: string }).code;
+  await call("POST", "/api/public/orders", { tableCode: code, customerName: "Budi", items: [{ id: it.json.id, qty: 1 }] });
+  const b = await call("POST", "/api/public/orders", { tableCode: code, customerName: "Sari", items: [{ id: it.json.id, qty: 2 }] });
+  assert.equal(b.status, 201);
+  const st = await call("GET", `/api/public/table/${code}/state?device=abcdefgh1`);
+  assert.equal(st.json.bill.orders, 2, "HP pembeli melihat tagihan meja");
+  assert.equal(st.json.bill.items[0].qty, 3);
+  const bills = (await call("GET", "/api/store/bills", undefined, kasir)).json.bills;
+  assert.equal(bills.length, 1, "dua pesanan satu meja jadi satu tagihan");
+  const total = bills[0].total;
+  const ids = bills[0].orders.map((o: { id: string }) => o.id);
+  assert.equal((await call("POST", "/api/store/bills/pay", { orderIds: ids, method: "cash", amountReceived: total - 1 }, kasir)).status, 400);
+  // Satu pesanan sudah dibayar terpisah: bayar gabungan ditolak utuh, yang lain tetap belum lunas
+  const one = ids[0];
+  await call("PATCH", `/api/store/orders/${one}/pay`, { method: "qris", amountReceived: null }, kasir);
+  assert.equal((await call("POST", "/api/store/bills/pay", { orderIds: ids, method: "cash", amountReceived: total }, kasir)).status, 409);
+  assert.equal((db.raw.prepare("SELECT payment_status FROM orders WHERE id = ?").get(ids[1]) as { payment_status: string }).payment_status, "unpaid");
+  const rest = (await call("GET", "/api/store/bills", undefined, kasir)).json.bills[0];
+  const pay = await call("POST", "/api/store/bills/pay", { orderIds: rest.orders.map((o: { id: string }) => o.id), method: "cash", amountReceived: 50000 }, kasir);
+  assert.equal(pay.status, 200);
+  assert.equal(pay.json.change, 50000 - rest.total);
+  assert.equal((await call("GET", "/api/store/bills", undefined, kasir)).json.bills.length, 0);
+  assert.equal((await call("GET", `/api/public/table/${code}/state?device=abcdefgh1`)).json.bill, null);
+});

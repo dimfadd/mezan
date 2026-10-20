@@ -1057,3 +1057,74 @@ s.was { color: var(--ink-3); font-weight: 500; text-decoration-thickness: 1.5px;
   .sc-link, .sc-link:has(input:nth-of-type(3)) { grid-template-columns: minmax(0, 1fr); padding-bottom: 8px; border-bottom: 1px dashed var(--line); }
   .sc-link .sc-tools { justify-self: end; }
 }
+
+/* ---------- Pilih varian ---------- */
+.vp { display: grid; gap: 12px; }
+.vp-row { display: grid; gap: 6px; }
+.vp-h { font-weight: 700; font-size: 0.9rem; }
+.vp-opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.vp-opt { min-height: 40px; min-width: 48px; padding: 6px 14px; border-radius: 12px; border: 1.5px solid var(--line-strong); background: var(--surface); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
+.vp-opt[aria-pressed="true"] { border-color: var(--brand); background: var(--brand-soft); color: var(--brand-text); }
+.vp-opt:disabled { opacity: 0.45; cursor: not-allowed; text-decoration: line-through; }
+.vp-opt small { font-weight: 500; }
+.vp-sel { color: var(--ink-2); }
+
+/* ---------- Scan kamera ---------- */
+.scan { position: fixed; inset: 0; z-index: 80; display: grid; grid-template-rows: auto 1fr auto; background: #0d0c0a; color: #f7f4ee; }
+.scan-top { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; font-weight: 700; }
+.scan-top span { display: inline-flex; gap: 8px; align-items: center; }
+.scan-top .icon-btn { color: #f7f4ee; }
+.scan-view { position: relative; overflow: hidden; display: grid; place-items: center; }
+.scan-view video { width: 100%; height: 100%; object-fit: cover; }
+.scan-frame { position: absolute; width: min(78%, 420px); aspect-ratio: 2 / 1; border: 3px solid rgb(255 255 255 / 0.9); border-radius: 16px; box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.45); }
+.scan-msg { padding: 14px 16px calc(14px + env(safe-area-inset-bottom)); text-align: center; font-weight: 600; }
+.variant-tag { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--surface-2); color: var(--ink-2); font-size: 0.78rem; font-weight: 600; vertical-align: 1px; }
+@media (max-width: 479px) { .hide-sm { display: none; } }
+
+/* ---------- Tagihan meja (HP pembeli) ---------- */
+.bill-box { display: grid; gap: 8px; padding: 14px; border-radius: var(--radius); background: var(--paper); border: 1px dashed var(--line-strong); }
+.bill-box ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 0.92rem; }
+.bill-box li { display: flex; justify-content: space-between; gap: 10px; }
+.bill-chip { background: var(--accent-soft); border-color: var(--accent); }
+
+/* ---------- Editor varian ---------- */
+.ve-list { display: grid; gap: 8px; }
+.ve-row { display: grid; grid-template-columns: minmax(120px, 1.2fr) repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; align-items: end; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); }
+.ve-row.off { opacity: 0.6; }
+.ve-name { display: grid; gap: 4px; align-self: center; }
+.ve-f { display: grid; gap: 3px; min-width: 0; }
+.ve-f > span:first-child { font-size: 0.75rem; font-weight: 700; color: var(--ink-2); }
+.ve-f small { color: var(--ink-3); font-size: 0.72rem; }
+.ve-code { min-width: 170px; }
+@media (max-width: 699px) {
+  .ve-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ve-name, .ve-code { grid-column: 1 / -1; }
+}
+
+/* ---------- Cetak label barcode ---------- */
+.lbl-list { display: grid; gap: 6px; max-height: 50vh; overflow-y: auto; }
+.lbl-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.qty input { width: 48px; text-align: center; border: 0; background: transparent; font: inherit; font-weight: 700; color: inherit; }
+#label-print { display: none; }
+@media print {
+  body.printing-labels > *:not(#label-print) { display: none !important; }
+  body.printing-labels #label-print { display: grid; grid-template-columns: repeat(auto-fill, 50mm); gap: 2mm; padding: 0; }
+  #label-print .lbl { width: 50mm; height: 30mm; box-sizing: border-box; padding: 1.5mm 2mm; border: 0.2mm dashed #bbb; display: grid; justify-items: center; align-content: center; gap: 0.4mm; overflow: hidden; break-inside: avoid; color: #000; font-family: system-ui, sans-serif; }
+  #label-print .lbl-name { font-size: 8pt; font-weight: 700; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #label-print .lbl-var { font-size: 7pt; }
+  #label-print .lbl-price { font-size: 9pt; font-weight: 800; }
+  #label-print svg { max-width: 100%; height: auto; }
+}
+.stock-parent td { border-bottom-style: dashed; }
+.stock-variant td:first-child { padding-left: 28px; }
+
+/* ---------- Tagihan (kasir) ---------- */
+.bill-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.bill-card { display: grid; gap: 10px; align-content: start; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 14px; }
+.bill-card.overdue { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger) inset; }
+.bill-card header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.bill-where { display: inline-flex; align-items: center; gap: 6px; font-weight: 800; font-size: 1.05rem; }
+.bill-where svg { width: 18px; height: 18px; }
+.bill-orders { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.bill-orders li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: baseline; font-size: 0.92rem; }
+.tab-alert { color: var(--danger); font-weight: 800; }

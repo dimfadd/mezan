@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, LockKeyhole, Wallet } from "lucide-react";
+import { AlertTriangle, ArrowDownLeft, ArrowUpRight, LockKeyhole, Wallet } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Empty, ErrorState, Field, Loading, Modal, MoneyInput, PageHead, Segmented, useConfirm, useToast } from "../../components/ui";
 import { api } from "../../lib/api";
 import { dateTime, PAY_LABEL, rupiah, time } from "../../lib/format";
@@ -37,7 +38,7 @@ export function Diff({ value }: { value: number }) {
 
 export function CashPage() {
   const { user } = useSession();
-  const cur = useApi<{ shift: Shift | null; summary: Summary | null; last: Shift | null }>("/api/store/shifts/current", { poll: 20000 });
+  const cur = useApi<{ shift: Shift | null; summary: Summary | null; last: Shift | null; unpaid?: { count: number; total: number } }>("/api/store/shifts/current", { poll: 20000 });
   const mgmt = isManagement(user?.role);
   return (
     <>
@@ -47,7 +48,7 @@ export function CashPage() {
       ) : !cur.data ? (
         <Loading rows={2} height={140} />
       ) : cur.data.shift && cur.data.summary ? (
-        <OpenShift shift={cur.data.shift} sum={cur.data.summary} onChanged={() => cur.reload(true)} />
+        <OpenShift shift={cur.data.shift} sum={cur.data.summary} unpaid={cur.data.unpaid ?? null} onChanged={() => cur.reload(true)} />
       ) : (
         <OpenForm last={cur.data.last} onOpened={() => cur.reload(true)} />
       )}
@@ -106,7 +107,7 @@ function OpenForm({ last, onOpened }: { last: Shift | null; onOpened: () => void
   );
 }
 
-function OpenShift({ shift, sum, onChanged }: { shift: Shift; sum: Summary; onChanged: () => void }) {
+function OpenShift({ shift, sum, unpaid, onChanged }: { shift: Shift; sum: Summary; unpaid: { count: number; total: number } | null; onChanged: () => void }) {
   const toast = useToast();
   const confirm = useConfirm();
   const feed = useOrderFeed();
@@ -136,7 +137,7 @@ function OpenShift({ shift, sum, onChanged }: { shift: Shift; sum: Summary; onCh
   const close = async () => {
     if (counted === "") return toast("Hitung dulu uang di laci, lalu isi jumlahnya.", "error");
     const diff = counted - sum.expected;
-    if (!(await confirm({ title: "Tutup shift?", body: `Uang dihitung ${rupiah(counted)}, seharusnya ${rupiah(sum.expected)}. ${diff === 0 ? "Pas." : diff < 0 ? `Kurang ${rupiah(-diff)}.` : `Lebih ${rupiah(diff)}.`} Setelah ditutup, angka ini tidak bisa diubah.`, confirm: "Tutup shift" }))) return;
+    if (!(await confirm({ title: "Tutup shift?", body: `${unpaid && unpaid.count ? `Masih ada ${unpaid.count} pesanan belum dibayar (${rupiah(unpaid.total)}). ` : ""}Uang dihitung ${rupiah(counted)}, seharusnya ${rupiah(sum.expected)}. ${diff === 0 ? "Pas." : diff < 0 ? `Kurang ${rupiah(-diff)}.` : `Lebih ${rupiah(diff)}.`} Setelah ditutup, angka ini tidak bisa diubah.`, confirm: "Tutup shift" }))) return;
     setBusy(true);
     try {
       const r = await api.post<{ expected: number; counted: number; diff: number }>(`/api/store/shifts/${shift.id}/close`, { counted_cash: counted });
@@ -198,6 +199,15 @@ function OpenShift({ shift, sum, onChanged }: { shift: Shift; sum: Summary; onCh
 
         <section className="panel stack">
           <h2><LockKeyhole aria-hidden="true" className="h-ico" /> Tutup shift</h2>
+          {unpaid && unpaid.count > 0 && (
+            <div className="banner danger" role="status" style={{ margin: 0 }}>
+              <AlertTriangle aria-hidden="true" />
+              <div className="stack-sm" style={{ flex: 1 }}>
+                <span>Masih ada {unpaid.count} pesanan belum dibayar, total {rupiah(unpaid.total)}. Tagih dulu sebelum tutup shift, supaya tidak ada yang terlewat.</span>
+                <Link className="btn btn-sm" to="/toko/pesanan" style={{ justifySelf: "start" }}>Buka tagihan</Link>
+              </div>
+            </div>
+          )}
           {nonCash.length > 0 && (
             <div className="stack-sm">
               <span className="small muted">Bukan tunai (tidak masuk laci, cocokkan dengan mutasi/aplikasi):</span>

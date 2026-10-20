@@ -75,7 +75,7 @@ export function SettingsPage() {
                 <Field label="Nama usaha" htmlFor="s-name">
                   <input id="s-name" className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} maxLength={80} required />
                 </Field>
-                <Field label="Jenis usaha" htmlFor="s-kind">
+                <Field label="Jenis usaha" htmlFor="s-kind" hint={f.kind === "toko" ? "Mode toko barang: tanpa meja, dapur, dan antrean. Kasir fokus ke scan barcode." : "Pilih Toko untuk jualan barang (baju, aksesoris, kelontong)."}>
                   <select id="s-kind" className="select" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })}>
                     {Object.entries(KIND_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>

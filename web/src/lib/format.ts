@@ -49,4 +49,4 @@ export function initials(name: string) {
 
 export const PAY_LABEL: Record<string, string> = { cash: "Tunai", qris: "QRIS", transfer: "Transfer", card: "Kartu debit", lainnya: "Lainnya" };
 export const ROLE_LABEL: Record<string, string> = { owner: "Pemilik", manager: "Manajer", staff: "Karyawan", platform_admin: "Admin Pesan.in" };
-export const KIND_LABEL: Record<string, string> = { resto: "Restoran", kafe: "Kafe", warung: "Warung makan", toko: "Toko" };
+export const KIND_LABEL: Record<string, string> = { resto: "Restoran", kafe: "Kafe", warung: "Warung makan", toko: "Toko barang (baju, aksesoris, kelontong)" };

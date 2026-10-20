@@ -9,6 +9,7 @@ import { attachPairs } from "../lib/pairs";
 import { awardStamp, memberCard, normalizePhone } from "../lib/loyalty";
 import { orderEta } from "../lib/eta";
 import { loadSite } from "../lib/site";
+import { loadItemVariants } from "../lib/variants";
 import { publicSite } from "../../../shared/site";
 import { businessDay } from "../lib/http";
 import { randomToken } from "../lib/security";
@@ -58,11 +59,11 @@ publicRoutes.get("/table/:code", async (c) => {
     c.var.db,
     `SELECT id, category_id, name, description, price, image_url, video_url, tags, available, track_stock, stock_qty,
             portion, components, spice_level, prep_minutes, allergens,
-            name_en, description_en, portion_en, components_en, allergens_en, avail_days, avail_from, avail_to, pair_ids
+            name_en, description_en, portion_en, components_en, allergens_en, avail_days, avail_from, avail_to, pair_ids, opt1_name, opt2_name
      FROM menu_items WHERE tenant_id = ? AND archived = 0 ORDER BY sort, name`,
     tenant.id,
   );
-  const [galleries, rules] = await Promise.all([loadGalleries(c.var.db, tenant.id), loadPriceRules(c.var.db, tenant.id)]);
+  const [galleries, rules, variants] = await Promise.all([loadGalleries(c.var.db, tenant.id), loadPriceRules(c.var.db, tenant.id), loadItemVariants(c.var.db, tenant.id)]);
   const useStock = !!tenant.inventory_enabled;
   const locked = tenantLocked(tenant);
   return c.json({
@@ -95,6 +96,14 @@ publicRoutes.get("/table/:code", async (c) => {
       // Pelanggan hanya perlu tahu "habis" atau "tinggal sedikit", bukan angka stok gudang.
       sold_out: !it.available || (useStock && !!track_stock && stock_qty <= 0),
       few_left: useStock && !!track_stock && stock_qty > 0 && stock_qty <= 3 ? stock_qty : null,
+      // Varian: tanpa modal, barcode, dan angka stok; cukup harga dan status habis.
+      variants: (variants.get(it.id) ?? []).map((v) => ({
+        id: v.id,
+        opt1: v.opt1,
+        opt2: v.opt2,
+        price: v.price,
+        sold_out: !v.available || (useStock && !!track_stock && v.stock_qty <= 0),
+      })),
     })),
   });
 });
@@ -104,7 +113,7 @@ const orderSchema = (lang: Lang) => z.object({
   customerName: z.string().trim().min(1, serverMsgs(lang).nameNeeded).max(40),
   note: z.string().trim().max(200).default(""),
   items: z
-    .array(z.object({ id: z.string().min(1).max(64), qty: z.number().int().min(1).max(50), note: z.string().trim().max(120).optional() }))
+    .array(z.object({ id: z.string().min(1).max(64), variantId: z.string().max(64).nullable().optional(), qty: z.number().int().min(1).max(50), note: z.string().trim().max(120).optional() }))
     .max(40, "Pesanan terlalu banyak untuk sekali kirim.")
     .default([]),
   // Pesan bareng: isi pesanan diambil dari keranjang meja di server, bukan dari HP pengirim.
@@ -128,7 +137,7 @@ publicRoutes.post("/orders", async (c) => {
     if (geo.check === "far") fail(403, M.tooFar(km(geo.distance!)));
   }
   // Pesan bareng: ambil semua pilihan orang-orang di meja ini.
-  let lines: { id: string; qty: number; note?: string; person?: string }[] = b.items;
+  let lines: { id: string; variantId?: string | null; qty: number; note?: string; person?: string }[] = b.items;
   let cartIds: string[] = [];
   let customerName = b.customerName;
   if (b.group) {
@@ -136,7 +145,7 @@ publicRoutes.post("/orders", async (c) => {
     const cart = await loadCart(c.var.db, table.id);
     if (cart.length === 0) fail(400, M.cartEmpty);
     cartIds = cart.map((l) => l.id);
-    lines = cart.map((l) => ({ id: l.menu_item_id, qty: l.qty, note: l.note, person: l.person || customerName }));
+    lines = cart.map((l) => ({ id: l.menu_item_id, variantId: l.variant_id, qty: l.qty, note: l.note, person: l.person || customerName }));
     if (lines.reduce((n, i) => n + i.qty, 0) > 80) fail(400, M.tooManyItemsGroup);
     // Nama pengirim di depan, supaya pelayan tahu siapa yang menekan kirim.
     const names = [...new Set([customerName, ...lines.map((l) => l.person!)].filter(Boolean))];
@@ -224,12 +233,12 @@ publicRoutes.get("/orders/:token", async (c) => {
 // ---------- Meja bersama: keranjang pesan bareng + panggil pelayan ----------
 
 const CART_TTL = 3 * 3600_000;
-type CartRow = { id: string; device: string; person: string; menu_item_id: string; qty: number; note: string; updated_at: number };
+type CartRow = { id: string; device: string; person: string; menu_item_id: string; variant_id: string | null; qty: number; note: string; updated_at: number };
 
 async function loadCart(db: Env["Variables"]["db"], tableId: string) {
   return all<CartRow>(
     db,
-    "SELECT id, device, person, menu_item_id, qty, note, updated_at FROM table_cart_lines WHERE table_id = ? AND updated_at > ? ORDER BY updated_at, id",
+    "SELECT id, device, person, menu_item_id, variant_id, qty, note, updated_at FROM table_cart_lines WHERE table_id = ? AND updated_at > ? ORDER BY updated_at, id",
     tableId,
     Date.now() - CART_TTL,
   );
@@ -247,7 +256,7 @@ publicRoutes.get("/table/:code/state", async (c) => {
   const { table } = await resolveCode(c, c.req.param("code"), lang);
   if (!table) fail(400, serverMsgs(lang).tableOnly);
   const me = deviceId.safeParse(c.req.query("device")).data ?? "";
-  const [cart, orders, calls] = await Promise.all([
+  const [cart, orders, calls, bill] = await Promise.all([
     loadCart(c.var.db, table.id),
     all<{ public_token: string; number: number; customer_name: string; status: string; created_at: number }>(
       c.var.db,
@@ -257,12 +266,27 @@ publicRoutes.get("/table/:code/state", async (c) => {
       Date.now() - CART_TTL,
     ),
     all<{ kind: string; created_at: number }>(c.var.db, "SELECT kind, created_at FROM service_calls WHERE table_id = ? AND status = 'open'", table.id),
+    // Tagihan meja: semua pesanan meja ini (QR maupun kasir) yang belum dibayar dalam 12 jam terakhir.
+    all<{ name: string; qty: number; amount: number; total: number; orders: number }>(
+      c.var.db,
+      `SELECT CASE WHEN i.variant_name != '' THEN i.name || ' (' || i.variant_name || ')' ELSE i.name END AS name,
+              SUM(i.qty) AS qty, SUM(i.qty * i.price) AS amount
+       FROM order_items i JOIN orders o ON o.id = i.order_id
+       WHERE o.table_id = ? AND o.payment_status = 'unpaid' AND o.status != 'cancelled' AND o.created_at > ?
+       GROUP BY 1 ORDER BY MIN(o.created_at)`,
+      table.id,
+      Date.now() - 12 * 3600_000,
+    ),
   ]);
+  const billTotal = bill.length
+    ? await first<{ total: number; n: number }>(c.var.db, "SELECT COALESCE(SUM(total), 0) AS total, COUNT(*) AS n FROM orders WHERE table_id = ? AND payment_status = 'unpaid' AND status != 'cancelled' AND created_at > ?", table.id, Date.now() - 12 * 3600_000)
+    : null;
   return c.json({
-    lines: cart.map((l) => ({ id: l.id, item_id: l.menu_item_id, qty: l.qty, note: l.note, person: l.person, mine: l.device === me })),
+    lines: cart.map((l) => ({ id: l.id, item_id: l.menu_item_id, variant_id: l.variant_id, qty: l.qty, note: l.note, person: l.person, mine: l.device === me })),
     people: new Set(cart.map((l) => l.device)).size,
     orders: orders.map((o) => ({ token: o.public_token, number: o.number, name: o.customer_name, status: o.status, at: o.created_at })),
     calls,
+    bill: billTotal && billTotal.n ? { orders: billTotal.n, total: billTotal.total, items: bill.map(({ name, qty, amount }) => ({ name, qty, amount })) } : null,
   });
 });
 
@@ -275,7 +299,7 @@ publicRoutes.put("/table/:code/cart", async (c) => {
     .object({
       device: deviceId,
       person: z.string().trim().max(30).default(""),
-      lines: z.array(z.object({ id: z.string().min(1).max(64), qty: z.number().int().min(1).max(50), note: z.string().trim().max(120).default("") })).max(30),
+      lines: z.array(z.object({ id: z.string().min(1).max(64), variantId: z.string().max(64).nullable().optional(), qty: z.number().int().min(1).max(50), note: z.string().trim().max(120).default("") })).max(30),
     })
     .parse(raw);
   const { table, tenant } = await resolveCode(c, c.req.param("code"), lang);
@@ -296,8 +320,8 @@ publicRoutes.put("/table/:code/cart", async (c) => {
     ...b.lines
       .filter((l) => valid.has(l.id))
       .map((l) =>
-        stmt(db, "INSERT INTO table_cart_lines (id, tenant_id, table_id, device, person, menu_item_id, qty, note, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-          newId(), tenant.id, table.id, b.device, b.person, l.id, l.qty, l.note, now),
+        stmt(db, "INSERT INTO table_cart_lines (id, tenant_id, table_id, device, person, menu_item_id, variant_id, qty, note, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          newId(), tenant.id, table.id, b.device, b.person, l.id, l.variantId ?? null, l.qty, l.note, now),
       ),
   ]);
   return c.json({ ok: true });

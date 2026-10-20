@@ -6,7 +6,7 @@ import { useSession } from "../../lib/session";
 import { LegalFoot } from "./Legal";
 
 function homeFor(role?: string) {
-  return role === "platform_admin" ? "/admin" : "/toko/pesanan";
+  return role === "platform_admin" ? "/admin" : "/toko";
 }
 
 function AuthLayout({ children, quote }: { children: React.ReactNode; quote: string }) {

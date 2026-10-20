@@ -2,7 +2,7 @@ import { useEffect, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   ArrowRight, BarChart3, BellRing, Boxes, Cake, Calculator, Check, ChefHat, Clapperboard, Clock3, Coffee, DoorOpen, QrCode, ReceiptText,
-  Sandwich, Shirt, ShoppingBag, Soup, Sparkles, Stamp, Star, Store, Timer, Users, UserCog, Utensils, Wallet, WifiOff, Wallet2,
+  Sandwich, ScanLine, Shirt, ShoppingBag, Soup, Sparkles, Stamp, Star, Store, Timer, Users, UserCog, Utensils, Wallet, WifiOff, Wallet2,
 } from "lucide-react";
 import { useSite } from "../../lib/site";
 import { FEATURES, type FeatureKey, type SolutionIcon } from "../../../../shared/site";
@@ -42,6 +42,9 @@ export const FEATURE_ICON: Record<FeatureKey, ReactNode> = {
   stock: <Boxes />,
   reports: <BarChart3 />,
   staff: <UserCog />,
+  variants: <Shirt />,
+  barcode: <ScanLine />,
+  bills: <ReceiptText />,
 };
 
 /** Huruf kecil untuk dipakai di tengah kalimat, tapi singkatan seperti UMKM tetap kapital. */

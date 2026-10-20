@@ -9,6 +9,8 @@ export interface OrderItem {
   station?: "kitchen" | "bar";
   ready_at?: number | null;
   list_price?: number | null;
+  variant_id?: string | null;
+  variant_name?: string;
 }
 
 export interface ServiceCall {
@@ -83,6 +85,23 @@ export interface MenuItem {
   pair_ids: string;
   pairs?: string[];
   cost?: number | null;
+  opt1_name?: string;
+  opt2_name?: string;
+  barcode?: string;
+  sku?: string;
+  variants?: ItemVariant[];
+}
+
+export interface ItemVariant {
+  id: string;
+  opt1: string;
+  opt2: string;
+  price: number | null;
+  cost?: number | null;
+  sku: string;
+  barcode: string;
+  stock_qty: number;
+  available: number;
 }
 
 export interface Category {

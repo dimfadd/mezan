@@ -1,12 +1,12 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
-  BarChart3, Boxes, ClipboardList, LogOut, Menu as MenuIcon, Palette, QrCode, Settings, ShoppingBasket, UserRound,
+  BarChart3, Boxes, ClipboardList, LogOut, Menu as MenuIcon, Palette, QrCode, Settings, ShoppingBasket, Package, UserRound,
   Users, UtensilsCrossed, AlertTriangle, ChefHat, Hourglass, Wallet, Stamp, WifiOff, RefreshCw, Trash2, CheckCircle2,
 } from "lucide-react";
 import { OutboxProvider, useOutbox } from "../lib/outbox";
 import { rupiah, time } from "../lib/format";
-import { isManagement, useSession } from "../lib/session";
+import { isManagement, isRetail, useSession } from "../lib/session";
 import { useApi, useMediaQuery } from "../lib/hooks";
 import { date, ROLE_LABEL } from "../lib/format";
 import { ThemeToggle } from "./ThemeToggle";
@@ -240,7 +240,18 @@ function ShellInner() {
   const stockOn = !!tenant.inventory_enabled;
 
   const waitOn = !!tenant.waitlist_enabled;
-  const items: NavItem[] = [
+  // Toko barang: tanpa dapur, meja, antrean, dan tampilan menu QR. Kasir paling depan.
+  const items: NavItem[] = isRetail(tenant) ? [
+    { to: "/toko/kasir", label: "Kasir", icon: <ShoppingBasket /> },
+    { to: "/toko/pesanan", label: "Penjualan", icon: <ClipboardList />, count: newCount },
+    { to: "/toko/menu", label: "Produk", icon: <Package /> },
+    ...(mgmt ? [{ to: "/toko/laporan", label: "Laporan", icon: <BarChart3 /> }] : []),
+    ...(stockOn ? [{ to: "/toko/stok", label: "Stok", icon: <Boxes /> }] : []),
+    { to: "/toko/kas", label: "Kas & shift", short: "Kas", icon: <Wallet /> },
+    ...(mgmt ? [{ to: "/toko/pelanggan", label: "Kartu stempel", short: "Stempel", icon: <Stamp /> }] : []),
+    ...(mgmt ? [{ to: "/toko/karyawan", label: "Karyawan", icon: <Users /> }] : []),
+    ...(mgmt ? [{ to: "/toko/pengaturan", label: "Pengaturan", icon: <Settings /> }] : []),
+  ] : [
     { to: "/toko/pesanan", label: "Pesanan", icon: <ClipboardList />, count: newCount },
     { to: "/toko/kasir", label: "Kasir", icon: <ShoppingBasket /> },
     { to: "/toko/dapur", label: "Layar dapur", short: "Dapur", icon: <ChefHat /> },
@@ -266,7 +277,7 @@ function ShellInner() {
   return (
     <div className="shell has-bottom-nav">
       <aside className="sidebar" aria-label="Navigasi utama">
-        <a className="wordmark" href="/toko/pesanan" onClick={(e) => { e.preventDefault(); nav("/toko/pesanan"); }}>
+        <a className="wordmark" href="/toko" onClick={(e) => { e.preventDefault(); nav("/toko"); }}>
           pesan<span className="dot">.</span>in
         </a>
         <div className="store-chip">

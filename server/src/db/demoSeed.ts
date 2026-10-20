@@ -4,6 +4,7 @@ import { first, stmt, type DB, type Stmt } from "./types";
 import { businessDay } from "../lib/http";
 import { hashPassword, newId, randomCode, randomToken } from "../lib/security";
 import { computeTotals } from "../lib/orders";
+import { newStoreBarcode } from "../../../shared/variants";
 
 const DAY = 86_400_000;
 const TZ = 420;
@@ -13,6 +14,7 @@ export const DEMO_ACCOUNTS = [
   ["Pemilik toko", "pemilik@contoh.id", "contoh12345"],
   ["Manajer", "manajer@contoh.id", "contoh12345"],
   ["Karyawan kasir", "kasir@contoh.id", "contoh12345"],
+  ["Pemilik toko baju", "toko@contoh.id", "contoh12345"],
 ] as const;
 
 /**
@@ -283,6 +285,19 @@ export async function seedDemo(db: DB, opts: { adminPassword?: string } = {}): P
     note: "Contoh pembayaran", period_end_after: now + 20 * DAY, recorded_by: null, created_at: now - 10 * DAY,
   });
 
+  // Contoh varian untuk usaha makanan: Teh Tarik panas atau es (es lebih mahal).
+  const tehTarik = items.find((i) => i.name === "Teh Tarik");
+  if (tehTarik) {
+    pending.push(stmt(db, "UPDATE menu_items SET opt1_name = 'Penyajian' WHERE id = ?", tehTarik.id));
+    ins("item_variants", { id: newId(), tenant_id: tenantId, item_id: tehTarik.id, opt1: "Panas", opt2: "", price: null, cost: null, sku: "", barcode: "", stock_qty: 0, available: 1, sort: 0, created_at: now });
+    ins("item_variants", { id: newId(), tenant_id: tenantId, item_id: tehTarik.id, opt1: "Es", opt2: "", price: 12000, cost: null, sku: "", barcode: "", stock_qty: 0, available: 1, sort: 1, created_at: now });
+  }
+  // Barcode pabrik contoh untuk barang titipan, supaya scan di kasir bisa dicoba.
+  const air = items.find((i) => i.name === "Air Mineral 600 ml");
+  if (air) pending.push(stmt(db, "UPDATE menu_items SET barcode = '8996001600146' WHERE id = ?", air.id));
+
+  await seedRetail(ins, { now, planId: planIds.kafe, pw });
+
   // Kirim bertahap supaya tidak melebihi batas ukuran satu batch di database cloud.
   for (let k = 0; k < pending.length; k += 400) await db.batch(pending.slice(k, k + 400));
   for (const sh of pendingShift) {
@@ -296,4 +311,84 @@ export async function seedDemo(db: DB, opts: { adminPassword?: string } = {}): P
     await db.batch([stmt(db, "UPDATE cash_shifts SET expected_cash = ?, counted_cash = ? WHERE id = ?", expected, expected + sh.diff, sh.id)]);
   }
   return true;
+}
+
+/**
+ * Toko barang contoh (baju & aksesoris): varian warna/ukuran, barcode, stok per varian, dan riwayat
+ * penjualan 30 hari. Pengacaknya terpisah supaya data warung contoh di atas tidak ikut berubah.
+ */
+async function seedRetail(ins: (table: string, row: Record<string, unknown>) => void, o: { now: number; planId: string; pw: string }) {
+  const { now, planId, pw } = o;
+  let seed = 7771;
+  const rand = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+  const pick = <T,>(arr: T[]) => arr[Math.floor(rand() * arr.length)];
+  const tenantId = newId();
+  ins("tenants", {
+    id: tenantId, slug: "toko-contoh", name: "Toko Busana Contoh", kind: "toko", plan_id: planId, status: "active",
+    period_end: now + 20 * DAY, address: "Pasar Contoh Blok B No. 7", phone: "", tax_rate: 0, service_rate: 0,
+    inventory_enabled: 1, qr_ordering_enabled: 0, tz_offset_minutes: TZ,
+    loyalty_enabled: 1, loyalty_target: 8, loyalty_min_spend: 100000, loyalty_reward: "Potongan Rp25.000",
+    welcome_note: "", created_at: now - 40 * DAY,
+  });
+  const owner = newId();
+  ins("users", { id: owner, tenant_id: tenantId, name: "Bu Rina", login: "toko@contoh.id", password_hash: pw, role: "owner", created_at: now - 40 * DAY });
+  const cats: Record<string, string> = {};
+  ["Atasan", "Bawahan", "Aksesoris"].forEach((n, i) => {
+    cats[n] = newId();
+    ins("categories", { id: cats[n], tenant_id: tenantId, name: n, sort: i + 1, created_at: now });
+  });
+  type V = { id: string; opt1: string; opt2: string; price: number | null; stock: number; code: string };
+  type P = { id: string; name: string; cat: string; price: number; cost: number; o1: string; o2: string; vs: V[]; stock: number; code: string };
+  const prods: P[] = [];
+  const product = (name: string, cat: string, price: number, cost: number, o1 = "", a: string[] = [], o2 = "", b: string[] = [], bump: Record<string, number> = {}) => {
+    const id = newId();
+    const vs: V[] = [];
+    for (const x of a) for (const y of b.length ? b : [""]) vs.push({ id: newId(), opt1: x, opt2: y, price: bump[y] ? price + bump[y] : null, stock: 2 + Math.floor(rand() * 10), code: newStoreBarcode() });
+    prods.push({ id, name, cat, price, cost, o1, o2, vs, stock: vs.length ? vs.reduce((n, v) => n + v.stock, 0) : 5 + Math.floor(rand() * 20), code: vs.length ? "" : newStoreBarcode() });
+  };
+  product("Kaos Polos Cotton 30s", "Atasan", 75000, 38000, "Warna", ["Hitam", "Putih", "Navy"], "Ukuran", ["S", "M", "L", "XL"], { XL: 10000 });
+  product("Kemeja Flanel", "Atasan", 145000, 80000, "Warna", ["Merah", "Biru"], "Ukuran", ["M", "L", "XL"]);
+  product("Celana Chino", "Bawahan", 165000, 90000, "Warna", ["Krem", "Hitam"], "Ukuran", ["30", "32", "34"]);
+  product("Topi Baseball", "Aksesoris", 55000, 25000, "Warna", ["Hitam", "Krem"]);
+  product("Kaus Kaki (3 pasang)", "Aksesoris", 35000, 15000);
+  product("Totebag Kanvas", "Aksesoris", 45000, 20000);
+  prods.forEach((p, i) => {
+    ins("menu_items", {
+      id: p.id, tenant_id: tenantId, category_id: cats[p.cat], name: p.name, description: "", price: p.price, tags: i === 0 ? "bestseller" : "",
+      available: 1, track_stock: 1, stock_qty: p.stock, low_stock_at: 3, unit: "pcs", sort: i + 1, created_at: now - 40 * DAY,
+      cost: p.cost, opt1_name: p.vs.length ? p.o1 : "", opt2_name: p.vs.length ? p.o2 : "", barcode: p.code, sku: `BC-${String(i + 1).padStart(3, "0")}`,
+    });
+    p.vs.forEach((v, k) => ins("item_variants", {
+      id: v.id, tenant_id: tenantId, item_id: p.id, opt1: v.opt1, opt2: v.opt2, price: v.price, cost: null, sku: "", barcode: v.code,
+      stock_qty: v.stock, available: 1, sort: k, created_at: now - 40 * DAY,
+    }));
+  });
+  // Penjualan 30 hari terakhir, langsung lunas di kasir.
+  for (let d = 30; d >= 0; d--) {
+    const n = 2 + Math.floor(rand() * 6);
+    const day = businessDay(now - d * DAY, TZ);
+    for (let k = 0; k < n; k++) {
+      const at = Date.parse(`${day}T00:00:00Z`) - TZ * 60_000 + (10 + Math.floor(rand() * 10)) * 3600_000 + Math.floor(rand() * 3600_000);
+      if (at > now) continue;
+      const id = newId();
+      const lines = Array.from({ length: 1 + Math.floor(rand() * 2) }, () => {
+        const p = pick(prods);
+        const v = p.vs.length ? pick(p.vs) : null;
+        return { p, v, qty: 1 + Math.floor(rand() * 2), price: v && v.price != null ? v.price : p.price };
+      });
+      const totals = computeTotals(lines.reduce((s, l) => s + l.price * l.qty, 0), 0, 0);
+      ins("orders", {
+        id, tenant_id: tenantId, number: k + 1, business_day: day, table_id: null, table_label: null, source: "pos", order_type: "takeaway",
+        customer_name: "", status: "done", payment_status: "paid", payment_method: pick(["cash", "cash", "qris", "transfer"]), amount_received: null,
+        subtotal: totals.subtotal, tax: 0, service: 0, total: totals.total, note: "", public_token: randomToken(16), created_by: owner, paid_by: owner,
+        created_at: at, updated_at: at, paid_at: at, accepted_at: at, ready_at: at,
+      });
+      for (const l of lines) {
+        ins("order_items", {
+          id: newId(), order_id: id, menu_item_id: l.p.id, category_name: l.p.cat, name: l.p.name, price: l.price, qty: l.qty, note: "",
+          unit_cost: l.p.cost, variant_id: l.v?.id ?? null, variant_name: l.v ? [l.v.opt1, l.v.opt2].filter(Boolean).join(" / ") : "",
+        });
+      }
+    }
+  }
 }

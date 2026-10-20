@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Calculator, Check, ChefHat, Clock3, MapPin, Sparkles, ThumbsUp, Wallet, Wifi, WifiOff } from "lucide-react";
+import { Calculator, Check, ChefHat, Clock3, MapPin, ReceiptText, ScanLine, Sparkles, ThumbsUp, Wallet, Wifi, WifiOff } from "lucide-react";
 import { AppIcon } from "./art";
 import { HappyDemo, PairDemo } from "./MoreDemos";
+import { BillDemo, RetailDemo } from "./RetailDemos";
 import { rupiah } from "../../../lib/format";
 import { BestDemo, Card, GeoDemo, QrDemo } from "./Extras";
 import { useCountUp, useReducedMotion, useStepper, useVisible } from "./motion";
@@ -14,6 +15,12 @@ export function Ops() {
   const on = visible && !reduce;
   return (
     <div ref={root} className={`lp-bento${on ? "" : " is-still"}`}>
+      <Card className="span2" icon={<ScanLine />} title="Toko barang: varian & scan barcode" body="Kaos, kemeja, topi, sampai kelontong. Tiap ukuran dan warna punya harga, stok, dan barcode sendiri. Scan pakai alat scan atau kamera HP; belum ada barcode? Buat kodenya dan cetak labelnya.">
+        <RetailDemo on={on} />
+      </Card>
+      <Card icon={<ReceiptText />} title="Makan dulu, bayar belakangan" body="Pesanan satu meja terkumpul jadi satu tagihan dan dibayar sekali. Tagihan yang sudah lama belum dibayar ditandai merah supaya tidak ada tamu yang lupa bayar.">
+        <BillDemo on={on} />
+      </Card>
       <Card className="span2" icon={<Calculator />} title="Modal & untung per menu" body="Isi modal per porsi. Laporan memilah menu jadi Andalan, Laris tapi tipis, Untung tapi jarang, dan Perlu dievaluasi, lengkap dengan persentase untungnya.">
         <MarginDemo on={on} />
       </Card>

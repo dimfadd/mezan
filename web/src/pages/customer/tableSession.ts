@@ -4,12 +4,14 @@ import type { Lang } from "../../../../shared/i18n";
 
 export interface CartLine {
   id: string;
+  variantId?: string | null;
   qty: number;
   note: string;
 }
 export interface SharedLine {
   id: string;
   item_id: string;
+  variant_id?: string | null;
   qty: number;
   note: string;
   person: string;
@@ -20,6 +22,7 @@ export interface TableState {
   people: number;
   orders: { token: string; number: number; name: string; status: string; at: number }[];
   calls: { kind: "waiter" | "bill"; created_at: number }[];
+  bill?: { orders: number; total: number; items: { name: string; qty: number; amount: number }[] } | null;
 }
 
 const DEVICE_KEY = "pesanin-device";
@@ -62,7 +65,7 @@ export function useTableSession(code: string, enabled: boolean, lang: Lang, onEr
       const s = await api.get<TableState>(`/api/public/table/${code}/state?device=${device}&lang=${lang}`);
       setState(s);
       if (!dirty.current) {
-        const next = s.lines.filter((l) => l.mine).map((l) => ({ id: l.item_id, qty: l.qty, note: l.note }));
+        const next = s.lines.filter((l) => l.mine).map((l) => ({ id: l.item_id, variantId: l.variant_id ?? null, qty: l.qty, note: l.note }));
         mineRef.current = next;
         setMineState(next);
       }

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Onboarding } from "../../components/Onboarding";
+import { Bills, type Bill } from "./Bills";
 import { Bell, BellOff, Printer, QrCode, Search, ShoppingBasket, MapPinOff, BellRing, Check, ReceiptText, MessageCircle, WifiOff, CircleCheck } from "lucide-react";
 import { ReceiptShare } from "../../components/ReceiptShare";
 import { useOrderFeed, soundEnabled } from "../../components/Shell";
@@ -9,7 +10,7 @@ import { printReceipt } from "../../components/receipt";
 import { api } from "../../lib/api";
 import { ago, PAY_LABEL, rupiah, time } from "../../lib/format";
 import { useApi, useMediaQuery } from "../../lib/hooks";
-import { useSession } from "../../lib/session";
+import { isRetail, useSession } from "../../lib/session";
 import { STATUS_LABEL, type LoyaltyCard, type Order } from "./types";
 
 type Col = "new" | "preparing" | "ready";
@@ -38,14 +39,30 @@ function splitBill(o: Order, persons: string[]): [string, number][] {
 }
 
 export function OrdersPage() {
-  const [tab, setTab] = useState<"active" | "history">("active");
+  const { tenant } = useSession();
+  const retail = isRetail(tenant);
+  const [tab, setTab] = useState<"active" | "bills" | "history">(retail ? "history" : "active");
   const [sound, setSound] = useState(soundEnabled());
+  // Dipoll di sini supaya jumlah tagihan tampil di tab walau tab lain yang terbuka.
+  const bills = useApi<{ bills: Bill[]; alertMin: number }>("/api/store/bills", { poll: 15000 });
+  const nBills = bills.data?.bills.length ?? 0;
+  const late = bills.data?.bills.some((b) => b.overdue);
   return (
     <>
-      <Onboarding />
+      {!retail && <Onboarding />}
       <PageHead
-        title="Pesanan"
-        sub={tab === "active" ? "Diperbarui otomatis tiap beberapa detik." : "Semua pesanan per tanggal."}
+        title={retail ? "Penjualan" : "Pesanan"}
+        sub={
+          tab === "active"
+            ? "Diperbarui otomatis tiap beberapa detik."
+            : tab === "bills"
+              ? retail
+                ? "Penjualan yang belum dibayar."
+                : "Pesanan yang belum dibayar, digabung per meja. Bayar sekaligus saat tamu selesai makan."
+              : retail
+                ? "Semua penjualan per tanggal."
+                : "Semua pesanan per tanggal."
+        }
         actions={
           <>
             <Segmented
@@ -53,8 +70,9 @@ export function OrdersPage() {
               value={tab}
               onChange={setTab}
               options={[
-                { value: "active", label: "Berjalan" },
-                { value: "history", label: "Riwayat" },
+                ...(retail ? [] : [{ value: "active" as const, label: "Berjalan" }]),
+                { value: "bills" as const, label: <span className={late ? "tab-alert" : undefined}>{retail ? "Belum dibayar" : "Tagihan"}{nBills ? ` (${nBills})` : ""}</span> },
+                { value: "history" as const, label: "Riwayat" },
               ]}
             />
             <button
@@ -76,7 +94,7 @@ export function OrdersPage() {
           </>
         }
       />
-      {tab === "active" ? <Board /> : <History />}
+      {tab === "active" ? <Board /> : tab === "bills" ? <Bills data={bills.data} error={bills.error} reload={() => bills.reload(true)} retail={retail} /> : <History />}
     </>
   );
 }

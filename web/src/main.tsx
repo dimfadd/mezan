@@ -6,7 +6,7 @@ import "@fontsource-variable/plus-jakarta-sans";
 import "@fontsource/fraunces/600.css";
 import "@fontsource/fraunces/700.css";
 import "./styles/app.css";
-import { SessionProvider, useSession, isManagement } from "./lib/session";
+import { SessionProvider, useSession, isManagement, isRetail } from "./lib/session";
 import { applyTheme, watchSystemTheme } from "./lib/theme";
 import { ConfirmProvider, Loading, ToastProvider } from "./components/ui";
 import { LoginPage, RegisterPage } from "./pages/public/Public";
@@ -50,13 +50,19 @@ const SolutionPage = lazyNamed(() => import("./pages/public/Solution"), "Solutio
 applyTheme();
 watchSystemTheme();
 
+/** Halaman awal toko: usaha makanan ke papan Pesanan, toko barang langsung ke Kasir. */
+function StoreHome() {
+  const { tenant } = useSession();
+  return <Navigate to={isRetail(tenant) ? "kasir" : "pesanan"} replace />;
+}
+
 function Gate({ need, children }: { need: "store" | "management" | "platform"; children: ReactNode }) {
   const { user, ready } = useSession();
   if (!ready) return <div style={{ padding: 24 }}><Loading rows={3} /></div>;
   if (!user) return <Navigate to="/masuk" replace />;
-  if (need === "platform" && user.role !== "platform_admin") return <Navigate to="/toko/pesanan" replace />;
+  if (need === "platform" && user.role !== "platform_admin") return <Navigate to="/toko" replace />;
   if (need !== "platform" && user.role === "platform_admin") return <Navigate to="/admin" replace />;
-  if (need === "management" && !isManagement(user.role)) return <Navigate to="/toko/pesanan" replace />;
+  if (need === "management" && !isManagement(user.role)) return <Navigate to="/toko" replace />;
   return <>{children}</>;
 }
 
@@ -90,7 +96,7 @@ createRoot(document.getElementById("root")!).render(
               <Route path="/antre/:code" element={<WaitlistJoinPage />} />
               <Route path="/antre/:code/:token" element={<WaitlistStatusPage />} />
               <Route path="/toko" element={<Gate need="store"><StoreShell /></Gate>}>
-                <Route index element={<Navigate to="pesanan" replace />} />
+                <Route index element={<StoreHome />} />
                 <Route path="pesanan" element={<OrdersPage />} />
                 <Route path="kasir" element={<PosPage />} />
                 <Route path="dapur" element={<KitchenPage />} />

@@ -7,7 +7,7 @@ import { SiteLinkTo, useSite } from "../../../lib/site";
 import type { NavGroup } from "../../../../../shared/site";
 
 function homeFor(role?: string) {
-  return role === "platform_admin" ? "/admin" : "/toko/pesanan";
+  return role === "platform_admin" ? "/admin" : "/toko";
 }
 
 /** Menu atas situs publik. Isinya diatur dari panel admin (Konten situs). */

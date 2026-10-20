@@ -5,9 +5,15 @@ import { newId, randomToken } from "./security";
 import type { Tenant } from "./auth";
 import { serverMsgs, type Lang } from "../../../shared/i18n";
 import { availableAt, clockAt, priceInfo, scheduleText, type PriceRule } from "../../../shared/schedule";
+import { variantLabel } from "../../../shared/variants";
+
+/** Toko barang (baju, aksesoris, kelontong): tanpa meja dan dapur. */
+export const isRetail = (t: { kind: string }) => t.kind === "toko";
 
 export interface OrderLineInput {
   id: string;
+  /** Wajib untuk produk yang punya varian (ukuran, warna, dst). */
+  variantId?: string | null;
   qty: number;
   note?: string;
   person?: string;
@@ -50,6 +56,29 @@ interface ItemRow {
   cost: number | null;
 }
 
+interface VariantRow {
+  id: string;
+  item_id: string;
+  opt1: string;
+  opt2: string;
+  price: number | null;
+  cost: number | null;
+  stock_qty: number;
+  available: number;
+  archived: number;
+}
+
+export async function loadVariants(db: DB, tenantId: string, itemIds: string[]) {
+  if (!itemIds.length) return [] as VariantRow[];
+  return all<VariantRow>(
+    db,
+    `SELECT id, item_id, opt1, opt2, price, cost, stock_qty, available, archived FROM item_variants
+     WHERE tenant_id = ? AND item_id IN (${itemIds.map(() => "?").join(",")})`,
+    tenantId,
+    ...itemIds,
+  );
+}
+
 export async function loadPriceRules(db: DB, tenantId: string) {
   return all<PriceRule>(db, "SELECT id, name, percent, days, start_min, end_min, category_ids, active FROM price_rules WHERE tenant_id = ? AND active = 1", tenantId);
 }
@@ -77,6 +106,7 @@ export async function createOrder(db: DB, input: CreateOrderInput) {
   const M = serverMsgs(lang);
   const nm = (it: ItemRow) => (lang === "en" && it.name_en ? it.name_en : it.name);
   const offline = !!input.offline;
+  const retail = isRetail(t);
   if (input.clientId) {
     const dup = await findByClientId(db, t.id, input.clientId);
     if (dup) return dup;
@@ -84,14 +114,14 @@ export async function createOrder(db: DB, input: CreateOrderInput) {
   if (input.lines.length === 0) fail(400, M.cartEmpty);
   const merged = new Map<string, OrderLineInput>();
   for (const l of input.lines) {
-    // item yang sama dengan catatan berbeda tetap dipisah
-    const key = `${l.id}|${(l.note ?? "").trim()}|${l.person ?? ""}`;
+    // item yang sama dengan catatan atau varian berbeda tetap dipisah
+    const key = `${l.id}|${l.variantId ?? ""}|${(l.note ?? "").trim()}|${l.person ?? ""}`;
     const prev = merged.get(key);
     if (prev) prev.qty += l.qty;
-    else merged.set(key, { ...l, note: (l.note ?? "").trim(), person: (l.person ?? "").trim() });
+    else merged.set(key, { ...l, variantId: l.variantId || null, note: (l.note ?? "").trim(), person: (l.person ?? "").trim() });
   }
   const ids = [...new Set(input.lines.map((l) => l.id))];
-  const [items, rules] = await Promise.all([
+  const [items, rules, variants] = await Promise.all([
     all<ItemRow>(
       db,
       `SELECT m.id, m.name, m.name_en, m.price, m.available, m.track_stock, m.stock_qty, m.archived, m.category_id,
@@ -102,33 +132,54 @@ export async function createOrder(db: DB, input: CreateOrderInput) {
       ...ids,
     ),
     loadPriceRules(db, t.id),
+    loadVariants(db, t.id, ids),
   ]);
   const byId = new Map(items.map((i) => [i.id, i]));
+  const vById = new Map(variants.map((v) => [v.id, v]));
+  const hasVariants = new Set(variants.filter((v) => !v.archived).map((v) => v.item_id));
   const useStock = !!t.inventory_enabled;
   const now = Date.now();
   // Pesanan offline memakai waktu saat dicatat, supaya harga promo, tanggal, dan shift-nya sesuai kenyataan.
   const at = offline ? input.offline!.at : now;
   const clock = clockAt(at, t.tz_offset_minutes);
+  // Kunci stok: "itemId|variantId" (variantId kosong untuk produk tanpa varian).
   const needed = new Map<string, number>();
   const unit = new Map<string, { price: number; list: number }>();
+  const lineVariant = new Map<OrderLineInput, VariantRow | null>();
   let subtotal = 0;
   for (const l of merged.values()) {
     const it = byId.get(l.id);
     if (!it || (it.archived && !offline)) fail(400, M.itemGone);
+    let v: VariantRow | null = null;
+    if (l.variantId) {
+      v = vById.get(l.variantId) ?? null;
+      if (!v || v.item_id !== it.id || (v.archived && !offline)) fail(400, M.variantGone(nm(it)));
+    } else if (hasVariants.has(it.id)) {
+      fail(400, M.pickVariant(nm(it)));
+    }
+    lineVariant.set(l, v);
+    const label = v ? `${nm(it)} (${variantLabel(v)})` : nm(it);
     if (!offline) {
-      if (!it.available) fail(409, M.soldOut(nm(it)));
+      if (!it.available || (v && !v.available)) fail(409, M.soldOut(label));
       if (!availableAt(it, clock)) fail(409, M.offHours(nm(it), scheduleText(it, lang)));
     }
-    const p = priceInfo(it, rules, clock);
-    unit.set(it.id, p);
+    const p = priceInfo({ ...it, price: v && v.price != null ? v.price : it.price }, rules, clock);
+    const key = `${it.id}|${v?.id ?? ""}`;
+    unit.set(key, p);
     subtotal += p.price * l.qty;
-    needed.set(it.id, (needed.get(it.id) ?? 0) + l.qty);
+    needed.set(key, (needed.get(key) ?? 0) + l.qty);
   }
+  const stockOf = (key: string) => {
+    const [id, vid] = key.split("|");
+    const it = byId.get(id)!;
+    const v = vid ? vById.get(vid)! : null;
+    return { it, v, qty: v ? v.stock_qty : it.stock_qty, label: v ? `${nm(it)} (${variantLabel(v)})` : nm(it) };
+  };
   if (useStock && !offline) {
-    for (const [id, qty] of needed) {
-      const it = byId.get(id)!;
-      if (it.track_stock && it.stock_qty < qty) {
-        fail(409, it.stock_qty > 0 ? M.onlyLeft(nm(it), it.stock_qty) : M.soldOut(nm(it)));
+    for (const [key, qty] of needed) {
+      const s = stockOf(key);
+      if (s.it.track_stock && s.qty < qty) {
+        fail(409, s.qty > 0 ? M.onlyLeft(s.label, s.qty) : M.soldOut(s.label));
       }
     }
   }
@@ -156,37 +207,46 @@ export async function createOrder(db: DB, input: CreateOrderInput) {
         db,
         `INSERT INTO orders (id, tenant_id, number, business_day, table_id, table_label, source, order_type, customer_name,
            status, payment_status, payment_method, amount_received, subtotal, tax, service, total, note, public_token,
-           created_by, paid_by, created_at, updated_at, paid_at, geo_check, geo_distance_m, client_id, offline, accepted_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           created_by, paid_by, created_at, updated_at, paid_at, geo_check, geo_distance_m, client_id, offline, accepted_at, ready_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         orderId, t.id, number, day, input.tableId, input.tableLabel, input.source, input.orderType, input.customerName,
-        input.source === "pos" ? "preparing" : "new",
+        // Toko barang: penjualan di kasir langsung selesai (tidak ada dapur). Usaha makanan: masuk dapur.
+        input.source === "pos" ? (retail ? "done" : "preparing") : "new",
         pay ? "paid" : "unpaid", pay?.method ?? null, pay?.amountReceived ?? null,
         totals.subtotal, totals.tax, totals.service, totals.total, input.note, token,
         input.userId, pay ? input.userId : null, at, now, pay ? at : null, input.geo?.check ?? "", input.geo?.distance ?? null,
-        input.clientId ?? null, offline ? 1 : 0, input.source === "pos" ? at : null,
+        input.clientId ?? null, offline ? 1 : 0, input.source === "pos" ? at : null, input.source === "pos" && retail ? at : null,
       ),
     ];
     for (const l of merged.values()) {
       const it = byId.get(l.id)!;
-      const p = unit.get(it.id)!;
+      const v = lineVariant.get(l) ?? null;
+      const p = unit.get(`${it.id}|${v?.id ?? ""}`)!;
       statements.push(
-        stmt(db, `INSERT INTO order_items (id, order_id, menu_item_id, category_name, name, price, qty, note, person, station, list_price, unit_cost)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        stmt(db, `INSERT INTO order_items (id, order_id, menu_item_id, category_name, name, price, qty, note, person, station, list_price, unit_cost, variant_id, variant_name)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           newId(), orderId, it.id, it.category_name ?? "", it.name, p.price, l.qty, l.note ?? "", l.person ?? "",
-          it.station === "bar" ? "bar" : "kitchen", p.list !== p.price ? p.list : null, it.cost),
+          it.station === "bar" ? "bar" : "kitchen", p.list !== p.price ? p.list : null, v && v.cost != null ? v.cost : it.cost,
+          v?.id ?? null, v ? variantLabel(v) : ""),
       );
     }
     if (useStock) {
-      for (const [id, qty] of needed) {
-        const it = byId.get(id)!;
+      for (const [key, qty] of needed) {
+        const { it, v, qty: have } = stockOf(key);
         if (!it.track_stock) continue;
         // Offline: barang sudah keluar; stok dicatat turun sampai nol, tidak minus.
-        const take = offline ? Math.min(qty, Math.max(0, it.stock_qty)) : qty;
+        const take = offline ? Math.min(qty, Math.max(0, have)) : qty;
         if (take <= 0) continue;
-        statements.push(stmt(db, `UPDATE menu_items SET stock_qty = ${offline ? "MAX(stock_qty - ?, 0)" : "stock_qty - ?"} WHERE id = ? AND tenant_id = ?`, take, id, t.id));
+        if (v) {
+          statements.push(stmt(db, `UPDATE item_variants SET stock_qty = ${offline ? "MAX(stock_qty - ?, 0)" : "stock_qty - ?"} WHERE id = ? AND tenant_id = ?`, take, v.id, t.id));
+          // Stok produk induk = jumlah stok varian; dijaga tidak minus kalau sempat tidak sinkron.
+          statements.push(stmt(db, "UPDATE menu_items SET stock_qty = MAX(stock_qty - ?, 0) WHERE id = ? AND tenant_id = ?", take, it.id, t.id));
+        } else {
+          statements.push(stmt(db, `UPDATE menu_items SET stock_qty = ${offline ? "MAX(stock_qty - ?, 0)" : "stock_qty - ?"} WHERE id = ? AND tenant_id = ?`, take, it.id, t.id));
+        }
         statements.push(
-          stmt(db, `INSERT INTO stock_movements (id, tenant_id, menu_item_id, change, reason, order_id, user_id, created_at)
-                    VALUES (?, ?, ?, ?, 'sale', ?, ?, ?)`, newId(), t.id, id, -take, orderId, input.userId, now),
+          stmt(db, `INSERT INTO stock_movements (id, tenant_id, menu_item_id, variant_id, change, reason, order_id, user_id, created_at)
+                    VALUES (?, ?, ?, ?, ?, 'sale', ?, ?, ?)`, newId(), t.id, it.id, v?.id ?? null, -take, orderId, input.userId, now),
         );
       }
     }
@@ -211,9 +271,10 @@ export async function createOrder(db: DB, input: CreateOrderInput) {
 
 /** Mengembalikan stok saat pesanan dibatalkan. */
 export async function restockCancelledOrder(db: DB, tenantId: string, orderId: string, userId: string | null) {
-  const moves = await all<{ menu_item_id: string; change: number }>(
+  const moves = await all<{ menu_item_id: string; variant_id: string | null; change: number }>(
     db,
-    "SELECT menu_item_id, SUM(change) AS change FROM stock_movements WHERE order_id = ? AND tenant_id = ? AND reason = 'sale' GROUP BY menu_item_id",
+    `SELECT menu_item_id, variant_id, SUM(change) AS change FROM stock_movements
+     WHERE order_id = ? AND tenant_id = ? AND reason = 'sale' GROUP BY menu_item_id, variant_id`,
     orderId,
     tenantId,
   );
@@ -221,12 +282,16 @@ export async function restockCancelledOrder(db: DB, tenantId: string, orderId: s
   const s: Stmt[] = [];
   for (const m of moves) {
     if (m.change >= 0) continue;
+    const vid = m.variant_id ?? "";
     // Dijaga NOT EXISTS supaya permintaan batal yang dobel tidak mengembalikan stok dua kali.
-    const notYet = "NOT EXISTS (SELECT 1 FROM stock_movements WHERE order_id = ? AND menu_item_id = ? AND reason = 'cancel')";
-    s.push(stmt(db, `UPDATE menu_items SET stock_qty = stock_qty + ? WHERE id = ? AND tenant_id = ? AND ${notYet}`, -m.change, m.menu_item_id, tenantId, orderId, m.menu_item_id));
+    const notYet = "NOT EXISTS (SELECT 1 FROM stock_movements WHERE order_id = ? AND menu_item_id = ? AND COALESCE(variant_id, '') = ? AND reason = 'cancel')";
+    if (m.variant_id) {
+      s.push(stmt(db, `UPDATE item_variants SET stock_qty = stock_qty + ? WHERE id = ? AND tenant_id = ? AND ${notYet}`, -m.change, m.variant_id, tenantId, orderId, m.menu_item_id, vid));
+    }
+    s.push(stmt(db, `UPDATE menu_items SET stock_qty = stock_qty + ? WHERE id = ? AND tenant_id = ? AND ${notYet}`, -m.change, m.menu_item_id, tenantId, orderId, m.menu_item_id, vid));
     s.push(
-      stmt(db, `INSERT INTO stock_movements (id, tenant_id, menu_item_id, change, reason, order_id, user_id, created_at)
-                SELECT ?, ?, ?, ?, 'cancel', ?, ?, ? WHERE ${notYet}`, newId(), tenantId, m.menu_item_id, -m.change, orderId, userId, now, orderId, m.menu_item_id),
+      stmt(db, `INSERT INTO stock_movements (id, tenant_id, menu_item_id, variant_id, change, reason, order_id, user_id, created_at)
+                SELECT ?, ?, ?, ?, ?, 'cancel', ?, ?, ? WHERE ${notYet}`, newId(), tenantId, m.menu_item_id, m.variant_id, -m.change, orderId, userId, now, orderId, m.menu_item_id, vid),
     );
   }
   return s;
@@ -236,7 +301,8 @@ export async function loadOrderItems(db: DB, orderIds: string[]) {
   if (orderIds.length === 0) return new Map<string, unknown[]>();
   const rows = await all<{ order_id: string } & Record<string, unknown>>(
     db,
-    `SELECT id, order_id, menu_item_id, name, price, qty, note, person, station, ready_at, list_price FROM order_items
+    `SELECT id, order_id, menu_item_id, CASE WHEN variant_name != '' THEN name || ' (' || variant_name || ')' ELSE name END AS name,
+            variant_id, variant_name, price, qty, note, person, station, ready_at, list_price FROM order_items
      WHERE order_id IN (${orderIds.map(() => "?").join(",")})`,
     ...orderIds,
   );

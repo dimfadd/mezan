@@ -6,6 +6,11 @@ import { api } from "../../lib/api";
 import { dateTime } from "../../lib/format";
 import { useApi } from "../../lib/hooks";
 import { isManagement, useSession } from "../../lib/session";
+import { variantLabel } from "../../../../shared/variants";
+
+function Cond({ qty, low }: { qty: number; low: number }) {
+  return qty <= 0 ? <span className="badge badge-danger">Habis</span> : qty <= low ? <span className="badge badge-warn">Menipis</span> : <span className="badge badge-ok">Aman</span>;
+}
 
 interface StockItem {
   id: string;
@@ -16,6 +21,9 @@ interface StockItem {
   track_stock: number;
   available: number;
   category_name: string | null;
+  variants?: { id: string; opt1: string; opt2: string; stock_qty: number; available: number }[];
+  /** Diisi saat mencatat stok satu varian. */
+  variantId?: string;
 }
 interface Movement {
   id: string;
@@ -56,7 +64,8 @@ export function StockPage() {
 
   const tracked = data.items.filter((i) => i.track_stock);
   const untracked = data.items.filter((i) => !i.track_stock);
-  const low = tracked.filter((i) => i.stock_qty <= i.low_stock_at);
+  // Produk bervarian dianggap menipis kalau salah satu variannya menipis.
+  const low = tracked.filter((i) => (i.variants?.length ? i.variants.some((v) => v.available && v.stock_qty <= i.low_stock_at) : i.stock_qty <= i.low_stock_at));
 
   return (
     <>
@@ -82,35 +91,45 @@ export function StockPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {tracked.map((i) => (
-                    <tr key={i.id}>
-                      <td>
-                        <div className="strong">{i.name}</div>
-                        <div className="tiny muted">{i.category_name ?? "Tanpa kategori"}</div>
-                      </td>
-                      <td className="r num strong">
-                        {i.stock_qty} <span className="muted small">{i.unit}</span>
-                      </td>
-                      <td>
-                        {i.stock_qty <= 0 ? (
-                          <span className="badge badge-danger">Habis</span>
-                        ) : i.stock_qty <= i.low_stock_at ? (
-                          <span className="badge badge-warn">Menipis</span>
-                        ) : (
-                          <span className="badge badge-ok">Aman</span>
-                        )}
-                      </td>
-                      {mgmt && (
+                  {tracked.flatMap((i) => {
+                    const acts = (t: StockItem) =>
+                      mgmt && (
                         <td className="r">
                           <div className="row" style={{ justifyContent: "flex-end", gap: 6 }}>
-                            <button className="btn btn-sm btn-primary" onClick={() => setAct({ item: i, mode: "restock" })}>Barang masuk</button>
-                            <button className="btn btn-sm" onClick={() => setAct({ item: i, mode: "waste" })}>Rusak</button>
-                            <button className="btn btn-sm btn-ghost" onClick={() => setAct({ item: i, mode: "set" })}>Hitung ulang</button>
+                            <button className="btn btn-sm btn-primary" onClick={() => setAct({ item: t, mode: "restock" })} aria-label={`Barang masuk ${t.name}`}>Barang masuk</button>
+                            <button className="btn btn-sm" onClick={() => setAct({ item: t, mode: "waste" })} aria-label={`Rusak ${t.name}`}>Rusak</button>
+                            <button className="btn btn-sm btn-ghost" onClick={() => setAct({ item: t, mode: "set" })} aria-label={`Hitung ulang ${t.name}`}>Hitung ulang</button>
                           </div>
                         </td>
-                      )}
-                    </tr>
-                  ))}
+                      );
+                    const head = (
+                      <tr key={i.id} className={i.variants?.length ? "stock-parent" : undefined}>
+                        <td>
+                          <div className="strong">{i.name}</div>
+                          <div className="tiny muted">{i.category_name ?? "Tanpa kategori"}{i.variants?.length ? ` · ${i.variants.length} varian` : ""}</div>
+                        </td>
+                        <td className="r num strong">
+                          {i.stock_qty} <span className="muted small">{i.unit}</span>
+                        </td>
+                        <td>{i.variants?.length ? <span className="tiny muted">total semua varian</span> : <Cond qty={i.stock_qty} low={i.low_stock_at} />}</td>
+                        {i.variants?.length ? mgmt && <td /> : acts(i)}
+                      </tr>
+                    );
+                    return [
+                      head,
+                      ...(i.variants ?? []).map((v) => {
+                        const t: StockItem = { ...i, name: `${i.name} (${variantLabel(v)})`, stock_qty: v.stock_qty, variantId: v.id, variants: undefined };
+                        return (
+                          <tr key={v.id} className="stock-variant">
+                            <td><span className="variant-tag" style={{ marginLeft: 0 }}>{variantLabel(v)}</span>{!v.available && <span className="tiny muted"> · tidak dijual</span>}</td>
+                            <td className="r num">{v.stock_qty}</td>
+                            <td><Cond qty={v.stock_qty} low={i.low_stock_at} /></td>
+                            {acts(t)}
+                          </tr>
+                        );
+                      }),
+                    ];
+                  })}
                 </tbody>
               </table>
             </div>
@@ -133,7 +152,11 @@ export function StockPage() {
                 {untracked.map((i) => (
                   <div key={i.id} className="row between" style={{ borderTop: "1px solid var(--line)", paddingTop: 8 }}>
                     <span>{i.name}</span>
-                    <button className="btn btn-sm" onClick={() => setAct({ item: i, mode: "set" })}>Mulai hitung</button>
+                    {i.variants?.length ? (
+                      <Link className="btn btn-sm" to="/toko/menu">Isi stok per varian</Link>
+                    ) : (
+                      <button className="btn btn-sm" onClick={() => setAct({ item: i, mode: "set" })}>Mulai hitung</button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -208,7 +231,7 @@ function MoveModal({ act, onClose, onDone }: { act: { item: StockItem; mode: "re
             onClick={async () => {
               setBusy(true);
               try {
-                await api.post("/api/store/stock/movements", { itemId: it.id, mode, qty, note });
+                await api.post("/api/store/stock/movements", { itemId: it.id, variantId: it.variantId ?? null, mode, qty, note });
                 toast(`Stok ${it.name} sekarang ${after} ${it.unit}.`);
                 onDone();
               } catch (e) {

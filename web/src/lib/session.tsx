@@ -129,3 +129,6 @@ export function useSession() {
 }
 
 export const isManagement = (r?: Role) => r === "owner" || r === "manager";
+
+/** Toko barang (baju, aksesoris, kelontong): tanpa meja, dapur, dan antrean tunggu. */
+export const isRetail = (t: { kind?: string } | null | undefined) => t?.kind === "toko";

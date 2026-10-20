@@ -5,10 +5,12 @@ import { all, first, run, stmt, type Stmt } from "../db/types";
 import { ALL_STORE, MANAGEMENT, requireStore, storeOf, tenantLocked } from "../lib/auth";
 import { fail } from "../lib/http";
 import { createOrder, loadOrderItems, loadPriceRules, restockCancelledOrder } from "../lib/orders";
+import { checkBarcodes, loadItemVariants, saveVariants, variantFields } from "../lib/variants";
 import { attachPairs, forgetPairs } from "../lib/pairs";
 import { awardStamp, normalizePhone } from "../lib/loyalty";
 import { opsRoutes } from "./ops";
 import { guestRoutes } from "./guests";
+import { billRoutes } from "./bills";
 import { hashPassword, newId, randomCode } from "../lib/security";
 import { EXT, MEDIA_LIMITS } from "../lib/storage";
 import { analyticsRoutes } from "./analytics";
@@ -143,6 +145,7 @@ storeRoutes.get("/items", async (c) => {
       `SELECT id, category_id, name, description, price, image_url, video_url, tags, available, track_stock, stock_qty,
               low_stock_at, unit, sort, portion, components, spice_level, prep_minutes, allergens,
               name_en, description_en, portion_en, components_en, allergens_en, avail_days, avail_from, avail_to, pair_ids, cost,
+              opt1_name, opt2_name, barcode, sku,
               (SELECT COALESCE(SUM(oi.qty), 0) FROM order_items oi JOIN orders o ON o.id = oi.order_id
                 WHERE oi.menu_item_id = m.id AND o.tenant_id = m.tenant_id AND o.status != 'cancelled' AND o.created_at > ?) AS sold_30d
        FROM menu_items m WHERE tenant_id = ? AND archived = 0 ORDER BY sort, name`,
@@ -151,12 +154,18 @@ storeRoutes.get("/items", async (c) => {
     ),
     loadGalleries(c.var.db, t.id),
   ]);
-  const rules = await loadPriceRules(c.var.db, t.id);
+  const [rules, variants] = await Promise.all([loadPriceRules(c.var.db, t.id), loadItemVariants(c.var.db, t.id)]);
+  const mgmtView = MANAGEMENT.includes(c.var.user!.role);
   const sellable = new Set(items.filter((i) => i.available).map((i) => i.id));
   const withPairs = await attachPairs(c.var.db, t.id, items as (typeof items[number] & { category_id: string | null; pair_ids: string })[], (id) => sellable.has(id));
   return c.json({
     // Modal (HPP) hanya untuk pemilik/manajer.
-    items: withPairs.map(({ cost, ...i }) => ({ ...i, ...(MANAGEMENT.includes(c.var.user!.role) ? { cost } : {}), media: galleries.get(i.id) ?? [] })),
+    items: withPairs.map(({ cost, ...i }) => ({
+      ...i,
+      ...(mgmtView ? { cost } : {}),
+      media: galleries.get(i.id) ?? [],
+      variants: (variants.get(i.id) ?? []).map(({ cost: vc, item_id: _i, sort: _s, ...v }) => ({ ...v, ...(mgmtView ? { cost: vc } : {}) })),
+    })),
     pricing: { tz: t.tz_offset_minutes, now: Date.now(), rules },
   });
 });
@@ -187,6 +196,7 @@ const itemSchema = z.object({
   avail_to: z.number().int().min(0).max(1439).nullable().default(null),
   pair_ids: z.array(z.string().max(64)).max(3, "Maksimal 3 menu pasangan.").default([]),
   cost: z.number().int().min(0).max(1_000_000_000).nullable().default(null),
+  ...variantFields,
 });
 
 async function checkCategory(c: { var: Env["Variables"] }, tenantId: string, categoryId: string | null) {
@@ -228,18 +238,23 @@ storeRoutes.post("/items", mgmt, async (c) => {
   const cover = coverOf(b.media);
   const max = await first<{ s: number | null }>(c.var.db, "SELECT MAX(sort) AS s FROM menu_items WHERE tenant_id = ?", t.id);
   const id = newId();
+  await checkBarcodes(c.var.db, t.id, id, [b.variants.length ? "" : b.barcode, ...b.variants.map((v) => v.barcode)]);
+  const vStmts = await saveVariants(c.var.db, { tenantId: t.id, itemId: id, userId: c.var.user!.id, variants: b.variants, useStock: !!t.inventory_enabled && !!b.track_stock, hasOptions: !!b.opt1_name });
   await c.var.db.batch([
     stmt(
       c.var.db,
       `INSERT INTO menu_items (id, tenant_id, category_id, name, description, price, image_url, video_url, tags, available,
          track_stock, low_stock_at, unit, sort, created_at, portion, components, spice_level, prep_minutes, allergens,
-         name_en, description_en, portion_en, components_en, allergens_en, avail_days, avail_from, avail_to, pair_ids, cost)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         name_en, description_en, portion_en, components_en, allergens_en, avail_days, avail_from, avail_to, pair_ids, cost,
+         opt1_name, opt2_name, barcode, sku)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id, t.id, b.category_id, b.name, b.description, b.price, cover.image_url, cover.video_url, b.tags, b.available,
       b.track_stock, b.low_stock_at, b.unit, (max?.s ?? 0) + 1, Date.now(), b.portion, b.components, b.spice_level, b.prep_minutes, b.allergens,
       b.name_en, b.description_en, b.portion_en, b.components_en, b.allergens_en, ...schedule(b), await pairIds(c, t.id, b.pair_ids, null), b.cost,
+      b.variants.length ? b.opt1_name : "", b.variants.length ? b.opt2_name : "", b.variants.length ? "" : b.barcode, b.sku,
     ),
     ...replaceGallery(c.var.db, t.id, id, b.media),
+    ...vStmts,
   ]);
   return c.json({ id }, 201);
 });
@@ -253,18 +268,23 @@ storeRoutes.put("/items/:id", mgmt, async (c) => {
   const id = c.req.param("id");
   if (!(await first(c.var.db, "SELECT 1 FROM menu_items WHERE id = ? AND tenant_id = ? AND archived = 0", id, t.id))) fail(404, "Menu tidak ditemukan.");
   const cover = coverOf(b.media);
+  await checkBarcodes(c.var.db, t.id, id, [b.variants.length ? "" : b.barcode, ...b.variants.map((v) => v.barcode)]);
+  const vStmts = await saveVariants(c.var.db, { tenantId: t.id, itemId: id, userId: c.var.user!.id, variants: b.variants, useStock: !!t.inventory_enabled && !!b.track_stock, hasOptions: !!b.opt1_name });
   await c.var.db.batch([
     stmt(
       c.var.db,
       `UPDATE menu_items SET category_id=?, name=?, description=?, price=?, image_url=?, video_url=?, tags=?, available=?,
          track_stock=?, low_stock_at=?, unit=?, portion=?, components=?, spice_level=?, prep_minutes=?, allergens=?,
-         name_en=?, description_en=?, portion_en=?, components_en=?, allergens_en=?, avail_days=?, avail_from=?, avail_to=?, pair_ids=?, cost=?
+         name_en=?, description_en=?, portion_en=?, components_en=?, allergens_en=?, avail_days=?, avail_from=?, avail_to=?, pair_ids=?, cost=?,
+         opt1_name=?, opt2_name=?, barcode=?, sku=?
        WHERE id=? AND tenant_id=?`,
       b.category_id, b.name, b.description, b.price, cover.image_url, cover.video_url, b.tags, b.available,
       b.track_stock, b.low_stock_at, b.unit, b.portion, b.components, b.spice_level, b.prep_minutes, b.allergens,
-      b.name_en, b.description_en, b.portion_en, b.components_en, b.allergens_en, ...schedule(b), await pairIds(c, t.id, b.pair_ids, id), b.cost, id, t.id,
+      b.name_en, b.description_en, b.portion_en, b.components_en, b.allergens_en, ...schedule(b), await pairIds(c, t.id, b.pair_ids, id), b.cost,
+      b.variants.length ? b.opt1_name : "", b.variants.length ? b.opt2_name : "", b.variants.length ? "" : b.barcode, b.sku, id, t.id,
     ),
     ...replaceGallery(c.var.db, t.id, id, b.media),
+    ...vStmts,
   ]);
   forgetPairs(t.id);
   return c.json({ ok: true });
@@ -326,15 +346,21 @@ storeRoutes.post("/media", mgmt, async (c) => {
 // Panduan langkah awal untuk toko baru: hitungan sederhana untuk mencentang langkah yang sudah selesai.
 storeRoutes.get("/onboarding", async (c) => {
   const t = storeOf(c);
-  const r = await first<{ items: number; tables: number; qr: number; code: string | null }>(
+  const r = await first<{ items: number; tables: number; qr: number; code: string | null; orders: number; barcodes: number }>(
     c.var.db,
     `SELECT (SELECT COUNT(*) FROM menu_items WHERE tenant_id = ? AND archived = 0) AS items,
             (SELECT COUNT(*) FROM dining_tables WHERE tenant_id = ? AND active = 1) AS tables,
             (SELECT COUNT(*) FROM orders WHERE tenant_id = ? AND source = 'qr') AS qr,
-            (SELECT code FROM dining_tables WHERE tenant_id = ? AND active = 1 ORDER BY created_at LIMIT 1) AS code`,
-    t.id, t.id, t.id, t.id,
+            (SELECT code FROM dining_tables WHERE tenant_id = ? AND active = 1 ORDER BY created_at LIMIT 1) AS code,
+            (SELECT COUNT(*) FROM orders WHERE tenant_id = ?) AS orders,
+            (SELECT COUNT(*) FROM menu_items WHERE tenant_id = ? AND archived = 0 AND barcode != '')
+              + (SELECT COUNT(*) FROM item_variants WHERE tenant_id = ? AND archived = 0 AND barcode != '') AS barcodes`,
+    t.id, t.id, t.id, t.id, t.id, t.id, t.id,
   );
-  return c.json({ items: r?.items ?? 0, tables: r?.tables ?? 0, qrOrders: r?.qr ?? 0, firstTableCode: r?.code ?? null, qrEnabled: !!t.qr_ordering_enabled });
+  return c.json({
+    items: r?.items ?? 0, tables: r?.tables ?? 0, qrOrders: r?.qr ?? 0, firstTableCode: r?.code ?? null, qrEnabled: !!t.qr_ordering_enabled,
+    orders: r?.orders ?? 0, barcodes: r?.barcodes ?? 0,
+  });
 });
 
 storeRoutes.get("/tables", async (c) => {
@@ -495,7 +521,7 @@ const posSchema = z.object({
   tableId: z.string().nullable().default(null),
   customerName: z.string().trim().max(40).default(""),
   note: z.string().trim().max(200).default(""),
-  items: z.array(z.object({ id: z.string(), qty: z.number().int().min(1).max(999), note: z.string().trim().max(120).optional() })).min(1, "Keranjang masih kosong.").max(60),
+  items: z.array(z.object({ id: z.string(), variantId: z.string().max(64).nullable().optional(), qty: z.number().int().min(1).max(999), note: z.string().trim().max(120).optional() })).min(1, "Keranjang masih kosong.").max(60),
   payment: z.object({ method: z.enum(["cash", "qris", "transfer", "card"]), amountReceived: money.nullable().default(null) }).nullable().default(null),
   // Kasir offline: ID dari perangkat (kiriman ulang aman) dan waktu asli pesanan dicatat.
   clientId: z.string().regex(/^[a-zA-Z0-9-]{8,64}$/).optional(),
@@ -594,19 +620,27 @@ storeRoutes.get("/stock", async (c) => {
      WHERE m.tenant_id = ? AND m.archived = 0 ORDER BY m.track_stock DESC, (m.stock_qty <= m.low_stock_at) DESC, m.name`,
     t.id,
   );
+  const variants = await loadItemVariants(c.var.db, t.id);
   const movements = await all(
     c.var.db,
-    `SELECT s.id, s.change, s.reason, s.note, s.created_at, m.name AS item_name, m.unit, u.name AS user_name, o.number AS order_number
-     FROM stock_movements s JOIN menu_items m ON m.id = s.menu_item_id
+    `SELECT s.id, s.change, s.reason, s.note, s.created_at,
+            CASE WHEN v.id IS NOT NULL THEN m.name || ' (' || TRIM(v.opt1 || CASE WHEN v.opt2 != '' THEN ' / ' || v.opt2 ELSE '' END) || ')' ELSE m.name END AS item_name,
+            m.unit, u.name AS user_name, o.number AS order_number
+     FROM stock_movements s JOIN menu_items m ON m.id = s.menu_item_id LEFT JOIN item_variants v ON v.id = s.variant_id
      LEFT JOIN users u ON u.id = s.user_id LEFT JOIN orders o ON o.id = s.order_id
      WHERE s.tenant_id = ? ORDER BY s.created_at DESC LIMIT 60`,
     t.id,
   );
-  return c.json({ enabled: !!t.inventory_enabled, items, movements });
+  return c.json({
+    enabled: !!t.inventory_enabled,
+    items: (items as { id: string }[]).map((i) => ({ ...i, variants: (variants.get(i.id) ?? []).map((v) => ({ id: v.id, opt1: v.opt1, opt2: v.opt2, stock_qty: v.stock_qty, available: v.available })) })),
+    movements,
+  });
 });
 
 const moveSchema = z.object({
   itemId: z.string(),
+  variantId: z.string().nullable().optional(),
   mode: z.enum(["restock", "waste", "set"]),
   qty: z.number().int().min(0).max(1_000_000),
   note: z.string().trim().max(120).default(""),
@@ -618,14 +652,22 @@ storeRoutes.post("/stock/movements", mgmt, async (c) => {
   const b = moveSchema.parse(await c.req.json());
   const it = await first<{ stock_qty: number }>(c.var.db, "SELECT stock_qty FROM menu_items WHERE id = ? AND tenant_id = ? AND archived = 0", b.itemId, t.id);
   if (!it) fail(404, "Barang tidak ditemukan.");
-  const change = b.mode === "restock" ? b.qty : b.mode === "waste" ? -b.qty : b.qty - it.stock_qty;
+  const hasVariants = await first(c.var.db, "SELECT 1 FROM item_variants WHERE item_id = ? AND archived = 0 LIMIT 1", b.itemId);
+  if (hasVariants && !b.variantId) fail(400, "Pilih varian yang stoknya diubah.");
+  const v = b.variantId
+    ? await first<{ stock_qty: number }>(c.var.db, "SELECT stock_qty FROM item_variants WHERE id = ? AND item_id = ? AND tenant_id = ? AND archived = 0", b.variantId, b.itemId, t.id)
+    : null;
+  if (b.variantId && !v) fail(404, "Varian tidak ditemukan.");
+  const have = v ? v.stock_qty : it.stock_qty;
+  const change = b.mode === "restock" ? b.qty : b.mode === "waste" ? -b.qty : b.qty - have;
   if (change === 0) return c.json({ ok: true });
-  if (it.stock_qty + change < 0) fail(400, `Stok saat ini hanya ${it.stock_qty}.`);
+  if (have + change < 0) fail(400, `Stok saat ini hanya ${have}.`);
   const reason = b.mode === "set" ? "adjust" : b.mode;
   await c.var.db.batch([
-    stmt(c.var.db, "UPDATE menu_items SET stock_qty = stock_qty + ?, track_stock = 1 WHERE id = ? AND tenant_id = ?", change, b.itemId, t.id),
-    stmt(c.var.db, `INSERT INTO stock_movements (id, tenant_id, menu_item_id, change, reason, note, user_id, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, newId(), t.id, b.itemId, change, reason, b.note, c.var.user!.id, Date.now()),
+    ...(v ? [stmt(c.var.db, "UPDATE item_variants SET stock_qty = stock_qty + ? WHERE id = ? AND tenant_id = ?", change, b.variantId, t.id)] : []),
+    stmt(c.var.db, `UPDATE menu_items SET stock_qty = ${v ? "MAX(stock_qty + ?, 0)" : "stock_qty + ?"}, track_stock = 1 WHERE id = ? AND tenant_id = ?`, change, b.itemId, t.id),
+    stmt(c.var.db, `INSERT INTO stock_movements (id, tenant_id, menu_item_id, variant_id, change, reason, note, user_id, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, newId(), t.id, b.itemId, b.variantId ?? null, change, reason, b.note, c.var.user!.id, Date.now()),
   ]);
   return c.json({ ok: true });
 });
@@ -696,3 +738,4 @@ storeRoutes.get("/subscription", mgmt, async (c) => {
 storeRoutes.route("/analytics", analyticsRoutes);
 storeRoutes.route("/", opsRoutes);
 storeRoutes.route("/", guestRoutes);
+storeRoutes.route("/", billRoutes);
