@@ -5,3 +5,5 @@ data/
 *.log
 .wrangler
 .vercel
+flows-out/
+retail-out/
