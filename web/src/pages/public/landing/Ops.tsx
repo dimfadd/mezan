@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Calculator, Check, ChefHat, Clock3, MapPin, ReceiptText, Sparkles, ThumbsUp, Wallet, Wifi, WifiOff } from "lucide-react";
+import { Calculator, Check, ChefHat, Clock3, MapPin, ReceiptText, Wallet, Wifi, WifiOff } from "lucide-react";
 import { AppIcon } from "./art";
-import { HappyDemo, PairDemo } from "./MoreDemos";
+import { HappyDemo } from "./MoreDemos";
 import { BillDemo } from "./RetailDemos";
 import { rupiah } from "../../../lib/format";
-import { BestDemo, Card, GeoDemo, MoreButton, QrDemo } from "./Extras";
+import { Card, GeoDemo, MoreButton, QrDemo } from "./Extras";
 import { useCountUp, useReducedMotion, useStepper, useVisible } from "./motion";
 
 // Sisi pemilik usaha makanan: yang menambah untung dulu, lalu yang menjaga dapur, laci, dan pesanan tetap rapi.
@@ -27,19 +27,13 @@ export function Ops() {
         <Card className="span2" icon={<ChefHat />} title="Layar dapur per bagian" body="Makanan masuk ke layar dapur, minuman ke bar. Waktu tunggu berubah warna kalau lewat perkiraan saji. Begitu semua item dicentang, pesanan otomatis jadi Siap diantar.">
           <KdsDemo on={on} />
         </Card>
-        <Card icon={<Sparkles />} title="Saran pasangan menu" body="Pesan ayam geprek, muncul es teh. Pasangannya bisa diatur pemilik, atau diambil dari menu yang sering dipesan bareng.">
-          <PairDemo on={on} />
+        <Card icon={<WifiOff />} title="Kasir tetap jalan saat internet putus" body="Pesanan disimpan di perangkat dan dikirim sendiri begitu sinyal kembali. Pesanan QR dari pembeli tetap butuh internet.">
+          <OfflineDemo on={on} />
         </Card>
         {all && (
           <>
             <Card className="span2" icon={<Clock3 />} title="Menu & harga ikut jam" body="Menu sarapan hanya bisa dipesan pagi. Happy hour memotong harga sendiri pada jamnya, di menu QR dan di kasir.">
               <HappyDemo on={on} />
-            </Card>
-            <Card icon={<ThumbsUp />} title="Best seller & tampilan kotak" body="Stempel jempol untuk menu terlaris. Pembeli bebas pilih tampilan daftar atau kotak.">
-              <BestDemo on={on} />
-            </Card>
-            <Card className="span2" icon={<WifiOff />} title="Kasir tetap jalan saat internet putus" body="Pesanan disimpan di perangkat dan dikirim sendiri begitu sinyal kembali, lalu dapat nomor antrean. Pesanan QR dari pembeli tetap butuh internet.">
-              <OfflineDemo on={on} />
             </Card>
             <Card icon={<MapPin />} title="Pengaman lokasi" body="Pesanan dari luar radius toko ditandai atau ditolak. QR yang difoto lalu dipakai dari rumah tidak lolos diam-diam.">
               <GeoDemo />
@@ -53,7 +47,7 @@ export function Ops() {
           </>
         )}
       </div>
-      <MoreButton open={all} count={6} onToggle={() => setAll(!all)} />
+      <MoreButton open={all} count={4} onToggle={() => setAll(!all)} />
     </>
   );
 }

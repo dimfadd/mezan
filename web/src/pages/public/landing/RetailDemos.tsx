@@ -1,8 +1,8 @@
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { Calculator, Camera, Check, Clock3, Lock, ScanLine, Shirt, Stamp, UserCog, UtensilsCrossed, Wallet, WifiOff } from "lucide-react";
 import { rupiah } from "../../../lib/format";
 import { useReducedMotion, useStepper, useVisible } from "./motion";
-import { Card, MoreButton } from "./Extras";
+import { Card } from "./Extras";
 import { MarginDemo, OfflineDemo, ShiftDemo } from "./Ops";
 import { StampDemo } from "./MoreDemos";
 import { Swatch } from "./RetailStory";
@@ -106,44 +106,46 @@ export function BillDemo({ on }: { on: boolean }) {
   );
 }
 
-// ---------- Fitur toko barang (mode Toko) ----------
-export function RetailFeatures() {
+// ---------- Fitur toko barang: sisi kasir ----------
+export function RetailKasirFeatures() {
   const root = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
-  const visible = useVisible(root, 0.15);
-  const on = visible && !reduce;
-  const [all, setAll] = useState(false);
+  const on = useVisible(root, 0.15) && !reduce;
   return (
-    <>
-      <div ref={root} className={`lp-bento${on ? "" : " is-still"}`}>
-        <Card className="span2" icon={<Calculator />} title="Modal & untung per produk" body="Isi modal per pcs, per varian kalau perlu. Laporan memilah produk jadi Andalan, Laris tapi tipis, Untung tapi jarang, dan Perlu dievaluasi.">
-          <MarginDemo on={on} retail />
-        </Card>
-        <Card icon={<Camera />} title="Kamera HP jadi alat scan" body="Belum punya alat scan? Arahkan kamera HP ke barcode. Sudah punya alat scan USB atau Bluetooth? Langsung bisa dipakai.">
-          <CameraDemo on={on} />
-        </Card>
-        <Card icon={<WifiOff />} title="Kasir tetap jalan saat internet putus" body="Penjualan disimpan di perangkat dan dikirim sendiri begitu sinyal kembali. Scan barcode juga tetap jalan.">
-          <OfflineDemo on={on} />
-        </Card>
-        <Card icon={<Stamp />} title="Kartu stempel pelanggan" body="Kasir mengetik nomor HP saat bayar. Belanja di atas batas minimal dapat stempel, hadiahnya ditukar di kasir. Tanpa kartu kertas.">
-          <StampDemo on={on} reward="Potongan Rp20.000" />
-        </Card>
-        <Card icon={<UserCog />} title="Akun kasir terpisah" body="Kasir hanya bisa berjualan dan melihat stok. Harga, modal, dan laporan hanya untuk pemilik dan manajer.">
-          <RolesDemo on={on} />
-        </Card>
-        {all && (
-          <>
-            <Card className="span2" icon={<Wallet />} title="Shift kasir & rekap laci" body="Buka dengan modal awal, catat kas masuk dan keluar, hitung uang saat tutup. Selisihnya langsung terlihat, lengkap dengan siapa yang bertugas.">
-              <ShiftDemo on={on} spend="beli kantong plastik" />
-            </Card>
-            <Card icon={<Clock3 />} title="Simpan dulu, bayar nanti" body="Pelanggan langganan ambil barang dulu? Simpan penjualannya, lalu tagih dari daftar Belum dibayar. Tidak ada yang terlupa.">
-              <PayLaterDemo on={on} />
-            </Card>
-          </>
-        )}
-      </div>
-      <MoreButton open={all} count={2} onToggle={() => setAll(!all)} />
-    </>
+    <div ref={root} className={`lp-bento${on ? "" : " is-still"}`}>
+      <Card className="span2" icon={<WifiOff />} title="Kasir tetap jalan saat internet putus" body="Penjualan disimpan di perangkat dan dikirim sendiri begitu sinyal kembali. Scan barcode juga tetap jalan.">
+        <OfflineDemo on={on} />
+      </Card>
+      <Card icon={<Camera />} title="Kamera HP jadi alat scan" body="Belum punya alat scan? Arahkan kamera HP ke barcode. Sudah punya alat scan USB atau Bluetooth? Langsung bisa dipakai.">
+        <CameraDemo on={on} />
+      </Card>
+      <Card icon={<Stamp />} title="Kartu stempel pelanggan" body="Kasir mengetik nomor HP saat bayar. Belanja di atas batas minimal dapat stempel, hadiahnya ditukar di kasir.">
+        <StampDemo on={on} reward="Potongan Rp20.000" />
+      </Card>
+      <Card icon={<Clock3 />} title="Simpan dulu, bayar nanti" body="Pelanggan langganan ambil barang dulu? Simpan penjualannya, lalu tagih dari daftar Belum dibayar.">
+        <PayLaterDemo on={on} />
+      </Card>
+      <Card icon={<Wallet />} title="Shift kasir & rekap laci" body="Buka dengan modal awal, hitung uang saat tutup. Selisihnya langsung terlihat, lengkap dengan siapa yang bertugas.">
+        <ShiftDemo on={on} spend="beli kantong plastik" />
+      </Card>
+    </div>
+  );
+}
+
+// ---------- Fitur toko barang: sisi pemilik ----------
+export function RetailOwnerFeatures() {
+  const root = useRef<HTMLDivElement>(null);
+  const reduce = useReducedMotion();
+  const on = useVisible(root, 0.15) && !reduce;
+  return (
+    <div ref={root} className={`lp-bento${on ? "" : " is-still"}`}>
+      <Card className="span2" icon={<Calculator />} title="Modal & untung per produk" body="Isi modal per pcs, per varian kalau perlu. Laporan memilah produk jadi Andalan, Laris tapi tipis, Untung tapi jarang, dan Perlu dievaluasi.">
+        <MarginDemo on={on} retail />
+      </Card>
+      <Card icon={<UserCog />} title="Akun kasir terpisah" body="Kasir hanya bisa berjualan dan melihat stok. Harga, modal, dan laporan hanya untuk pemilik dan manajer.">
+        <RolesDemo on={on} />
+      </Card>
+    </div>
   );
 }
 

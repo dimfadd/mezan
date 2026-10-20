@@ -7,19 +7,29 @@ import { useCountUp, usePhase, useReducedMotion, useStepper, useVisible } from "
 // Satu cerita utuh: pembeli di Meja 4 memesan, kasir & dapur memprosesnya, uang masuk ke laporan.
 // Semua label dan alur meniru layar aplikasi yang sebenarnya.
 type Key = "scan" | "menu" | "detail" | "add" | "send" | "in" | "cook" | "pay";
-const STEPS: { key: Key; who: string; title: string; body: string; dur: number; focus: "phone" | "board" }[] = [
-  { key: "scan", who: "Pembeli", title: "Pindai QR di meja", body: "Menu langsung terbuka di browser HP. Tidak perlu pasang aplikasi.", dur: 3000, focus: "phone" },
-  { key: "menu", who: "Pembeli", title: "Lihat menu", body: "Harga, menu favorit, dan menu yang sedang habis kelihatan sejak awal.", dur: 2700, focus: "phone" },
-  { key: "detail", who: "Pembeli", title: "Ketuk, lihat wujudnya", body: "Geser foto dan video pendek. Ada porsi, isi piring, level pedas, dan lama penyajian.", dur: 4600, focus: "phone" },
-  { key: "add", who: "Pembeli", title: "Tambah dengan catatan", body: "Pilih jumlah dan catatan cepat seperti \"Pedas sedikit\".", dur: 3300, focus: "phone" },
-  { key: "send", who: "Pembeli", title: "Kirim pesanan", body: "Cukup isi nama. Bayarnya tetap di kasir.", dur: 2900, focus: "phone" },
-  { key: "in", who: "Kasir", title: "Pesanan masuk dan berbunyi", body: "Tiket muncul lengkap dengan nomor antrean, meja, dan catatan.", dur: 3300, focus: "board" },
-  { key: "cook", who: "Dapur", title: "Terima, lalu buat", body: "Status di HP pembeli ikut berubah, lengkap dengan antrean dan perkiraan siapnya.", dur: 3300, focus: "board" },
-  { key: "pay", who: "Kasir", title: "Antar dan terima bayar", body: "Tunai, QRIS, atau transfer. Omzet hari ini langsung bertambah di laporan.", dur: 4400, focus: "board" },
-];
-const at = (k: Key) => STEPS.findIndex((s) => s.key === k);
+type Step = { key: Key; who: string; title: string; body: string; dur: number };
+export type StorySide = "pembeli" | "usaha";
+// Sisi pembeli: semua yang dilihat di HP pembeli. Sisi usaha: yang dilihat kasir & dapur untuk pesanan yang sama.
+const SIDES: Record<StorySide, Step[]> = {
+  pembeli: [
+    { key: "scan", who: "Pembeli", title: "Pindai QR di meja", body: "Menu langsung terbuka di browser HP. Tidak perlu pasang aplikasi.", dur: 3000 },
+    { key: "menu", who: "Pembeli", title: "Lihat menu", body: "Harga, menu favorit, dan menu yang sedang habis kelihatan sejak awal.", dur: 2700 },
+    { key: "detail", who: "Pembeli", title: "Ketuk, lihat wujudnya", body: "Geser foto dan video pendek. Ada porsi, isi piring, level pedas, dan lama penyajian.", dur: 4600 },
+    { key: "add", who: "Pembeli", title: "Tambah dengan catatan", body: "Pilih jumlah dan catatan cepat seperti \"Pedas sedikit\".", dur: 3300 },
+    { key: "send", who: "Pembeli", title: "Kirim pesanan", body: "Cukup isi nama. Bayarnya tetap di kasir.", dur: 2900 },
+    { key: "in", who: "Pembeli", title: "Pesanan diterima", body: "Nomor antrean muncul di HP. Tidak perlu bolak-balik bertanya ke kasir.", dur: 3000 },
+    { key: "cook", who: "Pembeli", title: "Pantau antrean & perkiraan siap", body: "Angkanya bergerak sendiri setiap dapur menyelesaikan pesanan di depannya.", dur: 3300 },
+    { key: "pay", who: "Pembeli", title: "Diantar, lalu bayar", body: "Status berubah jadi Sudah dibayar begitu kasir menerima uangnya.", dur: 4400 },
+  ],
+  usaha: [
+    { key: "in", who: "Kasir", title: "Pesanan masuk dan berbunyi", body: "Tiket dari meja muncul lengkap dengan nomor antrean, meja, dan catatan. Tidak ada yang salah dengar.", dur: 3600 },
+    { key: "cook", who: "Dapur", title: "Terima, lalu buat", body: "Satu ketukan, pesanan pindah ke Sedang dibuat. HP pembeli ikut berubah sendiri.", dur: 3600 },
+    { key: "pay", who: "Kasir", title: "Antar dan terima bayar", body: "Tunai, QRIS, atau transfer. Omzet hari ini langsung bertambah di laporan.", dur: 4600 },
+  ],
+};
 
-export function Story() {
+export function Story({ side }: { side: StorySide }) {
+  const STEPS = SIDES[side];
   const root = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
   const [userPaused, setUserPaused] = useState<boolean | null>(null);
@@ -30,7 +40,7 @@ export function Story() {
   const s = STEPS[step];
 
   return (
-    <div ref={root} className={`lp-story${running ? "" : " is-still"}`} data-focus={s.focus}>
+    <div ref={root} className={`lp-story only-${side === "pembeli" ? "phone" : "board"}${running ? "" : " is-still"}`}>
       <ol className="lp-steps" aria-label="Langkah simulasi">
         {STEPS.map((x, i) => (
           <li key={x.key}>
@@ -67,19 +77,22 @@ export function Story() {
           <strong>{s.title}</strong>
           <span className="b">{s.body}</span>
         </p>
-        <div className="lp-devices">
-          <div className={`lp-dev lp-dev-phone${s.focus === "phone" ? " is-focus" : ""}`}>
-            <span className="lp-dev-label">HP pembeli</span>
-            <div className="lp-phone">
-              <div className="lp-screen">
-                <PhoneScreen k={s.key} running={running} />
+        <div className="lp-devices single">
+          {side === "pembeli" ? (
+            <div className="lp-dev lp-dev-phone is-focus">
+              <span className="lp-dev-label">HP pembeli</span>
+              <div className="lp-phone">
+                <div className="lp-screen">
+                  <PhoneScreen k={s.key} running={running} />
+                </div>
               </div>
             </div>
-          </div>
-          <div className={`lp-dev lp-dev-board${s.focus === "board" ? " is-focus" : ""}`}>
-            <span className="lp-dev-label">Layar kasir & dapur</span>
-            <Board k={s.key} step={step} running={running} />
-          </div>
+          ) : (
+            <div className="lp-dev lp-dev-board is-focus">
+              <span className="lp-dev-label">Layar kasir & dapur</span>
+              <Board k={s.key} running={running} />
+            </div>
+          )}
         </div>
         <div className="lp-dots">
           {STEPS.map((x, i) => (
@@ -326,11 +339,11 @@ function StatusScreen({ k, running }: { k: Key; running: boolean }) {
 }
 
 // ---------- Papan pesanan kasir ----------
-function Board({ k, step, running }: { k: Key; step: number; running: boolean }) {
+function Board({ k, running }: { k: Key; running: boolean }) {
   const inPhase = usePhase(k === "in" ? "in" : "a", k === "in" ? [2100] : [], running);
   const cookPhase = usePhase(k === "cook" ? "cook" : "b", k === "cook" ? [2100] : [], running);
   const payPhase = usePhase(k === "pay" ? "pay" : "c", k === "pay" ? [1000, 2200] : [], running);
-  const arrived = step >= at("in");
+  const arrived = k === "in" || k === "cook" || k === "pay";
   const col = !arrived ? null : k === "in" ? "new" : k === "cook" ? "prep" : "ready";
   const paid = k === "pay" && payPhase >= 2;
   const omzet = useCountUp(paid ? 590000 : 538000, running);

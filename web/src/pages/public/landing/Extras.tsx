@@ -1,9 +1,9 @@
 import { useRef, useState, type ReactNode } from "react";
-import { BellRing, Check, ChevronDown, Clapperboard, DoorOpen, LayoutGrid, List, MapPin, ReceiptText, ShoppingBag, Stamp, Star, ThumbsUp, Users } from "lucide-react";
+import { BellRing, Check, ChevronDown, Sparkles, Clapperboard, DoorOpen, LayoutGrid, List, MapPin, ReceiptText, ShoppingBag, Stamp, Star, ThumbsUp, Users } from "lucide-react";
 import { rupiah } from "../../../lib/format";
 import { AppIcon, FakeQR, Food, type FoodKind } from "./art";
 import { useReducedMotion, useStepper, useVisible } from "./motion";
-import { RatingDemo, StampDemo, VideoDemo, WaitlistDemo } from "./MoreDemos";
+import { PairDemo, RatingDemo, StampDemo, VideoDemo, WaitlistDemo } from "./MoreDemos";
 
 // Yang dirasakan pembeli di meja, diurutkan dari yang paling memikat. Setiap kartu memperagakan perilaku aplikasi yang sebenarnya.
 export function Extras() {
@@ -29,22 +29,28 @@ export function Extras() {
       </Card>
       {all && (
       <>
-      <Card className="span2" icon={<Star />} title="Struk digital & rating per menu" body="Kasir mengirim struk ke WhatsApp pembeli. Setelah makan, pembeli memberi bintang dan jempol per menu, lalu bisa lanjut menulis ulasan di Google Maps. Pemilik melihat menu mana yang disukai.">
+      <Card className="span2" icon={<Star />} title="Struk digital & rating per menu" body="Struk dikirim ke WhatsApp pembeli. Setelah makan, pembeli memberi bintang dan jempol per menu, lalu bisa lanjut menulis ulasan di Google Maps.">
         <RatingDemo on={on} />
       </Card>
       <Card icon={<ShoppingBag />} title="QR khusus bawa pulang" body="Satu QR di dekat kasir. Pesan tanpa antre, ambil saat nomornya dipanggil.">
         <PickupDemo on={on} />
       </Card>
-      <Card className="span2" icon={<DoorOpen />} title="Antrean saat penuh" body="Pembeli memindai QR di pintu, mengisi nama dan jumlah orang, lalu bebas menunggu di mana saja. Halamannya diperbarui sendiri dan berubah saat mejanya siap.">
+      <Card className="span2" icon={<DoorOpen />} title="Antrean saat penuh" body="Pembeli memindai QR di pintu, mengisi nama dan jumlah orang, lalu bebas menunggu di mana saja. Halamannya berubah sendiri saat mejanya siap.">
         <WaitlistDemo on={on} />
       </Card>
-      <Card icon={<ReceiptText />} title="Bagi tagihan per orang" body="Kasir langsung melihat bagian masing-masing, sudah termasuk service dan pajak.">
+      <Card icon={<Sparkles />} title="Saran pasangan menu" body="Pesan ayam geprek, muncul es teh. Tambah pelengkap dengan satu ketukan.">
+        <PairDemo on={on} />
+      </Card>
+      <Card className="span2" icon={<ThumbsUp />} title="Best seller & tampilan kotak" body="Stempel jempol untuk menu terlaris. Pembeli bebas pilih tampilan daftar atau kotak.">
+        <BestDemo on={on} />
+      </Card>
+      <Card icon={<ReceiptText />} title="Bagi tagihan per orang" body="Bagian masing-masing langsung terlihat, sudah termasuk service dan pajak.">
         <SplitDemo />
       </Card>
     </>
       )}
     </div>
-    <MoreButton open={all} count={4} onToggle={() => setAll(!all)} />
+    <MoreButton open={all} count={6} onToggle={() => setAll(!all)} />
     </>
   );
 }

@@ -9,7 +9,7 @@ import { useCountUp, useReducedMotion, useStepper, useVisible } from "./motion";
 type DemoProps = { on: boolean };
 const TAB_MS = 9000;
 
-const TABS: { key: string; label: string; icon: ReactNode; title: string; body: string; points: string[]; Demo: (p: DemoProps) => ReactNode }[] = [
+const ALL_TABS: { key: string; label: string; icon: ReactNode; title: string; body: string; points: string[]; Demo: (p: DemoProps) => ReactNode }[] = [
   {
     key: "kasir",
     label: "Kasir",
@@ -66,7 +66,8 @@ const TABS: { key: string; label: string; icon: ReactNode; title: string; body: 
   },
 ];
 
-export function Features() {
+export function Features({ keys }: { keys?: string[] }) {
+  const TABS = keys ? ALL_TABS.filter((t) => keys.includes(t.key)) : ALL_TABS;
   const root = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
   const [auto, setAuto] = useState<boolean | null>(null);

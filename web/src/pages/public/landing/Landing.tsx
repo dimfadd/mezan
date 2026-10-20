@@ -10,8 +10,8 @@ import { SiteNav } from "./SiteNav";
 import { SiteFooter } from "./SiteFooter";
 import { EaseSteps, Monitor, Testimonials } from "./Trust";
 import { RetailStory } from "./RetailStory";
-import { RetailFeatures } from "./RetailDemos";
-import { FloatingModeSwitch, ModeSwitch, useLandingMode, type Mode } from "./mode";
+import { RetailKasirFeatures, RetailOwnerFeatures } from "./RetailDemos";
+import { FloatingModeSwitch, MODE_OPTIONS, Slider, SUB_OPTIONS, useLandingMode, type Mode, type Sub } from "./mode";
 import "../../../styles/landing.css";
 
 const HERO: Record<Mode, { eyebrow: string; lead: string; demo: string; assure: string }> = {
@@ -31,7 +31,7 @@ const HERO: Record<Mode, { eyebrow: string; lead: string; demo: string; assure: 
 
 export function LandingPage() {
   const { solutions } = useSite();
-  const [mode, setMode] = useLandingMode();
+  const { mode, sub, setMode, setSub } = useLandingMode();
   useScrollToHash();
   const h = HERO[mode];
   const retail = mode === "toko";
@@ -39,9 +39,18 @@ export function LandingPage() {
   const signup = retail ? "/daftar?jenis=toko" : "/daftar";
 
   // Ganti dari pil melayang: bawa pengunjung ke awal isi mode baru, bukan ke tengah halaman yang sudah berubah.
+  const toBody = () =>
+    requestAnimationFrame(() => {
+      const el = document.getElementById("lp-body");
+      if (el && el.getBoundingClientRect().top < 0) el.scrollIntoView({ behavior: "smooth" });
+    });
   const switchFromFloat = (m: Mode) => {
     setMode(m);
-    requestAnimationFrame(() => document.getElementById("lp-body")?.scrollIntoView({ behavior: "smooth" }));
+    toBody();
+  };
+  const pickSub = (v: Sub) => {
+    setSub(v);
+    toBody();
   };
 
   return (
@@ -49,7 +58,7 @@ export function LandingPage() {
       <SiteNav />
 
       <header className="lp-hero">
-        <ModeSwitch id="lp-mode-main" mode={mode} onChange={setMode} />
+        <Slider id="lp-mode-main" className="lp-mode-main" value={mode} options={MODE_OPTIONS} onChange={setMode} label="Jenis usaha" />
         <span className="lp-eyebrow">{h.eyebrow}</span>
         <h1>
           Aplikasi kasir buat <span className="hl">UMKM</span> sampai bisnis besar.
@@ -75,8 +84,14 @@ export function LandingPage() {
         )}
       </header>
 
-      <div id="lp-body" className="lp-body" key={mode}>
-        {retail ? <RetailBody /> : <FoodBody />}
+      <div id="lp-body" className="lp-body">
+        <div className="lp-subbar">
+          <span className="lp-subbar-h">{retail ? "Lihat dari meja:" : "Lihat dari sisi:"}</span>
+          <Slider key={mode} value={sub} options={SUB_OPTIONS[mode]} onChange={pickSub} label="Sudut pandang" compact className="lp-sub" />
+        </div>
+        <div className="lp-subbody" key={mode + sub}>
+          {retail ? (sub === "depan" ? <RetailKasir /> : <RetailOwner />) : sub === "depan" ? <FoodBuyer /> : <FoodOwner />}
+        </div>
 
         <Testimonials />
 
@@ -111,91 +126,98 @@ export function LandingPage() {
   );
 }
 
-function FoodBody() {
+function Head({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
+  return (
+    <div className="lp-sec-head">
+      <h2 id={id}>{title}</h2>
+      <p>{children}</p>
+    </div>
+  );
+}
+
+/** Makanan & minuman, sisi pembeli: semua yang terjadi di HP pembeli. */
+function FoodBuyer() {
   return (
     <>
       <section id="simulasi" className="lp-sec" aria-labelledby="sim-h">
-        <div className="lp-sec-head">
-          <h2 id="sim-h">Dari pindai QR sampai uang masuk</h2>
-          <p>Satu pesanan dari Meja 4, dilihat dari dua sisi: HP pembeli dan layar kasir. Ketuk langkah mana saja untuk melompat.</p>
-        </div>
-        <Story />
+        <Head id="sim-h" title="Dari pindai QR sampai makanan datang">Satu pesanan dari Meja 4, dilihat dari HP pembeli. Ketuk langkah mana saja untuk melompat.</Head>
+        <Story side="pembeli" />
       </section>
-
-      <section id="mudah" className="lp-sec" aria-labelledby="mudah-h">
-        <div className="lp-sec-head">
-          <h2 id="mudah-h">Gampang dipakai, bahkan yang baru pertama pegang aplikasi kasir</h2>
-          <p>Tiga langkah ini cukup untuk mulai jualan. Fitur lain bisa dinyalakan pelan-pelan saat usaha tumbuh.</p>
-        </div>
-        <EaseSteps />
-      </section>
-
       <section id="antrean" className="lp-sec" aria-labelledby="eta-h">
-        <div className="lp-sec-head">
-          <h2 id="eta-h">Tidak ada lagi "masih lama, Kak?"</h2>
-          <p>Pembeli melihat sendiri antrean dan perkiraan siapnya dari HP. Hitungannya memakai waktu saji tiap menu dan pesanan yang sedang dimasak.</p>
-        </div>
+        <Head id="eta-h" title={'Tidak ada lagi "masih lama, Kak?"'}>Pembeli melihat sendiri antrean dan perkiraan siapnya dari HP. Hitungannya memakai waktu saji tiap menu dan pesanan yang sedang dimasak.</Head>
         <EtaSpotlight />
       </section>
-
       <section id="pembeli" className="lp-sec" aria-labelledby="extra-h">
-        <div className="lp-sec-head">
-          <h2 id="extra-h">Yang membuat pembeli betah dan kembali</h2>
-          <p>Menu yang hidup di layar, pelayan yang bisa dipanggil dari HP, dan stempel yang terkumpul setiap belanja.</p>
-        </div>
+        <Head id="extra-h" title="Yang membuat pembeli betah dan kembali">Menu yang hidup di layar, pelayan yang bisa dipanggil dari HP, dan stempel yang terkumpul setiap belanja.</Head>
         <Extras />
       </section>
-
-      <section id="untung" className="lp-sec" aria-labelledby="ops-h">
-        <div className="lp-sec-head">
-          <h2 id="ops-h">Untung lebih jelas, dapur dan laci lebih rapi</h2>
-          <p>Tahu menu mana yang benar-benar menghasilkan, tagih meja yang makan dulu bayar belakangan, dan jaga dapur tetap lancar saat ramai.</p>
-        </div>
-        <Ops />
-      </section>
-
-      <section id="pantau" className="lp-sec" aria-labelledby="pantau-h">
-        <Monitor />
-      </section>
-
-      <section id="fitur" className="lp-sec" aria-labelledby="feat-h">
-        <div className="lp-sec-head">
-          <h2 id="feat-h">Dasar yang dipakai setiap hari</h2>
-          <p>Kasir, stok, laporan, sampai tampilan menu. Semuanya dari akun toko yang sama, di HP, tablet, atau komputer.</p>
-        </div>
-        <Features />
+      <section id="tampilan" className="lp-sec" aria-labelledby="tampil-h">
+        <Head id="tampil-h" title="Menu dengan wajah tokomu, dalam dua bahasa">Warna, font, dan logo sendiri di paket premium. Tamu asing bisa pindah ke bahasa Inggris dari menu.</Head>
+        <Features keys={["brand", "bahasa"]} />
       </section>
     </>
   );
 }
 
-function RetailBody() {
+/** Makanan & minuman, sisi pemilik & karyawan: kasir, dapur, laci, laporan. */
+function FoodOwner() {
+  return (
+    <>
+      <section id="kasir" className="lp-sec" aria-labelledby="kasir-h">
+        <Head id="kasir-h" title="Pesanan masuk, dapur bergerak, uang tercatat">Pesanan yang sama dari Meja 4, kali ini dilihat dari layar kasir dan dapur.</Head>
+        <Story side="usaha" />
+      </section>
+      <section id="mudah" className="lp-sec" aria-labelledby="mudah-h">
+        <Head id="mudah-h" title="Gampang dipakai, bahkan yang baru pertama pegang aplikasi kasir">Tiga langkah ini cukup untuk mulai jualan. Fitur lain bisa dinyalakan pelan-pelan saat usaha tumbuh.</Head>
+        <EaseSteps />
+      </section>
+      <section id="untung" className="lp-sec" aria-labelledby="ops-h">
+        <Head id="ops-h" title="Untung lebih jelas, dapur dan laci lebih rapi">Tahu menu mana yang benar-benar menghasilkan, tagih meja yang makan dulu bayar belakangan, dan jaga dapur tetap lancar saat ramai.</Head>
+        <Ops />
+      </section>
+      <section id="pantau" className="lp-sec" aria-labelledby="pantau-h">
+        <Monitor />
+      </section>
+      <section id="fitur" className="lp-sec" aria-labelledby="feat-h">
+        <Head id="feat-h" title="Dasar yang dipakai setiap hari">Kasir, stok, laporan, dan hak akses. Semuanya dari akun toko yang sama, di HP, tablet, atau komputer.</Head>
+        <Features keys={["kasir", "stok", "laporan", "akses"]} />
+      </section>
+    </>
+  );
+}
+
+/** Toko barang, sisi kasir: jualan sehari-hari. */
+function RetailKasir() {
   return (
     <>
       <section id="simulasi-toko" className="lp-sec" aria-labelledby="simt-h">
-        <div className="lp-sec-head">
-          <h2 id="simt-h">Dari isi produk sampai untung terlihat</h2>
-          <p>Satu hari di toko baju, dilihat dari HP pemilik dan layar kasir. Ketuk langkah mana saja untuk melompat.</p>
-        </div>
-        <RetailStory />
+        <Head id="simt-h" title="Scan, pilih ukuran, bayar">Satu pembeli di toko baju, dilihat dari layar kasir. Ketuk langkah mana saja untuk melompat.</Head>
+        <RetailStory side="kasir" />
       </section>
+      <section id="fitur-kasir" className="lp-sec" aria-labelledby="fk-h">
+        <Head id="fk-h" title="Kasir tetap lancar, pelanggan punya alasan kembali">Jualan jalan saat sinyal hilang, tidak wajib beli alat scan, dan laci tercatat per shift.</Head>
+        <RetailKasirFeatures />
+      </section>
+    </>
+  );
+}
 
+/** Toko barang, sisi pemilik: produk, stok, laporan. */
+function RetailOwner() {
+  return (
+    <>
+      <section id="pemilik-toko" className="lp-sec" aria-labelledby="pt-h">
+        <Head id="pt-h" title="Dari isi produk sampai untung terlihat">Yang diatur dan dipantau pemilik dari HP. Ketuk langkah mana saja untuk melompat.</Head>
+        <RetailStory side="pemilik" />
+      </section>
       <section id="mudah" className="lp-sec" aria-labelledby="mudah-h">
-        <div className="lp-sec-head">
-          <h2 id="mudah-h">Gampang dipakai, bahkan yang baru pertama pegang aplikasi kasir</h2>
-          <p>Tidak perlu komputer atau alat mahal. Tiga langkah ini cukup untuk mulai jualan hari ini.</p>
-        </div>
+        <Head id="mudah-h" title="Gampang dipakai, bahkan yang baru pertama pegang aplikasi kasir">Tidak perlu komputer atau alat mahal. Tiga langkah ini cukup untuk mulai jualan hari ini.</Head>
         <EaseSteps retail />
       </section>
-
       <section id="fitur-toko" className="lp-sec" aria-labelledby="ft-h">
-        <div className="lp-sec-head">
-          <h2 id="ft-h">Untung lebih jelas, kasir lebih rapi</h2>
-          <p>Tahu barang mana yang benar-benar menghasilkan, jualan tetap jalan saat sinyal hilang, dan pelanggan punya alasan untuk kembali.</p>
-        </div>
-        <RetailFeatures />
+        <Head id="ft-h" title="Tahu barang mana yang menghasilkan">Modal per produk dan per varian, dan kasir tidak bisa mengubah harga.</Head>
+        <RetailOwnerFeatures />
       </section>
-
       <section id="pantau" className="lp-sec" aria-labelledby="pantau-h">
         <Monitor retail />
       </section>

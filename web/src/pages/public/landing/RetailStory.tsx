@@ -5,18 +5,26 @@ import { useCountUp, usePhase, useReducedMotion, useStepper, useVisible } from "
 
 // Satu hari di toko baju: produk berukuran diisi, diberi label, discan di kasir, stok & laporan ikut bergerak.
 // Label dan alurnya meniru layar mode toko barang yang sebenarnya.
-type Key = "edit" | "label" | "scan" | "pay" | "stock" | "report";
-const STEPS: { key: Key; who: string; title: string; body: string; dur: number; focus: "phone" | "board" }[] = [
-  { key: "edit", who: "Pemilik", title: "Isi produk sekali, varian jadi sendiri", body: "Ketik warna dan ukurannya. Semua kombinasi langsung dibuat, masing-masing dengan harga dan stok sendiri.", dur: 4200, focus: "phone" },
-  { key: "label", who: "Pemilik", title: "Pasang barcode", body: "Barang pabrik cukup discan barcode kemasannya. Belum ada? Buat kode, lalu cetak label tempel.", dur: 3600, focus: "phone" },
-  { key: "scan", who: "Kasir", title: "Scan, langsung masuk keranjang", body: "Pakai alat scan atau kamera HP. Ukuran dan warnanya ikut terbaca, tidak perlu memilih lagi.", dur: 3600, focus: "board" },
-  { key: "pay", who: "Kasir", title: "Terima bayar", body: "Tunai, QRIS, transfer, atau kartu. Kembalian dihitung sendiri, penjualan langsung selesai.", dur: 3600, focus: "board" },
-  { key: "stock", who: "Pemilik", title: "Stok per ukuran berkurang sendiri", body: "Ukuran yang tinggal sedikit ditandai, yang habis tidak bisa dijual. Tidak perlu hitung manual di gudang.", dur: 3600, focus: "phone" },
-  { key: "report", who: "Pemilik", title: "Untung hari ini kelihatan", body: "Omzet, untung, dan varian terlaris terbarui setiap transaksi. Bisa dilihat dari mana saja.", dur: 4200, focus: "phone" },
-];
-const at = (k: Key) => STEPS.findIndex((s) => s.key === k);
+type Key = "edit" | "label" | "scan" | "pick" | "pay" | "stock" | "report";
+type Step = { key: Key; who: string; title: string; body: string; dur: number };
+export type RetailSide = "kasir" | "pemilik";
+// Kasir: yang terjadi di meja kasir. Pemilik: yang diatur dan dipantau dari HP pemilik.
+const SIDES: Record<RetailSide, Step[]> = {
+  kasir: [
+    { key: "scan", who: "Kasir", title: "Scan, langsung masuk keranjang", body: "Pakai alat scan atau kamera HP. Ukuran dan warnanya ikut terbaca, tidak perlu memilih lagi.", dur: 3600 },
+    { key: "pick", who: "Kasir", title: "Tanpa barcode? Ketuk lalu pilih ukuran", body: "Pilihan warna dan ukuran muncul sendiri. Yang stoknya habis tidak bisa dipilih.", dur: 3800 },
+    { key: "pay", who: "Kasir", title: "Terima bayar", body: "Tunai, QRIS, transfer, atau kartu. Kembalian dihitung sendiri, penjualan langsung selesai.", dur: 3800 },
+  ],
+  pemilik: [
+    { key: "edit", who: "Pemilik", title: "Isi produk sekali, varian jadi sendiri", body: "Ketik warna dan ukurannya. Semua kombinasi langsung dibuat, masing-masing dengan harga dan stok sendiri.", dur: 4200 },
+    { key: "label", who: "Pemilik", title: "Pasang barcode", body: "Barang pabrik cukup discan barcode kemasannya. Belum ada? Buat kode, lalu cetak label tempel.", dur: 3600 },
+    { key: "stock", who: "Pemilik", title: "Stok per ukuran berkurang sendiri", body: "Setiap kasir menjual, stoknya terpotong. Ukuran yang tinggal sedikit ditandai, yang habis tidak bisa dijual.", dur: 3600 },
+    { key: "report", who: "Pemilik", title: "Untung hari ini kelihatan", body: "Omzet, laba kotor, dan varian terlaris terbarui setiap transaksi. Bisa dilihat dari mana saja.", dur: 4200 },
+  ],
+};
 
-export function RetailStory() {
+export function RetailStory({ side }: { side: RetailSide }) {
+  const STEPS = SIDES[side];
   const root = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
   const [userPaused, setUserPaused] = useState<boolean | null>(null);
@@ -27,7 +35,7 @@ export function RetailStory() {
   const s = STEPS[step];
 
   return (
-    <div ref={root} className={`lp-story${running ? "" : " is-still"}`} data-focus={s.focus}>
+    <div ref={root} className={`lp-story only-${side === "pemilik" ? "phone" : "board"}${running ? "" : " is-still"}`}>
       <ol className="lp-steps" aria-label="Langkah simulasi">
         {STEPS.map((x, i) => (
           <li key={x.key}>
@@ -64,19 +72,22 @@ export function RetailStory() {
           <strong>{s.title}</strong>
           <span className="b">{s.body}</span>
         </p>
-        <div className="lp-devices">
-          <div className={`lp-dev lp-dev-phone${s.focus === "phone" ? " is-focus" : ""}`}>
-            <span className="lp-dev-label">HP pemilik</span>
-            <div className="lp-phone">
-              <div className="lp-screen">
-                <OwnerScreen k={s.key} step={step} running={running} />
+        <div className="lp-devices single">
+          {side === "pemilik" ? (
+            <div className="lp-dev lp-dev-phone is-focus">
+              <span className="lp-dev-label">HP pemilik</span>
+              <div className="lp-phone">
+                <div className="lp-screen">
+                  <OwnerScreen k={s.key} running={running} />
+                </div>
               </div>
             </div>
-          </div>
-          <div className={`lp-dev lp-dev-board${s.focus === "board" ? " is-focus" : ""}`}>
-            <span className="lp-dev-label">Layar kasir</span>
-            <Till k={s.key} step={step} running={running} />
-          </div>
+          ) : (
+            <div className="lp-dev lp-dev-board is-focus">
+              <span className="lp-dev-label">Layar kasir</span>
+              <Till k={s.key} running={running} />
+            </div>
+          )}
         </div>
         <div className="lp-dots">
           {STEPS.map((x, i) => (
@@ -119,11 +130,11 @@ const COLORS = [
 const SIZES = ["S", "M", "L", "XL"];
 
 // ---------- HP pemilik ----------
-function OwnerScreen({ k, step, running }: { k: Key; step: number; running: boolean }) {
+function OwnerScreen({ k, running }: { k: Key; running: boolean }) {
   if (k === "edit") return <EditScreen running={running} />;
   if (k === "label") return <LabelScreen running={running} />;
   if (k === "report") return <ReportScreen running={running} />;
-  return <StockScreen k={k} step={step} running={running} />;
+  return <StockScreen running={running} />;
 }
 
 function EditScreen({ running }: { running: boolean }) {
@@ -200,16 +211,17 @@ function LabelScreen({ running }: { running: boolean }) {
   );
 }
 
-function StockScreen({ k, step, running }: { k: Key; step: number; running: boolean }) {
-  const phase = usePhase(k === "stock" ? "stock" : "s", k === "stock" ? [900] : [], running);
-  const sold = step > at("stock") || (k === "stock" && phase >= 1);
+function StockScreen({ running }: { running: boolean }) {
+  const k: Key = "stock";
+  const phase = usePhase("stock", [1000], running);
+  const sold = phase >= 1;
   const m = sold ? 2 : 3;
   return (
     <div className="lp-rs">
       <div className="lp-rs-bar"><b>Stok</b><span className="lp-badge warn">{sold ? 2 : 1} menipis</span></div>
       <div className="lp-rs-body">
         {k === "stock" && phase >= 1 && (
-          <div className="lp-rs-alert" key="a"><AlertTriangle /> Kaos Polos Hitam M tinggal 2. Saatnya pesan ulang.</div>
+          <div className="lp-rs-alert" key="a"><AlertTriangle /> Kasir baru menjual Kaos Polos Hitam M. Tinggal 2, saatnya pesan ulang.</div>
         )}
         <div className="lp-rs-card">
           <div className="lp-rs-prod">
@@ -295,40 +307,45 @@ const LINES = [
   { n: "Kaos Polos Katun", v: "Hitam / M", p: 75000, code: "2041736592018" },
   { n: "Kemeja Flanel", v: "Biru / L", p: 145000, code: "2088104337452" },
   { n: "Totebag Kanvas", v: "", p: 45000, code: "8991002101234" },
+  { n: "Kaos Polos Katun", v: "Putih / L", p: 75000, code: "" },
 ];
 const TOTAL = LINES.reduce((a, b) => a + b.p, 0);
+const PAID = 350000;
 
-function Till({ k, step, running }: { k: Key; step: number; running: boolean }) {
+function Till({ k, running }: { k: Key; running: boolean }) {
   const scanPhase = usePhase(k === "scan" ? "scan" : "a", k === "scan" ? [600, 1500, 2400] : [], running);
+  const pickPhase = usePhase(k === "pick" ? "pick" : "p", k === "pick" ? [600, 1400, 2200, 3000] : [], running);
   const payPhase = usePhase(k === "pay" ? "pay" : "b", k === "pay" ? [700, 1500, 2400] : [], running);
-  const shown = k === "scan" ? scanPhase : k === "pay" ? 3 : 0;
-  const paid = (k === "pay" && payPhase >= 3) || step > at("pay");
-  const sales = useCountUp(paid ? 2_680_000 : 2_415_000, running);
+  const shown = k === "scan" ? scanPhase : k === "pick" ? (pickPhase >= 4 ? 4 : 3) : 4;
+  const paid = k === "pay" && payPhase >= 3;
+  const sales = useCountUp(paid ? 2_755_000 : 2_415_000, running);
   const total = LINES.slice(0, shown).reduce((a, b) => a + b.p, 0);
-  const lastCode = shown > 0 ? LINES[shown - 1].code : "";
+  const lastCode = k === "scan" && shown > 0 ? LINES[shown - 1].code : "";
+  const picker = k === "pick" && pickPhase >= 1 && pickPhase < 4;
   return (
     <div className="lp-board lp-till">
       <div className="lp-b-head">
         <b>Kasir</b>
         <span className="lp-kpi">
           <small>Penjualan hari ini</small>
-          <b className={paid && k === "pay" ? "up" : ""}>{rupiah(sales)}</b>
+          <b className={paid ? "up" : ""}>{rupiah(sales)}</b>
         </span>
       </div>
       <div className="lp-till-in">
         <div className="lp-till-left">
           <div className={`lp-till-search${k === "scan" ? " live" : ""}`} key={k === "scan" ? `s${shown}` : "s"}>
             <ScanLine />
-            {k === "scan" && shown > 0 ? <span className="num">{lastCode}</span> : <span className="lp-ph">Scan barcode atau cari barang</span>}
+            {lastCode ? <span className="num">{lastCode}</span> : <span className="lp-ph">Scan barcode atau cari barang</span>}
             {k === "scan" && <span className="laser" aria-hidden="true" />}
           </div>
           <div className="lp-till-grid">
-            {GRID.map((g) => (
-              <div key={g.n} className="lp-till-p">
+            {GRID.map((g, i) => (
+              <div key={g.n} className={`lp-till-p${k === "pick" && i === 0 && pickPhase === 0 ? " hit" : ""}`}>
                 <Swatch icon={g.icon} color={g.c} />
                 <b>{g.n}</b>
                 <span className="num">{g.p}</span>
                 {g.v && <em>{g.v}</em>}
+                {k === "pick" && i === 0 && pickPhase === 0 && running && <Tap style={{ left: "50%", top: "40%", animationDelay: "250ms" }} />}
               </div>
             ))}
           </div>
@@ -336,23 +353,51 @@ function Till({ k, step, running }: { k: Key; step: number; running: boolean }) 
         <div className="lp-till-cart">
           <small>Keranjang</small>
           {LINES.slice(0, shown).map((l) => (
-            <div className="lp-till-line" key={l.n}>
+            <div className="lp-till-line" key={l.n + l.v}>
               <span>{l.n}{l.v && <i>{l.v}</i>}</span>
               <b className="num">{rupiah(l.p)}</b>
             </div>
           ))}
-          {shown === 0 && <div className="lp-col-empty">{paid ? "Penjualan berikutnya" : "Arahkan alat scan ke barcode"}</div>}
+          {shown === 0 && <div className="lp-col-empty">Arahkan alat scan ke barcode</div>}
           <div className="lp-rt-tot"><span>Total</span><b className="num">{rupiah(total)}</b></div>
           <span className="lp-btn primary">Bayar{k === "pay" && payPhase === 0 && <Tap />}</span>
         </div>
       </div>
+      {picker && (
+        <div className="lp-till-pay">
+          <div className="lp-till-modal">
+            <b>Kaos Polos Katun</b>
+            <div className="lp-vp">
+              <small>Warna</small>
+              <div>
+                {["Hitam", "Putih", "Navy"].map((c) => (
+                  <span key={c} className={c === "Putih" && pickPhase >= 2 ? "on" : ""}>
+                    {c}
+                    {c === "Putih" && pickPhase === 1 && <Tap />}
+                  </span>
+                ))}
+              </div>
+              <small>Ukuran</small>
+              <div>
+                {["S", "M", "L", "XL"].map((z) => (
+                  <span key={z} className={`${z === "L" && pickPhase >= 3 ? "on" : ""}${z === "XL" ? " out" : ""}`}>
+                    {z}
+                    {z === "L" && pickPhase === 2 && <Tap />}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <span className="lp-btn primary">Tambah · {rupiah(75000)}{pickPhase === 3 && <Tap />}</span>
+          </div>
+        </div>
+      )}
       {k === "pay" && payPhase >= 1 && (
         <div className="lp-till-pay">
           <div className="lp-till-modal">
             <b>Terima bayar {rupiah(TOTAL)}</b>
             <div className="lp-seg"><span className="on">Tunai</span><span>QRIS</span><span>Transfer</span><span>Kartu</span></div>
-            <div className="lp-shift-row"><span>Uang diterima</span><b className="num">{payPhase >= 2 ? rupiah(300000) : "—"}</b></div>
-            <div className="lp-shift-row tot"><span>Kembalian</span><b className="num">{payPhase >= 2 ? rupiah(300000 - TOTAL) : "—"}</b></div>
+            <div className="lp-shift-row"><span>Uang diterima</span><b className="num">{payPhase >= 2 ? rupiah(PAID) : "—"}</b></div>
+            <div className="lp-shift-row tot"><span>Kembalian</span><b className="num">{payPhase >= 2 ? rupiah(PAID - TOTAL) : "—"}</b></div>
             {payPhase >= 3 ? (
               <span className="lp-btn done"><Check /> Lunas · stok terpotong</span>
             ) : (

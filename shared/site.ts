@@ -81,7 +81,7 @@ export const FEATURES = {
   stock: { title: "Stok berkurang sendiri", desc: "Stok turun tiap terjual, diingatkan saat menipis.", href: "/#fitur" },
   reports: { title: "Laporan penjualan", desc: "Omzet, menu terlaris, dan jam ramai, terbarui setiap transaksi.", href: "/#pantau" },
   staff: { title: "Akun karyawan & hak akses", desc: "Kasir tidak bisa mengubah harga atau melihat laporan.", href: "/#fitur" },
-  variants: { title: "Varian ukuran & warna", desc: "Tiap kombinasi punya harga, stok, dan barcode sendiri. Kasir tinggal pilih atau scan.", href: "/#simulasi-toko" },
+  variants: { title: "Varian ukuran & warna", desc: "Tiap kombinasi punya harga, stok, dan barcode sendiri. Kasir tinggal pilih atau scan.", href: "/#pemilik-toko" },
   barcode: { title: "Scan barcode & cetak label", desc: "Pakai alat scan atau kamera HP. Barang tanpa barcode diberi kode lalu dicetak labelnya.", href: "/#simulasi-toko" },
   bills: { title: "Makan dulu, bayar belakangan", desc: "Pesanan satu meja jadi satu tagihan. Tagihan yang lama belum dibayar ditandai merah.", href: "/#untung" },
 } as const;
@@ -89,12 +89,12 @@ export type FeatureKey = keyof typeof FEATURES;
 /** Di halaman solusi toko barang, fitur umum diarahkan ke peragaan versi toko di landing. */
 export const RETAIL_FEATURE_HREF: Partial<Record<FeatureKey, string>> = {
   pos: "/#simulasi-toko",
-  stock: "/#simulasi-toko",
+  stock: "/#pemilik-toko",
   margin: "/#fitur-toko",
-  offline: "/#fitur-toko",
+  offline: "/#fitur-kasir",
   staff: "/#fitur-toko",
-  stamp: "/#fitur-toko",
-  shift: "/#fitur-toko",
+  stamp: "/#fitur-kasir",
+  shift: "/#fitur-kasir",
   reports: "/?untuk=toko#pantau",
 };
 export const FEATURE_KEYS = Object.keys(FEATURES) as FeatureKey[];
@@ -116,7 +116,7 @@ export const DEFAULT_SITE: Site = {
         {
           title: "Di kasir & dapur",
           items: [
-            { label: "Kasir & pembayaran", href: "/#fitur" },
+            { label: "Kasir & pembayaran", href: "/#kasir" },
             { label: "Layar dapur & bar", href: "/#untung" },
             { label: "Modal & untung per menu", href: "/#untung" },
             { label: "Laporan penjualan", href: "/#pantau" },
@@ -127,9 +127,9 @@ export const DEFAULT_SITE: Site = {
           title: "Di toko barang",
           items: [
             { label: "Scan barcode & varian ukuran", href: "/#simulasi-toko" },
-            { label: "Cetak label barcode", href: "/#simulasi-toko" },
+            { label: "Cetak label barcode", href: "/#pemilik-toko" },
             { label: "Modal & untung per produk", href: "/#fitur-toko" },
-            { label: "Kamera HP jadi alat scan", href: "/#fitur-toko" },
+            { label: "Kamera HP jadi alat scan", href: "/#fitur-kasir" },
           ],
         },
       ],
