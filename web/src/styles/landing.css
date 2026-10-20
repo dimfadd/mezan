@@ -997,3 +997,10 @@
   .sf-brand { grid-column: 1 / -1; }
 }
 @media (max-width: 339px) { .sf-in { grid-template-columns: minmax(0, 1fr); } }
+
+/* Hero: label kecil di atas judul & jenis usaha */
+.lp-eyebrow { display: inline-block; margin-bottom: 14px; padding: 5px 14px; border-radius: 999px; background: var(--brand-soft); color: var(--brand-text); font-weight: 700; font-size: 0.88rem; }
+.lp-for { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 8px; margin-top: 18px; font-size: 0.9rem; }
+.lp-for span { color: var(--ink-3); font-weight: 600; }
+.lp-for a { padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--ink); text-decoration: none; font-weight: 600; background: var(--surface); }
+.lp-for a:hover, .lp-for a:focus-visible { border-color: var(--brand); color: var(--brand-text); }

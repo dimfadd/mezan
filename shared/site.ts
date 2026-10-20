@@ -56,7 +56,7 @@ export interface Site {
 export type SiteKey = keyof Site;
 export const SITE_KEYS: SiteKey[] = ["nav", "solutions", "testimonials", "footer"];
 
-export const SOLUTION_ICONS = ["coffee", "utensils", "store", "cake", "soup", "sandwich"] as const;
+export const SOLUTION_ICONS = ["coffee", "utensils", "store", "cake", "soup", "sandwich", "shirt", "bag"] as const;
 export type SolutionIcon = (typeof SOLUTION_ICONS)[number];
 
 /** Katalog fitur yang bisa ditampilkan di halaman solusi. Tautannya ke bagian landing yang memperagakannya. */
@@ -106,6 +106,7 @@ export const DEFAULT_SITE: Site = {
             { label: "Layar dapur & bar", href: "/#untung" },
             { label: "Modal & untung per menu", href: "/#untung" },
             { label: "Laporan penjualan", href: "/#pantau" },
+            { label: "Kasir untuk toko baju & aksesoris", href: "/solusi/toko-retail" },
           ],
         },
       ],
@@ -115,6 +116,21 @@ export const DEFAULT_SITE: Site = {
     { label: "Paket", href: "/#paket", sections: [] },
   ],
   solutions: [
+    {
+      slug: "warung",
+      name: "UMKM kaki lima & warung",
+      icon: "store",
+      headline: "UMKM cukup satu HP untuk catat pesanan, terima bayar, dan lihat untung.",
+      intro: "Tidak perlu mesin kasir mahal. Pelaku UMKM cukup membuka Pesan.in dari HP yang sudah ada, mencatat pesanan dengan beberapa ketukan, dan melihat untung harian tanpa menghitung manual.",
+      points: [
+        "Bisa dijalankan satu orang dari satu HP.",
+        "Kasir tetap mencatat walau sinyal hilang, terkirim sendiri saat online.",
+        "Isi modal per porsi, laporan menunjukkan untung tiap menu.",
+        "QR bawa pulang supaya pembeli bisa pesan tanpa antre.",
+      ],
+      features: ["pos", "offline", "margin", "takeaway", "reports", "stock"],
+      published: true,
+    },
     {
       slug: "kedai-kopi",
       name: "Kedai kopi",
@@ -128,6 +144,21 @@ export const DEFAULT_SITE: Site = {
         "Happy hour sore memotong harga sendiri pada jamnya.",
       ],
       features: ["qr", "eta", "kds", "stamp", "happy", "takeaway"],
+      published: true,
+    },
+    {
+      slug: "kafe",
+      name: "Kafe & tempat nongkrong",
+      icon: "cake",
+      headline: "Menu yang menggoda dilihat, pembeli yang betah balik lagi.",
+      intro: "Foto dan video menu tampil menarik di HP pembeli, menu terlaris diberi tanda, dan setiap kunjungan bisa berujung ulasan di Google Maps.",
+      points: [
+        "Mode video membuat menu terasa hidup, seperti menggulir media sosial.",
+        "Saran pasangan menu menawarkan minuman atau camilan yang cocok.",
+        "Struk lewat WhatsApp dan rating per menu, lalu lanjut ulasan Google Maps.",
+        "Akun karyawan dengan hak akses, kasir tidak bisa mengubah harga.",
+      ],
+      features: ["video", "pairs", "rating", "stamp", "happy", "staff"],
       published: true,
     },
     {
@@ -146,39 +177,25 @@ export const DEFAULT_SITE: Site = {
       published: true,
     },
     {
-      slug: "warung",
-      name: "Warung & kaki lima",
-      icon: "store",
-      headline: "Cukup satu HP untuk catat pesanan, terima bayar, dan lihat untung.",
-      intro: "Tidak perlu mesin kasir mahal. Buka dari HP yang sudah ada, catat pesanan dengan beberapa ketukan, dan lihat untung harian tanpa menghitung manual.",
+      slug: "toko-retail",
+      name: "Toko baju & aksesoris",
+      icon: "shirt",
+      headline: "Kasir dan stok toko dalam satu HP, dari lapak UMKM sampai butik.",
+      intro: "Catat penjualan baju, aksesoris, atau barang kelontong dengan beberapa ketukan. Stok berkurang setiap terjual, kamu diingatkan saat menipis, dan laporan menunjukkan barang mana yang paling laku.",
       points: [
-        "Bisa dijalankan satu orang dari satu HP.",
-        "Kasir tetap mencatat walau sinyal hilang, terkirim sendiri saat online.",
-        "Isi modal per porsi, laporan menunjukkan untung tiap menu.",
-        "QR bawa pulang supaya pembeli bisa pesan tanpa antre.",
+        "Kasir di HP, tablet, atau komputer: tunai, QRIS, transfer, atau kartu.",
+        "Stok turun sendiri setiap terjual dan diingatkan saat menipis.",
+        "Isi harga modal, laporan menunjukkan untung per barang.",
+        "Karyawan punya akun sendiri; kasir tidak bisa mengubah harga atau melihat laporan.",
+        "Kartu stempel lewat nomor HP supaya pelanggan balik lagi.",
       ],
-      features: ["pos", "offline", "margin", "takeaway", "reports", "stock"],
-      published: true,
-    },
-    {
-      slug: "kafe",
-      name: "Kafe & tempat nongkrong",
-      icon: "cake",
-      headline: "Menu yang menggoda dilihat, pembeli yang betah balik lagi.",
-      intro: "Foto dan video menu tampil menarik di HP pembeli, menu terlaris diberi tanda, dan setiap kunjungan bisa berujung ulasan di Google Maps.",
-      points: [
-        "Mode video membuat menu terasa hidup, seperti menggulir media sosial.",
-        "Saran pasangan menu menawarkan minuman atau camilan yang cocok.",
-        "Struk lewat WhatsApp dan rating per menu, lalu lanjut ulasan Google Maps.",
-        "Akun karyawan dengan hak akses, kasir tidak bisa mengubah harga.",
-      ],
-      features: ["video", "pairs", "rating", "stamp", "happy", "staff"],
+      features: ["pos", "stock", "margin", "reports", "staff", "offline", "stamp", "shift"],
       published: true,
     },
   ],
   testimonials: [],
   footer: {
-    tagline: "Menu QR, kasir, dan dapur dalam satu aplikasi untuk warung, kafe, dan resto.",
+    tagline: "Aplikasi kasir dan menu QR buat UMKM sampai bisnis besar: kaki lima, warung, kafe, resto, sampai toko baju.",
     columns: [
       {
         title: "Layanan",

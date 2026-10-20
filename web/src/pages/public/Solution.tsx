@@ -2,7 +2,7 @@ import { useEffect, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   ArrowRight, BarChart3, BellRing, Boxes, Cake, Calculator, Check, ChefHat, Clapperboard, Clock3, Coffee, DoorOpen, QrCode, ReceiptText,
-  Sandwich, ShoppingBag, Soup, Sparkles, Stamp, Star, Store, Timer, Users, UserCog, Utensils, Wallet, WifiOff, Wallet2,
+  Sandwich, Shirt, ShoppingBag, Soup, Sparkles, Stamp, Star, Store, Timer, Users, UserCog, Utensils, Wallet, WifiOff, Wallet2,
 } from "lucide-react";
 import { useSite } from "../../lib/site";
 import { FEATURES, type FeatureKey, type SolutionIcon } from "../../../../shared/site";
@@ -17,6 +17,8 @@ export const SOLUTION_ICON: Record<SolutionIcon, ReactNode> = {
   cake: <Cake />,
   soup: <Soup />,
   sandwich: <Sandwich />,
+  shirt: <Shirt />,
+  bag: <ShoppingBag />,
 };
 
 export const FEATURE_ICON: Record<FeatureKey, ReactNode> = {
@@ -42,6 +44,9 @@ export const FEATURE_ICON: Record<FeatureKey, ReactNode> = {
   staff: <UserCog />,
 };
 
+/** Huruf kecil untuk dipakai di tengah kalimat, tapi singkatan seperti UMKM tetap kapital. */
+const lc = (n: string) => (/^[A-Z]{2}/.test(n) ? n : n.charAt(0).toLowerCase() + n.slice(1));
+
 export function SolutionPage() {
   const { slug = "" } = useParams();
   const { solutions } = useSite();
@@ -66,7 +71,7 @@ export function SolutionPage() {
       ) : (
         <>
           <header className="sol-hero">
-            <span className="sol-tag"><span className="ic">{SOLUTION_ICON[s.icon]}</span> Untuk {s.name.toLowerCase()}</span>
+            <span className="sol-tag"><span className="ic">{SOLUTION_ICON[s.icon]}</span> Untuk {lc(s.name)}</span>
             <h1>{s.headline}</h1>
             {s.intro && <p className="lead">{s.intro}</p>}
             <div className="row wrap lp-cta">
@@ -91,7 +96,7 @@ export function SolutionPage() {
           {s.features.length > 0 && (
             <section className="lp-sec" aria-labelledby="sol-feat">
               <div className="lp-sec-head">
-                <h2 id="sol-feat">Fitur yang paling terpakai di {s.name.toLowerCase()}</h2>
+                <h2 id="sol-feat">Fitur yang paling terpakai di {lc(s.name)}</h2>
                 <p>Ketuk salah satu untuk melihat peragaannya.</p>
               </div>
               <div className="sol-feats">

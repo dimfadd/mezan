@@ -15,7 +15,7 @@ const TABS: { value: Tab; label: string }[] = [
   { value: "testimonials", label: "Testimoni" },
   { value: "footer", label: "Footer" },
 ];
-const ICON_LABEL: Record<SolutionIcon, string> = { coffee: "Kopi", utensils: "Restoran", store: "Warung", cake: "Kafe/kue", soup: "Bakso/soto", sandwich: "Roti" };
+const ICON_LABEL: Record<SolutionIcon, string> = { coffee: "Kopi", utensils: "Restoran", store: "Warung", cake: "Kafe/kue", soup: "Bakso/soto", sandwich: "Roti", shirt: "Baju", bag: "Toko/aksesoris" };
 
 function move<T>(list: T[], i: number, d: -1 | 1) {
   const j = i + d;

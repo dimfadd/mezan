@@ -19,11 +19,12 @@ export function LandingPage() {
       <SiteNav />
 
       <header className="lp-hero">
+        <span className="lp-eyebrow">Aplikasi kasir & menu QR buatan Indonesia</span>
         <h1>
-          Pelanggan lihat dulu wujudnya, <span className="hl">baru pesan.</span>
+          Aplikasi kasir buat <span className="hl">UMKM</span> sampai bisnis besar.
         </h1>
         <p className="lead">
-          Pesan.in memberi warung, kafe, dan resto kamu menu QR dengan foto dan video di setiap meja. Pesanan langsung masuk ke kasir dan dapur, pembeli tahu kapan pesanannya siap, dan laporan penjualan siap dibaca.
+          Dari gerobak kaki lima, warung, kedai kopi, sampai resto dan toko baju. Catat penjualan dari HP, stok berkurang sendiri, dan untung harian langsung terlihat. Untuk usaha makanan, pembeli bisa memesan dari meja lewat menu QR berfoto dan video, lalu melihat kapan pesanannya siap.
         </p>
         <div className="row wrap lp-cta">
           <Link className="btn btn-primary btn-lg" to="/daftar">Coba gratis 14 hari</Link>
@@ -31,10 +32,18 @@ export function LandingPage() {
           {import.meta.env.DEV && <a className="btn btn-ghost btn-lg" href="/m/contoh-meja1">Buka menu contoh</a>}
         </div>
         <ul className="lp-assure">
-          <li><Check aria-hidden="true" /> Tanpa kartu kredit</li>
+          <li><Check aria-hidden="true" /> Gratis 14 hari, tanpa kartu kredit</li>
           <li><Check aria-hidden="true" /> Tanpa pasang aplikasi</li>
-          <li><Check aria-hidden="true" /> Bisa mulai dari satu HP</li>
+          <li><Check aria-hidden="true" /> UMKM bisa mulai dari satu HP</li>
         </ul>
+        {solutions.length > 0 && (
+          <nav className="lp-for" aria-label="Untuk jenis usaha">
+            <span>Cocok untuk</span>
+            {solutions.map((s) => (
+              <Link key={s.slug} to={`/solusi/${s.slug}`}>{s.name}</Link>
+            ))}
+          </nav>
+        )}
       </header>
 
       <section id="simulasi" className="lp-sec" aria-labelledby="sim-h">
@@ -47,8 +56,8 @@ export function LandingPage() {
 
       <section id="mudah" className="lp-sec" aria-labelledby="mudah-h">
         <div className="lp-sec-head">
-          <h2 id="mudah-h">Gampang, bahkan untuk yang baru pertama pakai aplikasi kasir</h2>
-          <p>Banyak fitur bukan berarti rumit. Tiga langkah ini cukup untuk mulai menerima pesanan, sisanya bisa dinyalakan pelan-pelan.</p>
+          <h2 id="mudah-h">Gampang dipakai pelaku UMKM, bahkan yang baru pertama pegang aplikasi kasir</h2>
+          <p>Banyak fitur bukan berarti rumit. Tiga langkah ini cukup untuk mulai jualan, sisanya bisa dinyalakan pelan-pelan saat usaha tumbuh.</p>
         </div>
         <EaseSteps />
       </section>
@@ -93,28 +102,30 @@ export function LandingPage() {
 
       <section id="paket" className="lp-sec" aria-labelledby="class-h">
         <div className="lp-sec-head">
-          <h2 id="class-h">Cocok untuk gerobak sampai resto</h2>
-          <p>Mulai dari template yang sudah rapi. Naik paket kalau usahanya tumbuh, datanya tetap.</p>
+          <h2 id="class-h">Dari UMKM kaki lima sampai resto besar</h2>
+          <p>Mulai kecil dengan yang perlu saja. Naik paket kalau usahanya tumbuh, datanya tetap.</p>
         </div>
         <div className="lp-classes">
           <article className="lp-class">
-            <span className="who">Warung & kafe kecil</span>
-            <h3>Langsung jalan hari ini</h3>
+            <span className="who">UMKM: kaki lima, warung, toko kecil</span>
+            <h3>Langsung jualan hari ini</h3>
             <ul>
               <li><Check aria-hidden="true" /> Menu QR dengan template yang mudah dibaca di HP</li>
               <li><Check aria-hidden="true" /> Beberapa foto per menu, ditambah video di paket Kafe</li>
               <li><Check aria-hidden="true" /> Kasir, papan pesanan, stok, dan laporan</li>
               <li><Check aria-hidden="true" /> Bisa dipakai satu orang dari satu HP</li>
               <li><Check aria-hidden="true" /> Kasir tetap mencatat saat internet putus</li>
+              <li><Check aria-hidden="true" /> Jualan barang juga bisa: baju, aksesoris, kelontong</li>
             </ul>
           </article>
           <article className="lp-class premium">
-            <span className="who">Resto & kafe besar</span>
-            <h3>Menu dengan wajah brand sendiri</h3>
+            <span className="who">Resto, kafe & bisnis besar</span>
+            <h3>Rapi saat ramai, dengan wajah brand sendiri</h3>
             <ul>
               <li><Check aria-hidden="true" /> Warna, font, logo, dan gambar latar menu QR sendiri</li>
               <li><Check aria-hidden="true" /> Galeri lebih banyak foto dan video per menu</li>
               <li><Check aria-hidden="true" /> Lebih banyak meja dan akun karyawan</li>
+              <li><Check aria-hidden="true" /> Layar dapur & bar, shift kasir, dan rekap laci</li>
             </ul>
           </article>
         </div>
@@ -130,8 +141,8 @@ export function LandingPage() {
 
       <section className="lp-final receipt-edge" aria-labelledby="final-h">
         <div className="lp-final-in">
-          <h2 id="final-h">Coba 14 hari, tanpa kartu kredit.</h2>
-          <p>Daftar, isi menu, cetak QR meja. Akun karyawan bisa dibuat setelahnya.</p>
+          <h2 id="final-h">UMKM bisa mulai hari ini.</h2>
+          <p>Gratis 14 hari, tanpa kartu kredit. Daftar, isi menu atau produk, lalu mulai jualan dari HP. Akun karyawan bisa dibuat setelahnya.</p>
           <Link className="btn btn-primary btn-lg" to="/daftar">Daftarkan usaha</Link>
         </div>
       </section>
