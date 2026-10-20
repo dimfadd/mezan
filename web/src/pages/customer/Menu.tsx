@@ -442,7 +442,7 @@ export function CustomerMenuPage() {
       )}
       {video && (
         <VideoFeed
-          items={sections.flatMap((x) => x.items).filter((i) => i.media.length > 0 || i.image_url || i.video_url)}
+          items={sections.flatMap((x) => x.items)}
           lang={lang}
           priced={priced}
           canOrder={data.store.accepting_orders}

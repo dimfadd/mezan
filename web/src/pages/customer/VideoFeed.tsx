@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { initials } from "../../lib/format";
 import { ChevronUp, Info, Plus, ShoppingBag, ThumbsUp, X } from "lucide-react";
 import { rupiah } from "../../lib/format";
 import { useLang } from "../../lib/lang";
@@ -7,7 +8,9 @@ import type { Lang } from "../../../../shared/i18n";
 import type { Dish, Priced } from "./Menu";
 
 /**
- * Mode video ala TikTok: satu menu satu layar, geser ke atas untuk menu berikutnya.
+ * Mode geser ala TikTok/Reels: satu menu satu layar, geser ke atas untuk menu berikutnya.
+ * Foto dan video satu menu jadi carousel yang digeser ke samping; foto berganti sendiri seperti
+ * carousel foto di TikTok, sampai pembeli menyentuhnya. Menu tanpa foto tetap ikut, dengan inisial.
  * Hanya video yang sedang terlihat yang diputar (tanpa suara), supaya hemat kuota dan baterai.
  */
 export function VideoFeed({
@@ -51,13 +54,7 @@ export function VideoFeed({
     const io = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
-          const v = e.target.querySelector("video");
-          if (e.isIntersecting && e.intersectionRatio >= 0.6) {
-            setIdx(Number((e.target as HTMLElement).dataset.i));
-            v?.play().catch(() => {});
-          } else {
-            v?.pause();
-          }
+          if (e.isIntersecting && e.intersectionRatio >= 0.6) setIdx(Number((e.target as HTMLElement).dataset.i));
         }
       },
       { root, threshold: [0, 0.6, 1] },
@@ -98,19 +95,11 @@ export function VideoFeed({
       </div>
       {items.map((d, i) => {
         const p = priced(d);
-        const vid = d.media.find((m) => m.kind === "video")?.url ?? d.video_url;
-        const img = d.image_url ?? d.media.find((m) => m.kind === "image")?.url ?? null;
         const ok = !d.sold_out && p.open;
         const near = Math.abs(i - idx) <= 1; // muat media hanya untuk slide sekitar
         return (
           <section key={d.id} className="vf-slide" data-i={i} aria-label={d.name}>
-            <div className="vf-media">
-              {vid && near ? (
-                <video src={vid} poster={img ?? undefined} muted loop playsInline preload="metadata" aria-hidden="true" />
-              ) : img ? (
-                <img src={img} alt="" loading={near ? "eager" : "lazy"} decoding="async" />
-              ) : null}
-            </div>
+            <Carousel dish={d} active={i === idx} near={near} />
             <div className="vf-info">
               {d.tags.split(",").includes("bestseller") && (
                 <span className="stamp-best"><ThumbsUp aria-hidden="true" /> {t.bestSeller}</span>
@@ -132,6 +121,7 @@ export function VideoFeed({
                   <Info /> {t.seeDetail}
                 </button>
               </div>
+              {i === 0 && mediaOf(d).length > 1 && <p className="vf-side">{t.swipeSide}</p>}
               {i === 0 && items.length > 1 && (
                 <button type="button" className="vf-hint" onClick={() => go(1)}>
                   <ChevronUp aria-hidden="true" /> {t.swipeUp}
@@ -141,6 +131,100 @@ export function VideoFeed({
           </section>
         );
       })}
+    </div>
+  );
+}
+
+type Media = { kind: string; url: string };
+
+/** Galeri menu sesuai urutan pemilik; data lama tanpa galeri memakai kolom sampul. */
+function mediaOf(d: Dish): Media[] {
+  if (d.media.length) return d.media;
+  const out: Media[] = [];
+  if (d.image_url) out.push({ kind: "image", url: d.image_url });
+  if (d.video_url) out.push({ kind: "video", url: d.video_url });
+  return out;
+}
+
+const PHOTO_MS = 3500;
+
+function Carousel({ dish, active, near }: { dish: Dish; active: boolean; near: boolean }) {
+  const { t } = useLang();
+  const media = mediaOf(dish);
+  const track = useRef<HTMLDivElement>(null);
+  const vids = useRef<(HTMLVideoElement | null)[]>([]);
+  const [page, setPage] = useState(0);
+  const [touched, setTouched] = useState(false);
+  const poster = media.find((m) => m.kind === "image")?.url;
+
+  // Video hanya diputar kalau menunya sedang tampil dan halaman carousel-nya sedang dilihat.
+  useEffect(() => {
+    vids.current.forEach((v, i) => {
+      if (!v) return;
+      if (active && i === page) v.play().catch(() => {});
+      else v.pause();
+    });
+  }, [active, page, near]);
+
+  // Foto berganti sendiri seperti carousel foto TikTok, berhenti begitu pembeli menggeser sendiri.
+  useEffect(() => {
+    if (!active || touched || media.length < 2 || media[page]?.kind !== "image" || page >= media.length - 1) return;
+    const id = window.setTimeout(() => goTo(page + 1), PHOTO_MS);
+    return () => window.clearTimeout(id);
+  });
+
+  // Kembali ke awal saat menu ditinggalkan, supaya saat digeser balik mulai dari sampul.
+  useEffect(() => {
+    if (active) return;
+    setTouched(false);
+    const el = track.current;
+    if (el && el.scrollLeft) el.scrollTo({ left: 0 });
+  }, [active]);
+
+  const goTo = (n: number) => {
+    const el = track.current;
+    if (el) el.scrollTo({ left: n * el.clientWidth, behavior: "smooth" });
+  };
+  const onScroll = () => {
+    const el = track.current;
+    if (el) setPage(Math.round(el.scrollLeft / Math.max(1, el.clientWidth)));
+  };
+
+  if (!media.length) {
+    return (
+      <div className="vf-media vf-empty" aria-hidden="true">
+        <span className="vf-ini">{initials(dish.name)}</span>
+        <small>{t.noPhoto}</small>
+      </div>
+    );
+  }
+
+  return (
+    <div className="vf-media">
+      <div
+        className="vf-track"
+        ref={track}
+        onScroll={onScroll}
+        onPointerDown={() => setTouched(true)}
+        onTouchStart={() => setTouched(true)}
+      >
+        {media.map((m, i) => (
+          <div className="vf-page" key={m.url + i} aria-label={t.mediaPos(i + 1, media.length)}>
+            {!near ? null : m.kind === "video" ? (
+              <video ref={(el) => { vids.current[i] = el; }} src={m.url} poster={poster} muted loop playsInline preload="metadata" aria-hidden="true" />
+            ) : (
+              <img src={m.url} alt="" loading={active ? "eager" : "lazy"} decoding="async" />
+            )}
+          </div>
+        ))}
+      </div>
+      {media.length > 1 && (
+        <div className="vf-dots" aria-hidden="true">
+          {media.map((m, i) => (
+            <span key={i} className={`${i === page ? "on" : ""}${m.kind === "video" ? " v" : ""}`} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
