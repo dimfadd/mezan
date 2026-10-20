@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { isRetail, useSession } from "../../lib/session";
 import { Download, Star } from "lucide-react";
 import { BarChart, HBars } from "../../components/charts";
 import { Empty, ErrorState, Loading, PageHead, Segmented } from "../../components/ui";
@@ -13,6 +14,7 @@ interface Report {
   hours: { hour: number; orders: number; omzet: number }[];
   weekdays: { dow: number; orders: number; omzet: number }[];
   topItems: { name: string; qty: number; revenue: number }[];
+  topVariants?: { name: string; variant: string; qty: number; revenue: number }[];
   categories: { name: string; qty: number; revenue: number }[];
   payments: { method: string; orders: number; omzet: number }[];
   sources: { source: string; orders: number; omzet: number }[];
@@ -285,28 +287,7 @@ function ReportBody({ r, prevLabel }: { r: Report; prevLabel: string }) {
       </div>
 
       <div className="grid-2">
-        <section className="panel flush" aria-labelledby="top-title">
-          <div style={{ padding: "18px 18px 6px" }}>
-            <h2 id="top-title">Menu terlaris</h2>
-          </div>
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr><th>#</th><th>Menu</th><th className="r">Terjual</th><th className="r">Pendapatan</th></tr>
-              </thead>
-              <tbody>
-                {r.topItems.map((t, i) => (
-                  <tr key={`${i}-${t.name}`}>
-                    <td className="num muted">{i + 1}</td>
-                    <td className="strong">{t.name}</td>
-                    <td className="r num">{number(t.qty)}</td>
-                    <td className="r money">{rupiah(t.revenue)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+        <TopSection r={r} />
         <div className="stack" style={{ gap: 20 }}>
           <section className="panel" aria-labelledby="cat-title">
             <div className="panel-head"><h2 id="cat-title">Per kategori</h2></div>
@@ -363,29 +344,72 @@ function ReportBody({ r, prevLabel }: { r: Report; prevLabel: string }) {
   );
 }
 
+/** Terlaris per produk, atau per ukuran/warna kalau tokonya memakai varian. */
+function TopSection({ r }: { r: Report }) {
+  const { tenant } = useSession();
+  const retail = isRetail(tenant);
+  const hasV = (r.topVariants?.length ?? 0) > 0;
+  const [by, setBy] = useState<"item" | "variant">("item");
+  const rows = by === "variant" && hasV ? r.topVariants!.map((v) => ({ name: v.name, sub: v.variant, qty: v.qty, revenue: v.revenue })) : r.topItems.map((t) => ({ name: t.name, sub: "", qty: t.qty, revenue: t.revenue }));
+  return (
+    <section className="panel flush" aria-labelledby="top-title">
+      <div className="row between wrap" style={{ padding: "18px 18px 6px", gap: 8 }}>
+        <h2 id="top-title">{retail ? "Produk terlaris" : "Menu terlaris"}</h2>
+        {hasV && (
+          <div className="segmented" role="group" aria-label="Kelompokkan">
+            <button type="button" aria-pressed={by === "item"} onClick={() => setBy("item")}>Per produk</button>
+            <button type="button" aria-pressed={by === "variant"} onClick={() => setBy("variant")}>Per varian</button>
+          </div>
+        )}
+      </div>
+      <div className="table-wrap">
+        <table className="table">
+          <thead>
+            <tr><th>#</th><th>{retail ? "Produk" : "Menu"}</th><th className="r">Terjual</th><th className="r">Pendapatan</th></tr>
+          </thead>
+          <tbody>
+            {rows.map((t, i) => (
+              <tr key={`${i}-${t.name}-${t.sub}`}>
+                <td className="num muted">{i + 1}</td>
+                <td className="strong">{t.name}{t.sub && <span className="variant-tag">{t.sub}</span>}</td>
+                <td className="r num">{number(t.qty)}</td>
+                <td className="r money">{rupiah(t.revenue)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 function MarginSection({ r }: { r: Report }) {
   const { rows, avgMargin } = classify(r.margins);
   const costedRows = r.margins.filter((m) => m.cost != null);
   const revenue = costedRows.reduce((a, m) => a + m.revenue, 0);
   const cost = costedRows.reduce((a, m) => a + (m.cost ?? 0), 0);
   const cov = r.costCoverage;
+  const { tenant } = useSession();
+  const retail = isRetail(tenant);
+  const noun = retail ? "produk" : "menu";
+  const unit = retail ? "pcs" : "porsi";
   return (
     <section className="panel flush" aria-labelledby="margin-title">
       <div style={{ padding: "18px 18px 8px" }}>
-        <h2 id="margin-title">Untung per menu</h2>
+        <h2 id="margin-title">Untung per {noun}</h2>
         <p className="small muted">
-          Dari modal (HPP) yang diisi di Menu & produk. Sudah diisi untuk {cov.costed} dari {cov.total} menu.
-          {cov.costed < cov.total ? " Menu yang belum diisi tidak ikut dihitung." : ""}
+          Dari modal (HPP) yang diisi di Menu & produk. Sudah diisi untuk {cov.costed} dari {cov.total} {noun}.
+          {cov.costed < cov.total ? ` ${retail ? "Produk" : "Menu"} yang belum diisi tidak ikut dihitung.` : ""}
         </p>
       </div>
       {costedRows.length === 0 ? (
         <div style={{ padding: "0 18px 18px" }}>
-          <p className="small">Isi modal per porsi di halaman Menu & produk (kolom "Modal per porsi"), lalu laporan ini menunjukkan menu mana yang laris tapi untungnya tipis.</p>
+          <p className="small">Isi modal per {unit} di halaman {retail ? "Produk" : "Menu & produk"} (kolom "Modal per {unit}"), lalu laporan ini menunjukkan {noun} mana yang laris tapi untungnya tipis.</p>
         </div>
       ) : (
         <>
           <div className="kpis" style={{ padding: "0 18px 12px" }}>
-            <div className="kpi"><span className="label">Penjualan menu ber-HPP</span><span className="value">{rupiah(revenue)}</span></div>
+            <div className="kpi"><span className="label">Penjualan {noun} ber-HPP</span><span className="value">{rupiah(revenue)}</span></div>
             <div className="kpi"><span className="label">Modal</span><span className="value">{rupiah(cost)}</span></div>
             <div className="kpi hero"><span className="label">Laba kotor</span><span className="value">{rupiah(revenue - cost)}</span><span className="delta">{revenue ? Math.round(((revenue - cost) / revenue) * 100) : 0}% dari penjualan, sebelum pajak, gaji, dan sewa</span></div>
           </div>
@@ -393,7 +417,7 @@ function MarginSection({ r }: { r: Report }) {
             <div className="table-wrap">
               <table className="table">
                 <thead>
-                  <tr><th>Menu</th><th>Kelompok</th><th className="r">Terjual</th><th className="r">Untung/porsi</th><th className="r">Margin</th><th className="r">Laba kotor</th></tr>
+                  <tr><th>{retail ? "Produk" : "Menu"}</th><th>Kelompok</th><th className="r">Terjual</th><th className="r">Untung/{unit}</th><th className="r">Margin</th><th className="r">Laba kotor</th></tr>
                 </thead>
                 <tbody>
                   {rows.map((m) => (
@@ -415,7 +439,7 @@ function MarginSection({ r }: { r: Report }) {
               {(Object.keys(KLASS) as Klass[]).filter((k) => rows.some((x) => x.k === k)).map((k) => (
                 <li key={k}><span className={`badge ${KLASS[k].badge}`}>{KLASS[k].label}</span> {KLASS[k].tip}</li>
               ))}
-              <li className="muted">Rata-rata untung per porsi: {rupiah(Math.round(avgMargin))}.</li>
+              <li className="muted">Rata-rata untung per {unit}: {rupiah(Math.round(avgMargin))}.</li>
             </ul>
           )}
         </>

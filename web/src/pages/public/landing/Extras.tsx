@@ -1,5 +1,5 @@
-import { useRef, type ReactNode } from "react";
-import { BellRing, Check, Clapperboard, DoorOpen, LayoutGrid, List, MapPin, ReceiptText, ShoppingBag, Stamp, Star, ThumbsUp, Users } from "lucide-react";
+import { useRef, useState, type ReactNode } from "react";
+import { BellRing, Check, ChevronDown, Clapperboard, DoorOpen, LayoutGrid, List, MapPin, ReceiptText, ShoppingBag, Stamp, Star, ThumbsUp, Users } from "lucide-react";
 import { rupiah } from "../../../lib/format";
 import { AppIcon, FakeQR, Food, type FoodKind } from "./art";
 import { useReducedMotion, useStepper, useVisible } from "./motion";
@@ -11,7 +11,9 @@ export function Extras() {
   const reduce = useReducedMotion();
   const visible = useVisible(root, 0.15);
   const on = visible && !reduce;
+  const [all, setAll] = useState(false);
   return (
+    <>
     <div ref={root} className={`lp-bento${on ? "" : " is-still"}`}>
       <Card className="tall" icon={<Clapperboard />} title="Mode video ala TikTok" body="Pembeli menggeser menu satu per satu dalam layar penuh, videonya jalan sendiri. Tambah ke pesanan tanpa keluar dari video.">
         <VideoDemo on={on} />
@@ -25,6 +27,8 @@ export function Extras() {
       <Card icon={<Stamp />} title="Kartu stempel lewat nomor HP" body="Kasir mengetik nomor HP saat bayar. Tiap belanja di atas batas minimal dapat satu stempel. Pembeli tidak perlu pasang aplikasi.">
         <StampDemo on={on} />
       </Card>
+      {all && (
+      <>
       <Card className="span2" icon={<Star />} title="Struk digital & rating per menu" body="Kasir mengirim struk ke WhatsApp pembeli. Setelah makan, pembeli memberi bintang dan jempol per menu, lalu bisa lanjut menulis ulasan di Google Maps. Pemilik melihat menu mana yang disukai.">
         <RatingDemo on={on} />
       </Card>
@@ -37,6 +41,22 @@ export function Extras() {
       <Card icon={<ReceiptText />} title="Bagi tagihan per orang" body="Kasir langsung melihat bagian masing-masing, sudah termasuk service dan pajak.">
         <SplitDemo />
       </Card>
+    </>
+      )}
+    </div>
+    <MoreButton open={all} count={4} onToggle={() => setAll(!all)} />
+    </>
+  );
+}
+
+/** Tombol buka-tutup kartu tambahan. Halaman tetap pendek, fitur lengkap tetap bisa dilihat. */
+export function MoreButton({ open, count, onToggle }: { open: boolean; count: number; onToggle: () => void }) {
+  return (
+    <div className="lp-more">
+      <button type="button" className="btn" aria-expanded={open} onClick={onToggle}>
+        {open ? "Tampilkan lebih sedikit" : `Lihat ${count} fitur lainnya`}
+        <ChevronDown aria-hidden="true" className={open ? "up" : ""} />
+      </button>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { Field, Segmented } from "../../components/ui";
 import { api } from "../../lib/api";
 import { useSession } from "../../lib/session";
@@ -84,7 +84,9 @@ export function LoginPage() {
 export function RegisterPage() {
   const { user, refresh, ready } = useSession();
   const nav = useNavigate();
-  const [f, setF] = useState({ storeName: "", kind: "warung" as "warung" | "kafe" | "resto" | "toko", ownerName: "", login: "", password: "" });
+  // Dari landing mode toko barang: jenis usaha langsung terpilih "Toko".
+  const [params] = useSearchParams();
+  const [f, setF] = useState({ storeName: "", kind: (params.get("jenis") === "toko" ? "toko" : "warung") as "warung" | "kafe" | "resto" | "toko", ownerName: "", login: "", password: "" });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   if (ready && user) return <Navigate to={homeFor(user.role)} replace />;

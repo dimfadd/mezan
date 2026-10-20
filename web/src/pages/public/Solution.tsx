@@ -5,7 +5,7 @@ import {
   Sandwich, ScanLine, Shirt, ShoppingBag, Soup, Sparkles, Stamp, Star, Store, Timer, Users, UserCog, Utensils, Wallet, WifiOff, Wallet2,
 } from "lucide-react";
 import { useSite } from "../../lib/site";
-import { FEATURES, type FeatureKey, type SolutionIcon } from "../../../../shared/site";
+import { FEATURES, RETAIL_FEATURE_HREF, type FeatureKey, type SolutionIcon } from "../../../../shared/site";
 import { SiteNav } from "./landing/SiteNav";
 import { SiteFooter } from "./landing/SiteFooter";
 import "../../styles/landing.css";
@@ -104,7 +104,7 @@ export function SolutionPage() {
               </div>
               <div className="sol-feats">
                 {s.features.filter((k) => FEATURES[k]).map((k) => (
-                  <Link key={k} className="sol-feat" to={FEATURES[k].href}>
+                  <Link key={k} className="sol-feat" to={(s.slug.startsWith("toko") && RETAIL_FEATURE_HREF[k]) || FEATURES[k].href}>
                     <span className="ic">{FEATURE_ICON[k]}</span>
                     <b>{FEATURES[k].title}</b>
                     <span>{FEATURES[k].desc}</span>

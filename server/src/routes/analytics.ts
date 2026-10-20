@@ -63,7 +63,7 @@ analyticsRoutes.get("/", async (c) => {
   const paid = "o.tenant_id = ? AND o.business_day BETWEEN ? AND ? AND o.status != 'cancelled' AND o.payment_status = 'paid'";
   const tz = t.tz_offset_minutes * 60;
 
-  const [daily, hourly, weekday, topItems, categories, payments, sources, itemsSold, staff, idle, margins, fbSum, fbDist, fbRecent, itemFb, promo, costCoverage] = await Promise.all([
+  const [daily, hourly, weekday, topItems, topVariants, categories, payments, sources, itemsSold, staff, idle, margins, fbSum, fbDist, fbRecent, itemFb, promo, costCoverage] = await Promise.all([
     all<{ day: string; omzet: number; orders: number }>(db,
       `SELECT o.business_day AS day, SUM(o.total) AS omzet, COUNT(*) AS orders FROM orders o WHERE ${paid} GROUP BY o.business_day`, t.id, from, to),
     all<{ hour: number; orders: number; omzet: number }>(db,
@@ -76,6 +76,11 @@ analyticsRoutes.get("/", async (c) => {
       `SELECT i.name, SUM(i.qty) AS qty, SUM(i.qty * i.price) AS revenue
        FROM order_items i JOIN orders o ON o.id = i.order_id WHERE ${paid}
        GROUP BY COALESCE(i.menu_item_id, i.name) ORDER BY qty DESC, revenue DESC LIMIT 10`, t.id, from, to),
+    // Per ukuran/warna: untuk toko barang, mana yang perlu distok lebih banyak.
+    all<{ name: string; variant: string; qty: number; revenue: number }>(db,
+      `SELECT i.name, i.variant_name AS variant, SUM(i.qty) AS qty, SUM(i.qty * i.price) AS revenue
+       FROM order_items i JOIN orders o ON o.id = i.order_id WHERE ${paid} AND i.variant_id IS NOT NULL
+       GROUP BY i.variant_id ORDER BY qty DESC, revenue DESC LIMIT 10`, t.id, from, to),
     all<{ name: string; qty: number; revenue: number }>(db,
       `SELECT CASE WHEN i.category_name = '' THEN 'Tanpa kategori' ELSE i.category_name END AS name, SUM(i.qty) AS qty, SUM(i.qty * i.price) AS revenue
        FROM order_items i JOIN orders o ON o.id = i.order_id WHERE ${paid}
@@ -143,6 +148,7 @@ analyticsRoutes.get("/", async (c) => {
     hours,
     weekdays,
     topItems,
+    topVariants,
     categories,
     payments,
     sources,

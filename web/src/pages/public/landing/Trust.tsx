@@ -1,12 +1,13 @@
 import { useRef } from "react";
-import { BarChart3, Camera, Check, LayoutList, MonitorSmartphone, Printer, Quote, Settings2 } from "lucide-react";
+import { BarChart3, Camera, Check, LayoutList, MonitorSmartphone, Printer, Quote, ScanLine, Settings2, Shirt, ShoppingBag } from "lucide-react";
+import { Swatch } from "./RetailStory";
 import { rupiah } from "../../../lib/format";
 import { useSite } from "../../../lib/site";
 import { FakeQR, Food } from "./art";
 import { useCountUp, useReducedMotion, useStepper, useVisible } from "./motion";
 
 // ---------- Cara mulai: tiga langkah ----------
-export function EaseSteps() {
+export function EaseSteps({ retail = false }: { retail?: boolean }) {
   const root = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
   const on = useVisible(root, 0.25) && !reduce;
@@ -14,6 +15,50 @@ export function EaseSteps() {
   const step = on ? s : -1; // -1: semua langkah tampil sama, tanpa sorotan
   return (
     <div ref={root}>
+      {retail ? (
+      <ol className="ez-steps">
+        <li className={step === 0 ? "on" : ""}>
+          <span className="ez-no num">1</span>
+          <div className="ez-art" aria-hidden="true">
+            <div className="ez-form">
+              <span className="ez-cam"><Camera /></span>
+              <div className="ez-field"><small>Nama produk</small><b>Kaos Polos</b></div>
+              <div className="ez-field"><small>Ukuran</small><b>S, M, L, XL</b></div>
+            </div>
+          </div>
+          <h3>Daftar, lalu isi produk dari HP</h3>
+          <p>Ketik nama, harga, dan ukuran atau warnanya. Semua varian dibuat sendiri, stoknya bisa diisi langsung.</p>
+        </li>
+        <li className={step === 1 ? "on" : ""}>
+          <span className="ez-no num">2</span>
+          <div className="ez-art" aria-hidden="true">
+            <div className="ez-label">
+              <b>Kaos Polos · Hitam / M</b>
+              <span className="bars" />
+              <span className="num">2041736592018</span>
+            </div>
+            <span className="ez-print"><Printer /> Cetak label</span>
+          </div>
+          <h3>Scan barcode kemasan, atau cetak label</h3>
+          <p>Barang pabrik tinggal discan. Yang belum punya barcode dibuatkan kode, lalu labelnya dicetak dan ditempel.</p>
+        </li>
+        <li className={step === 2 ? "on" : ""}>
+          <span className="ez-no num">3</span>
+          <div className="ez-art" aria-hidden="true">
+            <div className="ez-ticket">
+              <div className="row between"><b><ScanLine className="ez-scan-ic" /> Scan</b><span className="lp-badge ok">Masuk keranjang</span></div>
+              <span>Kaos Polos · Hitam / M</span>
+              <span className="lp-btn ez-accept">
+                Bayar {rupiah(75000)}
+                {step === 2 && <span className="lp-tap" style={{ animationDelay: "900ms" }} />}
+              </span>
+            </div>
+          </div>
+          <h3>Scan, bayar, selesai</h3>
+          <p>Pakai alat scan atau kamera HP. Stok berkurang sendiri dan penjualan langsung masuk laporan.</p>
+        </li>
+      </ol>
+      ) : (
       <ol className="ez-steps">
         <li className={step === 0 ? "on" : ""}>
           <span className="ez-no num">1</span>
@@ -55,6 +100,7 @@ export function EaseSteps() {
           <p>Pesanan berbunyi di kasir. Ketuk Terima, lalu Siap. Pembeli melihat statusnya sendiri.</p>
         </li>
       </ol>
+      )}
       <ul className="ez-points">
         <li><Check aria-hidden="true" /> Bahasa sehari-hari, bukan istilah akuntansi</li>
         <li><Check aria-hidden="true" /> Tanpa pasang aplikasi, langsung dari browser</li>
@@ -70,7 +116,18 @@ const HOURS = [
   [10, 3], [11, 7], [12, 14], [13, 11], [14, 5], [15, 6], [16, 8], [17, 10], [18, 15], [19, 18], [20, 12], [21, 6],
 ] as const;
 
-export function Monitor() {
+const BEST_FNB = [
+  { icon: <Food kind="geprek" />, n: "Ayam Geprek", q: 38 },
+  { icon: <Food kind="kopi" />, n: "Kopi Susu Gula Aren", q: 31 },
+  { icon: <Food kind="nasgor" />, n: "Nasi Goreng", q: 24 },
+];
+const BEST_RETAIL = [
+  { icon: <Swatch icon={<Shirt />} color="#24262b" size={28} />, n: "Kaos Polos · Hitam / M", q: 9 },
+  { icon: <Swatch icon={<Shirt />} color="#2f5d8a" size={28} />, n: "Kemeja Flanel · Biru / L", q: 5 },
+  { icon: <Swatch icon={<ShoppingBag />} color="#c9b48a" size={28} />, n: "Totebag Kanvas", q: 4 },
+];
+
+export function Monitor({ retail = false }: { retail?: boolean }) {
   const root = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
   const on = useVisible(root, 0.3) && !reduce;
@@ -91,9 +148,19 @@ export function Monitor() {
           <span className="mo-label">Omzet</span>
           <b className="mo-omzet num">{rupiah(omzet)}</b>
           <div className="mo-chips">
-            <span><b className="num">{52 + step * 2}</b> Makan di tempat</span>
-            <span><b className="num">{19 + step}</b> Bawa pulang</span>
-            <span><b className="num">{34 + step * 2}</b> Lewat QR</span>
+            {retail ? (
+              <>
+                <span><b className="num">{21 + step}</b> Tunai</span>
+                <span><b className="num">{14 + step}</b> QRIS</span>
+                <span><b className="num">{6}</b> Transfer</span>
+              </>
+            ) : (
+              <>
+                <span><b className="num">{52 + step * 2}</b> Makan di tempat</span>
+                <span><b className="num">{19 + step}</b> Bawa pulang</span>
+                <span><b className="num">{34 + step * 2}</b> Lewat QR</span>
+              </>
+            )}
           </div>
           <div className="mo-chart">
             {HOURS.map(([h, n], i) => (
@@ -103,11 +170,11 @@ export function Monitor() {
           <div className="mo-axis"><span>10.00</span><span>Paling ramai {peak[0]}.00</span><span>21.00</span></div>
           <div className="mo-best">
             <small>Terlaris</small>
-            {(["geprek", "kopi", "nasgor"] as const).map((k, i) => (
-              <div key={k}>
-                <span className="th"><Food kind={k} /></span>
-                <span className="n">{["Ayam Geprek", "Kopi Susu Gula Aren", "Nasi Goreng"][i]}</span>
-                <b className="num">{[38, 31, 24][i] + (i === 0 ? step : 0)}</b>
+            {(retail ? BEST_RETAIL : BEST_FNB).map((b, i) => (
+              <div key={b.n}>
+                <span className="th">{b.icon}</span>
+                <span className="n">{b.n}</span>
+                <b className="num">{b.q + (i === 0 ? step : 0)}</b>
               </div>
             ))}
           </div>
@@ -119,19 +186,19 @@ export function Monitor() {
         <ul className="mo-list">
           <li>
             <span className="ic"><LayoutList /></span>
-            <span>Makan di tempat, bawa pulang, dan pesanan QR masuk ke satu papan.</span>
+            <span>{retail ? "Semua penjualan dari kasir mana pun masuk ke satu daftar." : "Makan di tempat, bawa pulang, dan pesanan QR masuk ke satu papan."}</span>
           </li>
           <li>
             <span className="ic"><Settings2 /></span>
-            <span>Atur menu, harga, meja, dan karyawan langsung dari HP.</span>
+            <span>{retail ? "Atur produk, harga, stok, dan karyawan langsung dari HP." : "Atur menu, harga, meja, dan karyawan langsung dari HP."}</span>
           </li>
           <li>
             <span className="ic"><BarChart3 /></span>
-            <span>Omzet, menu terlaris, dan jam ramai terbarui setiap ada transaksi.</span>
+            <span>{retail ? "Omzet, untung, varian terlaris, dan jam ramai terbarui setiap ada transaksi." : "Omzet, menu terlaris, dan jam ramai terbarui setiap ada transaksi."}</span>
           </li>
           <li>
             <span className="ic"><MonitorSmartphone /></span>
-            <span>Satu akun untuk HP pemilik, tablet kasir, dan layar dapur.</span>
+            <span>{retail ? "Satu akun untuk HP pemilik dan beberapa kasir sekaligus." : "Satu akun untuk HP pemilik, tablet kasir, dan layar dapur."}</span>
           </li>
         </ul>
       </div>

@@ -81,11 +81,22 @@ export const FEATURES = {
   stock: { title: "Stok berkurang sendiri", desc: "Stok turun tiap terjual, diingatkan saat menipis.", href: "/#fitur" },
   reports: { title: "Laporan penjualan", desc: "Omzet, menu terlaris, dan jam ramai, terbarui setiap transaksi.", href: "/#pantau" },
   staff: { title: "Akun karyawan & hak akses", desc: "Kasir tidak bisa mengubah harga atau melihat laporan.", href: "/#fitur" },
-  variants: { title: "Varian ukuran & warna", desc: "Tiap kombinasi punya harga, stok, dan barcode sendiri. Kasir tinggal pilih atau scan.", href: "/#untung" },
-  barcode: { title: "Scan barcode & cetak label", desc: "Pakai alat scan atau kamera HP. Barang tanpa barcode diberi kode lalu dicetak labelnya.", href: "/#untung" },
+  variants: { title: "Varian ukuran & warna", desc: "Tiap kombinasi punya harga, stok, dan barcode sendiri. Kasir tinggal pilih atau scan.", href: "/#simulasi-toko" },
+  barcode: { title: "Scan barcode & cetak label", desc: "Pakai alat scan atau kamera HP. Barang tanpa barcode diberi kode lalu dicetak labelnya.", href: "/#simulasi-toko" },
   bills: { title: "Makan dulu, bayar belakangan", desc: "Pesanan satu meja jadi satu tagihan. Tagihan yang lama belum dibayar ditandai merah.", href: "/#untung" },
 } as const;
 export type FeatureKey = keyof typeof FEATURES;
+/** Di halaman solusi toko barang, fitur umum diarahkan ke peragaan versi toko di landing. */
+export const RETAIL_FEATURE_HREF: Partial<Record<FeatureKey, string>> = {
+  pos: "/#simulasi-toko",
+  stock: "/#simulasi-toko",
+  margin: "/#fitur-toko",
+  offline: "/#fitur-toko",
+  staff: "/#fitur-toko",
+  stamp: "/#fitur-toko",
+  shift: "/#fitur-toko",
+  reports: "/?untuk=toko#pantau",
+};
 export const FEATURE_KEYS = Object.keys(FEATURES) as FeatureKey[];
 
 export const DEFAULT_SITE: Site = {
@@ -110,7 +121,15 @@ export const DEFAULT_SITE: Site = {
             { label: "Modal & untung per menu", href: "/#untung" },
             { label: "Laporan penjualan", href: "/#pantau" },
             { label: "Makan dulu, bayar belakangan", href: "/#untung" },
-            { label: "Varian & barcode untuk toko barang", href: "/solusi/toko-retail" },
+          ],
+        },
+        {
+          title: "Di toko barang",
+          items: [
+            { label: "Scan barcode & varian ukuran", href: "/#simulasi-toko" },
+            { label: "Cetak label barcode", href: "/#simulasi-toko" },
+            { label: "Modal & untung per produk", href: "/#fitur-toko" },
+            { label: "Kamera HP jadi alat scan", href: "/#fitur-toko" },
           ],
         },
       ],
@@ -212,6 +231,7 @@ export const DEFAULT_SITE: Site = {
           { label: "Layar dapur", href: "/#untung" },
           { label: "Kartu stempel", href: "/#pembeli" },
           { label: "Laporan penjualan", href: "/#pantau" },
+          { label: "Scan barcode & varian", href: "/#simulasi-toko" },
         ],
       },
       { title: "Solusi bisnis", auto: "solutions", links: [] },

@@ -766,6 +766,11 @@ test("varian: harga & stok per varian, wajib pilih varian, batal mengembalikan s
   assert.equal((await call("POST", "/api/store/stock/movements", { itemId: kaos.json.id, mode: "restock", qty: 3 }, owner)).status, 400, "produk bervarian harus pilih varian");
   assert.equal((await call("POST", "/api/store/stock/movements", { itemId: kaos.json.id, variantId: xl.id, mode: "restock", qty: 3 }, owner)).status, 200);
   assert.deepEqual(stock(), { xl: 5, m: 5, total: 10 });
+  // Laporan: terlaris per varian
+  const sale = await call("POST", "/api/store/orders", { orderType: "takeaway", items: [{ id: kaos.json.id, variantId: m.id, qty: 2 }, { id: kaos.json.id, variantId: xl.id, qty: 1 }] }, owner);
+  db.raw.prepare("UPDATE orders SET payment_status = 'paid' WHERE id = ?").run(sale.json.id);
+  const rep = await call("GET", "/api/store/analytics?range=today", undefined, owner);
+  assert.deepEqual(rep.json.topVariants.map((v: { variant: string; qty: number }) => [v.variant, v.qty]), [["Hitam / M", 2], ["Hitam / XL", 1]]);
 });
 
 test("barcode: unik per toko, kombinasi varian tidak boleh kembar, varian dihapus diarsipkan", async () => {

@@ -113,7 +113,7 @@ export function VideoDemo({ on }: { on: boolean }) {
 }
 
 /** Kartu stempel: satu stempel per belanja yang memenuhi batas minimal, hadiah ditukar di kasir. */
-export function StampDemo({ on }: { on: boolean }) {
+export function StampDemo({ on, reward = "1 Es Teh gratis" }: { on: boolean; reward?: string }) {
   const [s] = useStepper(5, (i) => [1300, 1300, 1300, 2600, 1900][i], on);
   const step = on ? s : 3;
   const stamps = [7, 8, 9, 10, 0][step];
@@ -133,7 +133,7 @@ export function StampDemo({ on }: { on: boolean }) {
       <div className="lp-stamp-foot">
         {step === 3 ? (
           <>
-            <span className="lp-badge new"><Gift /> Hadiah siap ditukar: 1 Es Teh gratis</span>
+            <span className="lp-badge new"><Gift /> Hadiah siap ditukar: {reward}</span>
             <span className="lp-btn primary" style={{ flex: "none" }}>
               Tukar
               {on && <Tap delay={1700} />}

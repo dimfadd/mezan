@@ -1,54 +1,60 @@
 import { useEffect, useRef, useState } from "react";
-import { Calculator, Check, ChefHat, Clock3, MapPin, ReceiptText, ScanLine, Sparkles, ThumbsUp, Wallet, Wifi, WifiOff } from "lucide-react";
+import { Calculator, Check, ChefHat, Clock3, MapPin, ReceiptText, Sparkles, ThumbsUp, Wallet, Wifi, WifiOff } from "lucide-react";
 import { AppIcon } from "./art";
 import { HappyDemo, PairDemo } from "./MoreDemos";
-import { BillDemo, RetailDemo } from "./RetailDemos";
+import { BillDemo } from "./RetailDemos";
 import { rupiah } from "../../../lib/format";
-import { BestDemo, Card, GeoDemo, QrDemo } from "./Extras";
+import { BestDemo, Card, GeoDemo, MoreButton, QrDemo } from "./Extras";
 import { useCountUp, useReducedMotion, useStepper, useVisible } from "./motion";
 
-// Sisi pemilik: yang menambah untung dulu, lalu yang menjaga dapur, laci, dan pesanan tetap rapi.
+// Sisi pemilik usaha makanan: yang menambah untung dulu, lalu yang menjaga dapur, laci, dan pesanan tetap rapi.
+// Empat kartu pertama selalu tampil; sisanya dibuka lewat tombol supaya halaman tidak kepanjangan.
 export function Ops() {
   const root = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
   const visible = useVisible(root, 0.15);
   const on = visible && !reduce;
+  const [all, setAll] = useState(false);
   return (
-    <div ref={root} className={`lp-bento${on ? "" : " is-still"}`}>
-      <Card className="span2" icon={<ScanLine />} title="Toko barang: varian & scan barcode" body="Kaos, kemeja, topi, sampai kelontong. Tiap ukuran dan warna punya harga, stok, dan barcode sendiri. Scan pakai alat scan atau kamera HP; belum ada barcode? Buat kodenya dan cetak labelnya.">
-        <RetailDemo on={on} />
-      </Card>
-      <Card icon={<ReceiptText />} title="Makan dulu, bayar belakangan" body="Pesanan satu meja terkumpul jadi satu tagihan dan dibayar sekali. Tagihan yang sudah lama belum dibayar ditandai merah supaya tidak ada tamu yang lupa bayar.">
-        <BillDemo on={on} />
-      </Card>
-      <Card className="span2" icon={<Calculator />} title="Modal & untung per menu" body="Isi modal per porsi. Laporan memilah menu jadi Andalan, Laris tapi tipis, Untung tapi jarang, dan Perlu dievaluasi, lengkap dengan persentase untungnya.">
-        <MarginDemo on={on} />
-      </Card>
-      <Card icon={<Sparkles />} title="Saran pasangan menu" body="Pesan ayam geprek, muncul es teh. Pasangannya bisa diatur pemilik, atau diambil dari menu yang sering dipesan bareng.">
-        <PairDemo on={on} />
-      </Card>
-      <Card className="span2" icon={<Clock3 />} title="Menu & harga ikut jam" body="Menu sarapan hanya bisa dipesan pagi. Happy hour memotong harga sendiri pada jamnya, di menu QR dan di kasir.">
-        <HappyDemo on={on} />
-      </Card>
-      <Card icon={<ThumbsUp />} title="Best seller & tampilan kotak" body="Stempel jempol untuk menu terlaris. Pembeli bebas pilih tampilan daftar atau kotak.">
-        <BestDemo on={on} />
-      </Card>
-      <Card className="span2" icon={<ChefHat />} title="Layar dapur per bagian" body="Makanan masuk ke layar dapur, minuman ke bar. Waktu tunggu berubah warna kalau lewat perkiraan saji. Begitu semua item dicentang, pesanan otomatis jadi Siap diantar.">
-        <KdsDemo on={on} />
-      </Card>
-      <Card icon={<WifiOff />} title="Kasir tetap jalan saat internet putus" body="Pesanan disimpan di perangkat dan dikirim sendiri begitu sinyal kembali, lalu dapat nomor antrean. Pesanan QR dari pembeli tetap butuh internet.">
-        <OfflineDemo on={on} />
-      </Card>
-      <Card icon={<Wallet />} title="Shift kasir & rekap laci" body="Buka dengan modal awal, catat kas masuk dan keluar, hitung uang saat tutup. Selisihnya langsung terlihat, lengkap dengan siapa yang bertugas.">
-        <ShiftDemo on={on} />
-      </Card>
-      <Card icon={<MapPin />} title="Pengaman lokasi" body="Pesanan dari luar radius toko ditandai atau ditolak. QR yang difoto lalu dipakai dari rumah tidak lolos diam-diam.">
-        <GeoDemo />
-      </Card>
-      <Card icon={<AppIcon size={18} />} title="QR berlogo pesan.in" body="Kode acak per meja yang tidak bisa ditebak, dengan logo di tengah dan tetap terbaca kamera HP biasa.">
-        <QrDemo />
-      </Card>
-    </div>
+    <>
+      <div ref={root} className={`lp-bento${on ? "" : " is-still"}`}>
+        <Card className="span2" icon={<Calculator />} title="Modal & untung per menu" body="Isi modal per porsi. Laporan memilah menu jadi Andalan, Laris tapi tipis, Untung tapi jarang, dan Perlu dievaluasi, lengkap dengan persentase untungnya.">
+          <MarginDemo on={on} />
+        </Card>
+        <Card icon={<ReceiptText />} title="Makan dulu, bayar belakangan" body="Pesanan satu meja terkumpul jadi satu tagihan dan dibayar sekali. Tagihan yang sudah lama belum dibayar ditandai merah supaya tidak ada tamu yang lupa bayar.">
+          <BillDemo on={on} />
+        </Card>
+        <Card className="span2" icon={<ChefHat />} title="Layar dapur per bagian" body="Makanan masuk ke layar dapur, minuman ke bar. Waktu tunggu berubah warna kalau lewat perkiraan saji. Begitu semua item dicentang, pesanan otomatis jadi Siap diantar.">
+          <KdsDemo on={on} />
+        </Card>
+        <Card icon={<Sparkles />} title="Saran pasangan menu" body="Pesan ayam geprek, muncul es teh. Pasangannya bisa diatur pemilik, atau diambil dari menu yang sering dipesan bareng.">
+          <PairDemo on={on} />
+        </Card>
+        {all && (
+          <>
+            <Card className="span2" icon={<Clock3 />} title="Menu & harga ikut jam" body="Menu sarapan hanya bisa dipesan pagi. Happy hour memotong harga sendiri pada jamnya, di menu QR dan di kasir.">
+              <HappyDemo on={on} />
+            </Card>
+            <Card icon={<ThumbsUp />} title="Best seller & tampilan kotak" body="Stempel jempol untuk menu terlaris. Pembeli bebas pilih tampilan daftar atau kotak.">
+              <BestDemo on={on} />
+            </Card>
+            <Card className="span2" icon={<WifiOff />} title="Kasir tetap jalan saat internet putus" body="Pesanan disimpan di perangkat dan dikirim sendiri begitu sinyal kembali, lalu dapat nomor antrean. Pesanan QR dari pembeli tetap butuh internet.">
+              <OfflineDemo on={on} />
+            </Card>
+            <Card icon={<MapPin />} title="Pengaman lokasi" body="Pesanan dari luar radius toko ditandai atau ditolak. QR yang difoto lalu dipakai dari rumah tidak lolos diam-diam.">
+              <GeoDemo />
+            </Card>
+            <Card className="span2" icon={<Wallet />} title="Shift kasir & rekap laci" body="Buka dengan modal awal, catat kas masuk dan keluar, hitung uang saat tutup. Selisihnya langsung terlihat, lengkap dengan siapa yang bertugas.">
+              <ShiftDemo on={on} />
+            </Card>
+            <Card icon={<AppIcon size={18} />} title="QR berlogo pesan.in" body="Kode acak per meja yang tidak bisa ditebak, dengan logo di tengah dan tetap terbaca kamera HP biasa.">
+              <QrDemo />
+            </Card>
+          </>
+        )}
+      </div>
+      <MoreButton open={all} count={6} onToggle={() => setAll(!all)} />
+    </>
   );
 }
 
@@ -138,7 +144,7 @@ function KdsDemo({ on }: { on: boolean }) {
   );
 }
 
-function OfflineDemo({ on }: { on: boolean }) {
+export function OfflineDemo({ on }: { on: boolean }) {
   const [s] = useStepper(6, (i) => [1400, 1200, 1000, 1000, 2200, 2800][i], on);
   const step = on ? s : 4;
   const offline = step >= 1 && step <= 4;
@@ -183,7 +189,7 @@ function OfflineDemo({ on }: { on: boolean }) {
   );
 }
 
-function ShiftDemo({ on }: { on: boolean }) {
+export function ShiftDemo({ on, spend = "beli es batu" }: { on: boolean; spend?: string }) {
   const [s] = useStepper(5, (i) => [1100, 1900, 1500, 1700, 3200][i], on);
   const step = on ? s : 4;
   const sales = useCountUp(step >= 1 ? 1070000 : 0, on, 1500);
@@ -204,7 +210,7 @@ function ShiftDemo({ on }: { on: boolean }) {
       </div>
       <div className="lp-shift-row"><span>Modal awal</span><b>{rupiah(200000)}</b></div>
       <div className="lp-shift-row"><span>Penjualan tunai</span><b>+{rupiah(salesShown)}</b></div>
-      <div className={`lp-shift-row${step >= 2 ? "" : " pending"}`}><span>Kas keluar · beli es batu</span><b>−{rupiah(20000)}</b></div>
+      <div className={`lp-shift-row${step >= 2 ? "" : " pending"}`}><span>Kas keluar · {spend}</span><b>−{rupiah(20000)}</b></div>
       <div className="lp-shift-row tot"><span>Seharusnya di laci</span><b>{rupiah(expected)}</b></div>
       <div className={`lp-shift-row counted${step >= 3 ? "" : " pending"}`}><span>Uang dihitung</span><b>{rupiah(countedShown)}</b></div>
       <div className={`lp-shift-diff${closed ? "" : " pending"}`}>Selisih: kurang {rupiah(5000)}</div>
@@ -212,35 +218,59 @@ function ShiftDemo({ on }: { on: boolean }) {
   );
 }
 
-const QUADS = [
-  { key: "puzzle", name: "Untung tapi jarang", tone: "info", items: [["Teh Tarik", 72]], tip: "Beri foto atau video, jadikan rekomendasi." },
-  { key: "star", name: "Andalan", tone: "ok", items: [["Kopi Susu Gula Aren", 68], ["Ayam Geprek", 54]], tip: "Pertahankan, taruh paling atas di menu." },
-  { key: "dog", name: "Perlu dievaluasi", tone: "bad", items: [["Mie Ayam Bakso", 22]], tip: "Ganti resepnya, jadikan paket, atau hapus." },
-  { key: "horse", name: "Laris tapi tipis", tone: "warn", items: [["Nasi Goreng Kampung", 31]], tip: "Naikkan harga sedikit atau tekan modal." },
-] as const;
+const FNB_MARGIN = {
+  name: "Kopi Susu Gula Aren",
+  price: 15000,
+  cost: 4800,
+  costLabel: "Modal per gelas",
+  axis: "Untung per porsi",
+  empty: "Persentase untung per menu muncul begitu modalnya diisi.",
+  quads: [
+    { key: "puzzle", name: "Untung tapi jarang", tone: "info", items: [["Teh Tarik", 72]], tip: "Beri foto atau video, jadikan rekomendasi." },
+    { key: "star", name: "Andalan", tone: "ok", items: [["Kopi Susu Gula Aren", 68], ["Ayam Geprek", 54]], tip: "Pertahankan, taruh paling atas di menu." },
+    { key: "dog", name: "Perlu dievaluasi", tone: "bad", items: [["Mie Ayam Bakso", 22]], tip: "Ganti resepnya, jadikan paket, atau hapus." },
+    { key: "horse", name: "Laris tapi tipis", tone: "warn", items: [["Nasi Goreng Kampung", 31]], tip: "Naikkan harga sedikit atau tekan modal." },
+  ],
+};
+const RETAIL_MARGIN: typeof FNB_MARGIN = {
+  name: "Kaos Polos Katun",
+  price: 75000,
+  cost: 42000,
+  costLabel: "Modal per pcs",
+  axis: "Untung per barang",
+  empty: "Persentase untung per produk muncul begitu modalnya diisi.",
+  quads: [
+    { key: "puzzle", name: "Untung tapi jarang", tone: "info", items: [["Jam Tangan Kulit", 52]], tip: "Pajang di dekat kasir, foto lebih menarik." },
+    { key: "star", name: "Andalan", tone: "ok", items: [["Kaos Polos Katun", 44], ["Kemeja Flanel", 41]], tip: "Jaga stoknya jangan sampai kosong." },
+    { key: "dog", name: "Perlu dievaluasi", tone: "bad", items: [["Topi Baseball", 12]], tip: "Obral, jadikan paket, atau berhenti kulak." },
+    { key: "horse", name: "Laris tapi tipis", tone: "warn", items: [["Kaus Kaki", 18]], tip: "Naikkan harga sedikit atau cari pemasok lain." },
+  ],
+};
 // Urutan sorotan: Andalan dulu, baru yang lain.
 const ORDER = [1, 3, 0, 2];
 
-function MarginDemo({ on }: { on: boolean }) {
+export function MarginDemo({ on, retail = false }: { on: boolean; retail?: boolean }) {
+  const d = retail ? RETAIL_MARGIN : FNB_MARGIN;
   const [s] = useStepper(5, (i) => (i === 0 ? 2200 : 2000), on);
   const step = on ? s : 1;
-  const cost = useCountUp(step === 0 ? 0 : 4800, on, 1200);
-  const costShown = on ? cost : 4800;
+  const cost = useCountUp(step === 0 ? 0 : d.cost, on, 1200);
+  const costShown = on ? cost : d.cost;
+  const pct = Math.round(((d.price - d.cost) / d.price) * 100);
   const hi = step === 0 ? -1 : ORDER[step - 1];
   return (
     <div className="lp-margin">
       <div className="lp-margin-edit">
-        <b>Kopi Susu Gula Aren</b>
-        <div className="lp-shift-row"><span>Harga jual</span><b>{rupiah(15000)}</b></div>
-        <div className="lp-shift-row field"><span>Modal per gelas</span><b>{rupiah(costShown)}</b></div>
-        <div className={`lp-shift-row tot${costShown === 4800 ? "" : " pending"}`}>
+        <b>{d.name}</b>
+        <div className="lp-shift-row"><span>Harga jual</span><b>{rupiah(d.price)}</b></div>
+        <div className="lp-shift-row field"><span>{d.costLabel}</span><b>{rupiah(costShown)}</b></div>
+        <div className={`lp-shift-row tot${costShown === d.cost ? "" : " pending"}`}>
           <span>Untung</span>
-          <b>{rupiah(15000 - 4800)} · 68%</b>
+          <b>{rupiah(d.price - d.cost)} · {pct}%</b>
         </div>
       </div>
       <div className="lp-quad-wrap">
         <div className="lp-quad">
-          {QUADS.map((q, i) => (
+          {d.quads.map((q, i) => (
             <div className={`lp-quad-cell${hi === i ? " hi" : ""}`} key={q.key}>
               <span className={`lp-badge ${q.tone}`}>{q.name}</span>
               {q.items.map(([n, m]) => (
@@ -252,9 +282,9 @@ function MarginDemo({ on }: { on: boolean }) {
             </div>
           ))}
         </div>
-        <div className="lp-quad-axis y">Untung per porsi</div>
+        <div className="lp-quad-axis y">{d.axis}</div>
         <div className="lp-quad-axis x">Terjual</div>
-        <p className="lp-quad-tip">{hi >= 0 ? QUADS[hi].tip : "Persentase untung per menu muncul begitu modalnya diisi."}</p>
+        <p className="lp-quad-tip">{hi >= 0 ? d.quads[hi].tip : d.empty}</p>
       </div>
     </div>
   );
